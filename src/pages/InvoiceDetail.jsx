@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
@@ -21,11 +21,11 @@ export default function InvoiceDetail() {
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
-    queryFn: async () => { const r = await base44.entities.Invoice.filter({ id }); return r[0]; },
+    queryFn: async () => { const r = await db.Invoice.filter({ id }); return r[0]; },
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data) => base44.entities.Invoice.update(id, data),
+    mutationFn: (data) => db.Invoice.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoice", id] });
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -33,7 +33,7 @@ export default function InvoiceDetail() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Invoice.delete(id),
+    mutationFn: () => db.Invoice.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       navigate("/invoices", { replace: true });

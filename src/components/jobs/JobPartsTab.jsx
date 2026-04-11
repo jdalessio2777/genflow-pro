@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +42,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscount
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.JobPart.create(data),
+    mutationFn: (data) => db.JobPart.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
       setOpen(false);
@@ -52,7 +52,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscount
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.JobPart.delete(id),
+    mutationFn: (id) => db.JobPart.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
       toast.success("Part removed");
@@ -60,7 +60,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscount
   });
 
   const saveCatalogMutation = useMutation({
-    mutationFn: (data) => base44.entities.Part.create(data),
+    mutationFn: (data) => db.Part.create(data),
   });
 
   const handleAdd = async () => {
@@ -114,7 +114,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscount
       if (catalogPart) {
         const currentStock = catalogPart.in_stock ?? 0;
         const newStock = Math.max(0, currentStock - form.quantity);
-        base44.entities.Part.update(form.part_id, {
+        db.Part.update(form.part_id, {
           in_stock: newStock,
           reorder_flagged: newStock === 0 ? true : (catalogPart.reorder_flagged || false),
         });

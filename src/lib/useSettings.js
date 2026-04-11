@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { db } from '@/lib/db';
 
 export const SETTING_DEFAULTS = {
   home_address: "31209 Courtnay Lane, Wharton NJ 07885",
@@ -21,7 +21,7 @@ export function useSettings() {
 
   const { data: rawSettings = [], isLoading } = useQuery({
     queryKey: ["app-settings"],
-    queryFn: () => base44.entities.AppSettings.list("key"),
+    queryFn: () => db.AppSettings.list("key"),
   });
 
   const settings = { ...SETTING_DEFAULTS };
@@ -35,9 +35,9 @@ export function useSettings() {
     mutationFn: async ({ key, value }) => {
       const existing = rawSettings.find(s => s.key === key);
       if (existing) {
-        return base44.entities.AppSettings.update(existing.id, { value: String(value) });
+        return db.AppSettings.update(existing.id, { value: String(value) });
       } else {
-        return base44.entities.AppSettings.create({ key, value: String(value) });
+        return db.AppSettings.create({ key, value: String(value) });
       }
     },
     onSuccess: () => {

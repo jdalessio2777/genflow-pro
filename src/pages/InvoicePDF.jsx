@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader2, FileText, CheckCircle2, Send, ArrowLeft } from "lucide-react";
@@ -17,18 +18,18 @@ export default function InvoicePDF() {
 
   const { data: invoice } = useQuery({
     queryKey: ["invoice", id],
-    queryFn: async () => { const r = await base44.entities.Invoice.filter({ id }); return r[0]; },
+    queryFn: async () => { const r = await db.Invoice.filter({ id }); return r[0]; },
   });
 
   const { data: customer } = useQuery({
     queryKey: ["customer", invoice?.customer_id],
-    queryFn: async () => { const r = await base44.entities.Customer.filter({ id: invoice.customer_id }); return r[0]; },
+    queryFn: async () => { const r = await db.Customer.filter({ id: invoice.customer_id }); return r[0]; },
     enabled: !!invoice?.customer_id,
   });
 
   const { data: jobDocs = [] } = useQuery({
     queryKey: ["job-docs-for-invoice", invoice?.job_id],
-    queryFn: () => base44.entities.JobDocument.filter({ job_id: invoice.job_id }),
+    queryFn: () => db.JobDocument.filter({ job_id: invoice.job_id }),
     enabled: !!invoice?.job_id,
   });
 
@@ -146,7 +147,7 @@ export default function InvoicePDF() {
       if (Object.values(includedDocs).some(Boolean)) subjectParts.push("Service Report");
       const subject = subjectParts.join(" & ") + " — AJ's Generator Service";
 
-      await base44.integrations.Core.SendEmail({
+      await integrationsCore.SendEmail({
         to: customer.email,
         subject,
         html: fullHTML,

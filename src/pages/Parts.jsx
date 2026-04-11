@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,11 +23,11 @@ export default function Parts() {
 
   const { data: parts = [], isLoading } = useQuery({
     queryKey: ["parts-catalog"],
-    queryFn: () => base44.entities.Part.list("name"),
+    queryFn: () => db.Part.list("name"),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Part.create(data),
+    mutationFn: (data) => db.Part.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
       setOpen(false);
@@ -37,7 +37,7 @@ export default function Parts() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Part.delete(id),
+    mutationFn: (id) => db.Part.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
       toast.success("Part removed");

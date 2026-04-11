@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { useSettings } from "@/lib/useSettings";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -164,11 +164,11 @@ function VehiclesTab() {
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ["vehicles"],
-    queryFn: () => base44.entities.Vehicle.list("name"),
+    queryFn: () => db.Vehicle.list("name"),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Vehicle.create(data),
+    mutationFn: (data) => db.Vehicle.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       setOpen(false);
@@ -179,12 +179,12 @@ function VehiclesTab() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Vehicle.update(id, data),
+    mutationFn: ({ id, data }) => db.Vehicle.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vehicles"] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Vehicle.delete(id),
+    mutationFn: (id) => db.Vehicle.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       toast.success("Vehicle removed");

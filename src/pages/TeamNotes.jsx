@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserColor, getUserDisplayName } from "@/lib/userColors";
 import { Card } from "@/components/ui/card";
@@ -18,11 +18,11 @@ export default function TeamNotes() {
 
   const { data: notes = [] } = useQuery({
     queryKey: ["team-notes"],
-    queryFn: () => base44.entities.TeamNote.list("-created_date", 50),
+    queryFn: () => db.TeamNote.list("-created_date", 50),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.TeamNote.create(data),
+    mutationFn: (data) => db.TeamNote.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-notes"] });
       setText("");
@@ -30,7 +30,7 @@ export default function TeamNotes() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.TeamNote.delete(id),
+    mutationFn: (id) => db.TeamNote.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-notes"] }),
   });
 

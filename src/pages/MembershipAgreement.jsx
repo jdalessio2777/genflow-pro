@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
@@ -112,11 +113,11 @@ export default function MembershipAgreement() {
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["customer", id],
-    queryFn: async () => { const r = await base44.entities.Customer.filter({ id }); return r[0]; },
+    queryFn: async () => { const r = await db.Customer.filter({ id }); return r[0]; },
   });
 
   const updateCustomer = useMutation({
-    mutationFn: (data) => base44.entities.Customer.update(id, data),
+    mutationFn: (data) => db.Customer.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer", id] }),
   });
 
@@ -139,7 +140,7 @@ export default function MembershipAgreement() {
       const expiryStr = expiry.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       const startStr = start.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       try {
-        await base44.integrations.Core.SendEmail({
+        await integrationsCore.SendEmail({
           to: customer.email,
           from_name: "AJ's Generator Service",
           subject: `Your Protection Plan is Active — ${planName}`,

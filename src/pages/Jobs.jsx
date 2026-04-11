@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
@@ -24,32 +24,32 @@ export default function Jobs() {
 
   const { data: jobs = [], isLoading } = useQuery({
     queryKey: ["jobs"],
-    queryFn: () => base44.entities.Job.list("-created_date", 200),
+    queryFn: () => db.Job.list("-created_date", 200),
   });
 
   const queryClient = useQueryClient();
 
   const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
-    queryFn: () => base44.entities.Customer.list("name"),
+    queryFn: () => db.Customer.list("name"),
   });
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
 
   const deleteMutation = useMutation({
     mutationFn: async (jobId) => {
       const [parts, labor, docs, photos] = await Promise.all([
-        base44.entities.JobPart.filter({ job_id: jobId }),
-        base44.entities.JobLabor.filter({ job_id: jobId }),
-        base44.entities.JobDocument.filter({ job_id: jobId }),
-        base44.entities.JobPhoto.filter({ job_id: jobId }),
+        db.JobPart.filter({ job_id: jobId }),
+        db.JobLabor.filter({ job_id: jobId }),
+        db.JobDocument.filter({ job_id: jobId }),
+        db.JobPhoto.filter({ job_id: jobId }),
       ]);
       await Promise.all([
-        ...parts.map(r => base44.entities.JobPart.delete(r.id)),
-        ...labor.map(r => base44.entities.JobLabor.delete(r.id)),
-        ...docs.map(r => base44.entities.JobDocument.delete(r.id)),
-        ...photos.map(r => base44.entities.JobPhoto.delete(r.id)),
+        ...parts.map(r => db.JobPart.delete(r.id)),
+        ...labor.map(r => db.JobLabor.delete(r.id)),
+        ...docs.map(r => db.JobDocument.delete(r.id)),
+        ...photos.map(r => db.JobPhoto.delete(r.id)),
       ]);
-      return base44.entities.Job.delete(jobId);
+      return db.Job.delete(jobId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });

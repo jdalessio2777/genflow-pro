@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
@@ -32,7 +32,7 @@ export default function Schedule() {
 
   const { data: jobs = [] } = useQuery({
     queryKey: ["jobs"],
-    queryFn: () => base44.entities.Job.list("-created_date", 200),
+    queryFn: () => db.Job.list("-created_date", 200),
   });
 
   const scheduledJobs = jobs.filter(j =>

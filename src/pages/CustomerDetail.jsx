@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -20,7 +20,7 @@ export default function CustomerDetail() {
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Customer.delete(id),
+    mutationFn: () => db.Customer.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       navigate("/customers", { replace: true });
@@ -31,19 +31,19 @@ export default function CustomerDetail() {
   const { data: customer, isLoading } = useQuery({
     queryKey: ["customer", id],
     queryFn: async () => {
-      const res = await base44.entities.Customer.filter({ id });
+      const res = await db.Customer.filter({ id });
       return res[0];
     },
   });
 
   const { data: jobs = [] } = useQuery({
     queryKey: ["customer-jobs", id],
-    queryFn: () => base44.entities.Job.filter({ customer_id: id }, "-created_date"),
+    queryFn: () => db.Job.filter({ customer_id: id }, "-created_date"),
   });
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["customer-invoices", id],
-    queryFn: () => base44.entities.Invoice.filter({ customer_id: id }),
+    queryFn: () => db.Invoice.filter({ customer_id: id }),
   });
 
   if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;

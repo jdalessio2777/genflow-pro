@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +15,7 @@ export default function Invoices() {
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["invoices"],
-    queryFn: () => base44.entities.Invoice.list("-created_date"),
+    queryFn: () => db.Invoice.list("-created_date"),
   });
 
   const filtered = invoices.filter(i => {

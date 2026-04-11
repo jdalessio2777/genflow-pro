@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,23 +39,23 @@ function CustomerCard({ customer }) {
   const queryClient = useQueryClient();
   const deleteMutation = useMutation({
     mutationFn: async (customerId) => {
-      const jobs = await base44.entities.Job.filter({ customer_id: customerId });
+      const jobs = await db.Job.filter({ customer_id: customerId });
       for (const job of jobs) {
         const [parts, labor, docs, photos] = await Promise.all([
-          base44.entities.JobPart.filter({ job_id: job.id }),
-          base44.entities.JobLabor.filter({ job_id: job.id }),
-          base44.entities.JobDocument.filter({ job_id: job.id }),
-          base44.entities.JobPhoto.filter({ job_id: job.id }),
+          db.JobPart.filter({ job_id: job.id }),
+          db.JobLabor.filter({ job_id: job.id }),
+          db.JobDocument.filter({ job_id: job.id }),
+          db.JobPhoto.filter({ job_id: job.id }),
         ]);
         await Promise.all([
-          ...parts.map(r => base44.entities.JobPart.delete(r.id)),
-          ...labor.map(r => base44.entities.JobLabor.delete(r.id)),
-          ...docs.map(r => base44.entities.JobDocument.delete(r.id)),
-          ...photos.map(r => base44.entities.JobPhoto.delete(r.id)),
+          ...parts.map(r => db.JobPart.delete(r.id)),
+          ...labor.map(r => db.JobLabor.delete(r.id)),
+          ...docs.map(r => db.JobDocument.delete(r.id)),
+          ...photos.map(r => db.JobPhoto.delete(r.id)),
         ]);
-        await base44.entities.Job.delete(job.id);
+        await db.Job.delete(job.id);
       }
-      return base44.entities.Customer.delete(customerId);
+      return db.Customer.delete(customerId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
@@ -209,7 +209,7 @@ export default function Customers() {
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ["customers"],
-    queryFn: () => base44.entities.Customer.list("-created_date"),
+    queryFn: () => db.Customer.list("-created_date"),
   });
 
   const filtered = customers.filter(c =>

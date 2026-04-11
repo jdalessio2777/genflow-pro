@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -16,11 +16,11 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
 
   const { data: templates = [] } = useQuery({
     queryKey: ["doc-templates"],
-    queryFn: () => base44.entities.DocumentTemplate.filter({ is_active: true }),
+    queryFn: () => db.DocumentTemplate.filter({ is_active: true }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.JobDocument.delete(id),
+    mutationFn: (id) => db.JobDocument.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-docs", jobId] });
       toast.success("Document removed");
@@ -28,7 +28,7 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (template) => base44.entities.JobDocument.create({
+    mutationFn: (template) => db.JobDocument.create({
       job_id: jobId,
       template_id: template.id,
       template_name: template.name,

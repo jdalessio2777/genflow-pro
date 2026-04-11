@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,7 +65,7 @@ function PartsCategoryList({ parts, onSelectCategory }) {
                 </div>
                 <button
                   onClick={() => {
-                    base44.entities.Part.update(part.id, { reorder_flagged: false, in_stock: 1 })
+                    db.Part.update(part.id, { reorder_flagged: false, in_stock: 1 })
                       .then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
                   }}
                   className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-orange-600 text-white shrink-0 active:scale-95"
@@ -114,19 +114,19 @@ function PartsItemList({ category, parts }) {
     : parts.filter(p => p.category === category.key);
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Part.create(data),
+    mutationFn: (data) => db.Part.create(data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }); setOpen(false); setForm({ name: "", part_number: "", cost: 0, default_price: 0, in_stock: 0 }); toast.success("Part added"); },
   });
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Part.update(id, data),
+    mutationFn: ({ id, data }) => db.Part.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }),
   });
   const reorderMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Part.update(id, data),
+    mutationFn: ({ id, data }) => db.Part.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }),
   });
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Part.delete(id),
+    mutationFn: (id) => db.Part.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }); toast.success("Part removed"); },
   });
 
@@ -197,15 +197,15 @@ function LaborRatesList() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", rate: 115, cost_rate: 0, notes: "" });
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => base44.entities.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const hourly = rates.filter(r => r.type === "hourly");
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.LaborRate.create(data),
+    mutationFn: (data) => db.LaborRate.create(data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); setOpen(false); setForm({ name: "", rate: 115, cost_rate: 0, notes: "" }); toast.success("Rate saved"); },
   });
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.LaborRate.delete(id),
+    mutationFn: (id) => db.LaborRate.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); toast.success("Rate removed"); },
   });
 
@@ -253,7 +253,7 @@ function LaborRatesList() {
 
 // ─── FLAT RATES FOLDER LIST ───────────────────────────────────────────────────
 function FlatRatesFolderList({ onSelectFolder }) {
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => base44.entities.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const flatRates = rates.filter(r => r.type === "flat_rate");
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance"];
 
@@ -290,18 +290,18 @@ function FlatRatesItemList({ folder }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => base44.entities.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance"];
   const items = folder.key === "other"
     ? rates.filter(r => r.type === "flat_rate" && !knownKeys.includes(r.category))
     : rates.filter(r => r.type === "flat_rate" && r.category === folder.key);
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.LaborRate.create(data),
+    mutationFn: (data) => db.LaborRate.create(data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); setOpen(false); setForm({ name: "", flat_price: 0, flat_cost: 0, notes: "" }); toast.success("Flat rate added"); },
   });
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.LaborRate.delete(id),
+    mutationFn: (id) => db.LaborRate.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); toast.success("Removed"); },
   });
 
@@ -357,15 +357,15 @@ function MaintenanceList() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => base44.entities.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const items = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.LaborRate.create(data),
+    mutationFn: (data) => db.LaborRate.create(data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); setOpen(false); setForm({ name: "", flat_price: 0, flat_cost: 0, notes: "" }); toast.success("Added"); },
   });
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.LaborRate.delete(id),
+    mutationFn: (id) => db.LaborRate.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); toast.success("Removed"); },
   });
 
@@ -381,7 +381,7 @@ function MaintenanceList() {
     const existingNames = rates.filter(r => r.category === "maintenance" && r.type === "flat_rate").map(r => r.name);
     const toSeed = SEED_ITEMS.filter(s => !existingNames.includes(s.name));
     if (toSeed.length === 0) return;
-    Promise.all(toSeed.map(s => base44.entities.LaborRate.create({ ...s, type: "flat_rate", category: "maintenance" })))
+    Promise.all(toSeed.map(s => db.LaborRate.create({ ...s, type: "flat_rate", category: "maintenance" })))
       .then(() => queryClient.invalidateQueries({ queryKey: ["labor-rates"] }));
   }, [rates.length]);
 
@@ -451,8 +451,8 @@ export default function Catalog() {
   const [partsCategory, setPartsCategory] = useState(null);
   const [search, setSearch] = useState("");
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => base44.entities.LaborRate.list("name") });
-  const { data: parts = [] } = useQuery({ queryKey: ["parts-catalog"], queryFn: () => base44.entities.Part.list("name") });
+  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
+  const { data: parts = [] } = useQuery({ queryKey: ["parts-catalog"], queryFn: () => db.Part.list("name") });
 
   // One-time migration: fix parts with missing/wrong categories
   useEffect(() => {
@@ -475,14 +475,14 @@ export default function Catalog() {
 
     const migrateParts = async () => {
       try {
-        const allParts = await base44.entities.Part.list("name");
+        const allParts = await db.Part.list("name");
         const toUpdate = allParts.filter(p => {
           const needsMigration = !p.category || p.category === "" || !KNOWN_KEYS.includes(p.category);
           if (!needsMigration) return false;
           return inferCategory(p.name) !== null;
         });
         for (const part of toUpdate) {
-          await base44.entities.Part.update(part.id, { category: inferCategory(part.name) });
+          await db.Part.update(part.id, { category: inferCategory(part.name) });
         }
         if (toUpdate.length > 0) queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
       } catch (e) { /* silently fail */ }
@@ -495,7 +495,7 @@ export default function Catalog() {
     if (rates.length > 0) {
       const hasBattery = rates.some(r => r.name?.toLowerCase().includes("26r") || r.name?.toLowerCase().includes("battery 26r"));
       if (!hasBattery) {
-        base44.entities.LaborRate.create({
+        db.LaborRate.create({
           name: "Battery 26R",
           type: "flat_rate",
           category: "batteries",

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,7 +16,7 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
   const [photoType, setPhotoType] = useState("before");
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.JobPhoto.delete(id),
+    mutationFn: (id) => db.JobPhoto.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-photos", jobId] });
       toast.success("Photo removed");
@@ -27,8 +28,8 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      await base44.entities.JobPhoto.create({
+      const { file_url } = await integrationsCore.UploadFile({ file });
+      await db.JobPhoto.create({
         job_id: jobId,
         url: file_url,
         type: photoType,

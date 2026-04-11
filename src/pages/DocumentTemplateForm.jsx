@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,7 +41,7 @@ export default function DocumentTemplateForm() {
   const { isLoading } = useQuery({
     queryKey: ["doc-template", id],
     queryFn: async () => {
-      const r = await base44.entities.DocumentTemplate.filter({ id });
+      const r = await db.DocumentTemplate.filter({ id });
       if (r.length > 0) setForm(prev => ({ ...prev, ...r[0] }));
       return r[0];
     },
@@ -50,8 +50,8 @@ export default function DocumentTemplateForm() {
 
   const mutation = useMutation({
     mutationFn: (data) => isEdit
-      ? base44.entities.DocumentTemplate.update(id, data)
-      : base44.entities.DocumentTemplate.create(data),
+      ? db.DocumentTemplate.update(id, data)
+      : db.DocumentTemplate.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success(isEdit ? "Template updated" : "Template created");

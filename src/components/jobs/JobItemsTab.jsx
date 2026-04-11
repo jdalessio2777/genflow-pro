@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, Clock, Zap, Wrench, Trash2, Plus } from "lucide-react";
@@ -31,11 +31,11 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
 
   const { data: rates = [] } = useQuery({
     queryKey: ["labor-rates"],
-    queryFn: () => base44.entities.LaborRate.list("name"),
+    queryFn: () => db.LaborRate.list("name"),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.JobLabor.create(data),
+    mutationFn: (data) => db.JobLabor.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-labor", jobId] });
       toast.success("Added to job");
@@ -45,7 +45,7 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.JobLabor.delete(id),
+    mutationFn: (id) => db.JobLabor.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["job-labor", jobId] }),
   });
 

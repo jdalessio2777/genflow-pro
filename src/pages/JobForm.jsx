@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName, getUserColor } from "@/lib/userColors";
 import { Button } from "@/components/ui/button";
@@ -60,13 +60,13 @@ export default function JobForm() {
 
   const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
-    queryFn: () => base44.entities.Customer.list("name"),
+    queryFn: () => db.Customer.list("name"),
   });
 
   const { isLoading: loadingJob } = useQuery({
     queryKey: ["job", id],
     queryFn: async () => {
-      const res = await base44.entities.Job.filter({ id });
+      const res = await db.Job.filter({ id });
       if (res.length > 0) setForm(prev => ({ ...prev, ...res[0] }));
       return res[0];
     },
@@ -82,12 +82,12 @@ export default function JobForm() {
 
   const mutation = useMutation({
     mutationFn: (data) => isEdit
-      ? base44.entities.Job.update(id, data)
-      : base44.entities.Job.create(data),
+      ? db.Job.update(id, data)
+      : db.Job.create(data),
     onSuccess: async (newJob) => {
       if (!isEdit) {
         try {
-          await base44.entities.Invoice.create({
+          await db.Invoice.create({
             job_id: newJob.id,
             customer_id: newJob.customer_id,
             customer_name: newJob.customer_name,

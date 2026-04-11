@@ -1,11 +1,12 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 
 // Shared team notification sender
 // Reads team emails from AppSettings and sends to all filled-in addresses
 // All failures are silent — never block the user action
 export async function notifyTeam({ subject, body, triggeredBy = "" }) {
   try {
-    const allSettings = await base44.entities.AppSettings.list("key");
+    const allSettings = await db.AppSettings.list("key");
     const get = (key) => allSettings.find(s => s.key === key)?.value || "";
 
     const emails = [
@@ -33,7 +34,7 @@ export async function notifyTeam({ subject, body, triggeredBy = "" }) {
 
     for (const email of emails) {
       try {
-        await base44.integrations.Core.SendEmail({ to: email, from_name, subject, html });
+        await integrationsCore.SendEmail({ to: email, from_name, subject, html });
       } catch {
         // silently fail per address
       }

@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -155,49 +156,49 @@ export default function JobDetail() {
 
   const { data: job, isLoading } = useQuery({
     queryKey: ["job", id],
-    queryFn: async () => { const r = await base44.entities.Job.filter({ id }); return r[0]; },
+    queryFn: async () => { const r = await db.Job.filter({ id }); return r[0]; },
   });
 
   const { data: parts = [] } = useQuery({
     queryKey: ["job-parts", id],
-    queryFn: () => base44.entities.JobPart.filter({ job_id: id }),
+    queryFn: () => db.JobPart.filter({ job_id: id }),
   });
 
   const { data: labor = [] } = useQuery({
     queryKey: ["job-labor", id],
-    queryFn: () => base44.entities.JobLabor.filter({ job_id: id }),
+    queryFn: () => db.JobLabor.filter({ job_id: id }),
   });
 
   const { data: documents = [] } = useQuery({
     queryKey: ["job-docs", id],
-    queryFn: () => base44.entities.JobDocument.filter({ job_id: id }),
+    queryFn: () => db.JobDocument.filter({ job_id: id }),
   });
 
   const { data: catalogParts = [] } = useQuery({
     queryKey: ["parts-catalog"],
-    queryFn: () => base44.entities.Part.list("name"),
+    queryFn: () => db.Part.list("name"),
   });
 
   const { data: photos = [] } = useQuery({
     queryKey: ["job-photos", id],
-    queryFn: () => base44.entities.JobPhoto.filter({ job_id: id }),
+    queryFn: () => db.JobPhoto.filter({ job_id: id }),
   });
 
   const { data: existingInvoices = [] } = useQuery({
     queryKey: ["job-invoice", id],
-    queryFn: () => base44.entities.Invoice.filter({ job_id: id }),
+    queryFn: () => db.Invoice.filter({ job_id: id }),
   });
   const existingInvoice = existingInvoices[0] || null;
 
   const { data: customer } = useQuery({
     queryKey: ["job-customer", job?.customer_id],
-    queryFn: async () => { const r = await base44.entities.Customer.filter({ id: job.customer_id }); return r[0]; },
+    queryFn: async () => { const r = await db.Customer.filter({ id: job.customer_id }); return r[0]; },
     enabled: !!job?.customer_id,
   });
 
   const { data: customerHistory = [] } = useQuery({
     queryKey: ["customer-history", job?.customer_id],
-    queryFn: () => base44.entities.Job.filter({ customer_id: job?.customer_id }, "-created_date"),
+    queryFn: () => db.Job.filter({ customer_id: job?.customer_id }, "-created_date"),
     enabled: !!job?.customer_id,
   });
   const previousJobs = customerHistory
@@ -243,7 +244,7 @@ export default function JobDetail() {
   }, [job?.status, job?.on_site_time, optimisticOnSiteTime]);
 
   const updateJob = useMutation({
-    mutationFn: (data) => base44.entities.Job.update(id, data),
+    mutationFn: (data) => db.Job.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job", id] });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -319,13 +320,13 @@ export default function JobDetail() {
       },
     });
     if (newStatus === "completed" && ["maintenance", "battery_replacement"].includes(job.job_type)) {
-      base44.entities.Customer.update(job.customer_id, { last_service_date: new Date().toISOString() });
+      db.Customer.update(job.customer_id, { last_service_date: new Date().toISOString() });
     }
     if (newStatus === "scheduled" && customer?.email && job.scheduled_date) {
       try {
         const appointmentTime = new Date(job.scheduled_date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
         const appointmentHour = new Date(job.scheduled_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        await base44.integrations.Core.SendEmail({
+        await integrationsCore.SendEmail({
           to: customer.email,
           from_name: "AJ's Generator Service",
           subject: `Appointment Confirmed — ${job.title}`,
@@ -338,7 +339,7 @@ export default function JobDetail() {
       try {
         const laborLines = labor.map(l => `<li style="font-size:13px;">${l.description}</li>`).join("");
         const partsLines = parts.filter(p => p.charge_for_part).map(p => `<li style="font-size:13px;">${p.name} (×${p.quantity})</li>`).join("");
-        await base44.integrations.Core.SendEmail({
+        await integrationsCore.SendEmail({
           to: customer.email,
           from_name: "AJ's Generator Service",
           subject: `Service Complete — ${job.title}`,
@@ -396,12 +397,12 @@ export default function JobDetail() {
     const invoiceData = { ...buildInvoiceData(), job_id: id, customer_id: job.customer_id, customer_name: job.customer_name };
     let inv;
     if (existingInvoice) {
-      await base44.entities.Invoice.update(existingInvoice.id, invoiceData);
+      await db.Invoice.update(existingInvoice.id, invoiceData);
       inv = existingInvoice;
     } else {
-      inv = await base44.entities.Invoice.create({ ...invoiceData, invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft" });
+      inv = await db.Invoice.create({ ...invoiceData, invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft" });
     }
-    await base44.entities.Job.update(id, { status: "invoiced" });
+    await db.Job.update(id, { status: "invoiced" });
     queryClient.invalidateQueries({ queryKey: ["job", id] });
     queryClient.invalidateQueries({ queryKey: ["job-invoice", id] });
     queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -412,10 +413,10 @@ export default function JobDetail() {
   const handleCollectPayment = async () => {
     const invoiceData = buildInvoiceData();
     if (existingInvoice) {
-      await base44.entities.Invoice.update(existingInvoice.id, invoiceData);
+      await db.Invoice.update(existingInvoice.id, invoiceData);
       navigate(`/invoices/${existingInvoice.id}`);
     } else {
-      const inv = await base44.entities.Invoice.create({
+      const inv = await db.Invoice.create({
         ...invoiceData, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
         invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft",
       });
@@ -426,7 +427,7 @@ export default function JobDetail() {
   const addServiceAgreement = async (type) => {
     if (type !== "annual_air_cooled") return;
     const description = "Annual Service Agreement — Air-Cooled Generator · 1 maintenance visit/yr · 10% off parts, labor & repairs";
-    await base44.entities.JobLabor.create({
+    await db.JobLabor.create({
       job_id: id,
       description,
       is_flat_rate: true,
@@ -847,7 +848,7 @@ export default function JobDetail() {
                     <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setScheduleNextOpen(false)}>Skip</Button>
                     <Button className="flex-1 rounded-xl" onClick={async () => {
                       if (!nextDate) return;
-                      await base44.entities.Job.create({
+                      await db.Job.create({
                         customer_id: job.customer_id, customer_name: job.customer_name,
                         title: job.title, job_type: "maintenance", status: "scheduled",
                         scheduled_date: new Date(nextDate).toISOString(),
@@ -924,7 +925,7 @@ export default function JobDetail() {
                               <div className="flex items-center gap-2 shrink-0">
                                 <p className="text-sm font-bold">{formatCurrency(item.total_price)}</p>
                                 <Button variant="ghost" size="icon" className="h-7 w-7"
-                                  onClick={() => base44.entities.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))}>
+                                  onClick={() => db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))}>
                                   <Trash2 className="w-3 h-3 text-destructive" />
                                 </Button>
                               </div>
@@ -951,7 +952,7 @@ export default function JobDetail() {
                           <p className="text-sm font-bold">${isMember ? Math.round(r.price * memberDiscountRate) : r.price}{r.type === "hourly" ? "/hr" : ""}</p>
                           <Button size="icon" className="h-7 w-7 rounded-lg" onClick={() => {
                             const price = isMember ? Math.round(r.price * memberDiscountRate * 100) / 100 : r.price;
-                            base44.entities.JobLabor.create({
+                            db.JobLabor.create({
                               job_id: id,
                               description: r.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
                               is_flat_rate: r.type === "flat",
@@ -986,7 +987,7 @@ export default function JobDetail() {
                           <p className="text-sm font-bold text-orange-700">${isMember ? Math.round(r.price * memberDiscountRate) : r.price}/hr</p>
                           <Button size="icon" className="h-7 w-7 rounded-lg bg-orange-500 hover:bg-orange-600" onClick={() => {
                             const price = isMember ? Math.round(r.price * memberDiscountRate * 100) / 100 : r.price;
-                            base44.entities.JobLabor.create({
+                            db.JobLabor.create({
                               job_id: id, description: r.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
                               is_flat_rate: false, hours: 1, rate: price, total_price: price, total_cost: 0,
                             }).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
@@ -1012,7 +1013,7 @@ export default function JobDetail() {
                         <div className="flex items-center gap-2 shrink-0">
                           <p className="text-sm font-bold text-red-700">${r.price}{r.type === "hourly" ? "/hr" : ""}</p>
                           <Button size="icon" className="h-7 w-7 rounded-lg bg-red-500 hover:bg-red-600" onClick={() => {
-                            base44.entities.JobLabor.create({
+                            db.JobLabor.create({
                               job_id: id, description: r.name,
                               is_flat_rate: r.type === "flat",
                               flat_rate_amount: r.type === "flat" ? r.price : 0,
@@ -1270,7 +1271,7 @@ export default function JobDetail() {
                                 <p className="text-sm font-semibold">{formatCurrency(part.total_price)}</p>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                                   if (window.confirm(`Remove "${part.name}" from this job?`)) {
-                                    base44.entities.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
+                                    db.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
                                   }
                                 }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                               </div>
@@ -1295,7 +1296,7 @@ export default function JobDetail() {
                                 <p className="text-sm font-semibold">{formatCurrency(item.total_price)}</p>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                                   if (window.confirm(`Remove "${item.description}" from this job?`)) {
-                                    base44.entities.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
+                                    db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
                                   }
                                 }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                               </div>
@@ -1316,7 +1317,7 @@ export default function JobDetail() {
                             </a>
                             <button onClick={() => {
                               if (window.confirm("Remove this photo from the job?")) {
-                                base44.entities.JobPhoto.delete(photo.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-photos", id] }));
+                                db.JobPhoto.delete(photo.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-photos", id] }));
                               }
                             }} className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center">
                               <Trash2 className="w-3 h-3 text-white" />
@@ -1339,7 +1340,7 @@ export default function JobDetail() {
                               </div>
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                                 if (window.confirm(`Remove "${doc.template_name || "this document"}" from this job?`)) {
-                                  base44.entities.JobDocument.delete(doc.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-docs", id] }));
+                                  db.JobDocument.delete(doc.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-docs", id] }));
                                 }
                               }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                             </div>

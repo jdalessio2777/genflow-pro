@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader2, Download, Mail, ArrowLeft, Link2, CheckCircle2 } from "lucide-react";
@@ -23,29 +24,29 @@ export default function QuotePDF() {
 
   const { data: job, refetch: refetchJob } = useQuery({
     queryKey: ["job", id],
-    queryFn: async () => { const r = await base44.entities.Job.filter({ id }); return r[0]; },
+    queryFn: async () => { const r = await db.Job.filter({ id }); return r[0]; },
   });
 
   const { data: parts = [] } = useQuery({
     queryKey: ["job-parts", id],
-    queryFn: () => base44.entities.JobPart.filter({ job_id: id }),
+    queryFn: () => db.JobPart.filter({ job_id: id }),
     enabled: !!id,
   });
 
   const { data: labor = [] } = useQuery({
     queryKey: ["job-labor", id],
-    queryFn: () => base44.entities.JobLabor.filter({ job_id: id }),
+    queryFn: () => db.JobLabor.filter({ job_id: id }),
     enabled: !!id,
   });
 
   const { data: customer } = useQuery({
     queryKey: ["customer", job?.customer_id],
-    queryFn: async () => { const r = await base44.entities.Customer.filter({ id: job.customer_id }); return r[0]; },
+    queryFn: async () => { const r = await db.Customer.filter({ id: job.customer_id }); return r[0]; },
     enabled: !!job?.customer_id,
   });
 
   const updateJob = useMutation({
-    mutationFn: (data) => base44.entities.Job.update(id, data),
+    mutationFn: (data) => db.Job.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job", id] });
       refetchJob();
@@ -59,7 +60,7 @@ export default function QuotePDF() {
   const getApprovalToken = async () => {
     if (job?.quote_approval_token) return job.quote_approval_token;
     const token = generateToken();
-    await base44.entities.Job.update(id, { quote_approval_token: token });
+    await db.Job.update(id, { quote_approval_token: token });
     await refetchJob();
     return token;
   };
@@ -116,7 +117,7 @@ Design requirements:
 
 Return ONLY the complete HTML document, nothing else.`;
 
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await integrationsCore.InvokeLLM({
         prompt,
         model: "claude_sonnet_4_6",
       });
@@ -154,7 +155,7 @@ Return ONLY the complete HTML document, nothing else.`;
         </div></body>`
       );
 
-      await base44.integrations.Core.SendEmail({
+      await integrationsCore.SendEmail({
         to: customer.email,
         subject: `Service Quote — ${job?.title} · AJ's Generator Service`,
         html: emailHtml,

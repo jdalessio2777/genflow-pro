@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
@@ -15,20 +15,20 @@ export default function QuoteApproval() {
   const { data: job, isLoading: loadingJob } = useQuery({
     queryKey: ["public-job", jobId],
     queryFn: async () => {
-      const r = await base44.entities.Job.filter({ id: jobId });
+      const r = await db.Job.filter({ id: jobId });
       return r[0];
     },
   });
 
   const { data: parts = [] } = useQuery({
     queryKey: ["public-parts", jobId],
-    queryFn: () => base44.entities.JobPart.filter({ job_id: jobId }),
+    queryFn: () => db.JobPart.filter({ job_id: jobId }),
     enabled: !!jobId,
   });
 
   const { data: labor = [] } = useQuery({
     queryKey: ["public-labor", jobId],
-    queryFn: () => base44.entities.JobLabor.filter({ job_id: jobId }),
+    queryFn: () => db.JobLabor.filter({ job_id: jobId }),
     enabled: !!jobId,
   });
 
@@ -51,7 +51,7 @@ export default function QuoteApproval() {
 
     setApproving(true);
     try {
-      await base44.entities.Job.update(jobId, {
+      await db.Job.update(jobId, {
         status: "scheduled",
         quote_approved_date: new Date().toISOString(),
         quote_approved_by_customer: true,

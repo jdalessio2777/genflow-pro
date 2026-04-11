@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Card } from "@/components/ui/card";
@@ -248,7 +249,7 @@ function ExpensesTab({ expenses }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Expense.create(data),
+    mutationFn: (data) => db.Expense.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
       resetForm();
@@ -257,7 +258,7 @@ function ExpensesTab({ expenses }) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Expense.delete(id),
+    mutationFn: (id) => db.Expense.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
   });
 
@@ -274,7 +275,7 @@ function ExpensesTab({ expenses }) {
     setReceiptPreview(URL.createObjectURL(file));
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await integrationsCore.UploadFile({ file });
       setReceiptUrl(file_url);
     } catch {
       toast.error("Photo upload failed — expense will save without receipt");
@@ -480,7 +481,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
   };
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.MileageLog.create(data),
+    mutationFn: (data) => db.MileageLog.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mileage"] });
       setSmartOpen(false);
@@ -494,7 +495,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.MileageLog.delete(id),
+    mutationFn: (id) => db.MileageLog.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["mileage"] }),
   });
 
@@ -938,27 +939,27 @@ export default function Finance() {
   const { settings = {} } = useSettings() || {};
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
-    queryFn: () => base44.entities.Invoice.list("-created_date", 500),
+    queryFn: () => db.Invoice.list("-created_date", 500),
   });
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses"],
-    queryFn: () => base44.entities.Expense.list("-date", 500),
+    queryFn: () => db.Expense.list("-date", 500),
   });
   const { data: mileage = [] } = useQuery({
     queryKey: ["mileage"],
-    queryFn: () => base44.entities.MileageLog.list("-date", 500),
+    queryFn: () => db.MileageLog.list("-date", 500),
   });
   const { data: vehicles = [] } = useQuery({
     queryKey: ["vehicles"],
-    queryFn: () => base44.entities.Vehicle.list("name"),
+    queryFn: () => db.Vehicle.list("name"),
   }); // still needed for MileageTab
   const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
-    queryFn: () => base44.entities.Customer.list("name"),
+    queryFn: () => db.Customer.list("name"),
   });
   const { data: financeJobs = [] } = useQuery({
     queryKey: ["jobs"],
-    queryFn: () => base44.entities.Job.list("-created_date", 500),
+    queryFn: () => db.Job.list("-created_date", 500),
   });
 
   return (

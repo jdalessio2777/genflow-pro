@@ -1,14 +1,15 @@
-import { createClient } from '@base44/sdk';
-import { appParams } from '@/lib/app-params';
-
-const { appId, token, functionsVersion, appBaseUrl } = appParams;
-
-//Create a client with authentication required
-export const base44 = createClient({
-  appId,
-  token,
-  functionsVersion,
-  serverUrl: '',
-  requiresAuth: false,
-  appBaseUrl
-});
+/**
+ * Legacy Base44 client stub. Data access uses `db` from `@/lib/db`;
+ * auth uses Supabase in `AuthContext`; integrations use `@/lib/coreIntegrations`.
+ */
+export const base44 = {
+  auth: {
+    me: async () => {
+      throw new Error('Auth is handled by Supabase — use useAuth() or supabase.auth.getUser()');
+    },
+    logout: () => {},
+    redirectToLogin: () => {},
+  },
+  entities: {},
+  integrations: { Core: {} },
+};

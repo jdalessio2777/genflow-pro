@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,11 @@ export default function Documents() {
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["doc-templates"],
-    queryFn: () => base44.entities.DocumentTemplate.list("-created_date"),
+    queryFn: () => db.DocumentTemplate.list("-created_date"),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.DocumentTemplate.delete(id),
+    mutationFn: (id) => db.DocumentTemplate.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success("Template deleted");
@@ -27,7 +27,7 @@ export default function Documents() {
   const duplicateMutation = useMutation({
     mutationFn: async (template) => {
       const { id, created_date, updated_date, created_by, ...data } = template;
-      await base44.entities.DocumentTemplate.create({ ...data, name: `${data.name} (Copy)` });
+      await db.DocumentTemplate.create({ ...data, name: `${data.name} (Copy)` });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["doc-templates"] });

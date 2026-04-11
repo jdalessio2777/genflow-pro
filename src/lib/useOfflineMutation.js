@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { db } from '@/lib/db';
 import { queueOperation } from './offlineQueue';
 import { useOffline } from './OfflineContext';
 import { toast } from 'sonner';
@@ -16,7 +16,7 @@ export function useOfflineMutation({ entity, type, queryKeys = [], onSuccess, on
         return { offline: true, data };
       }
 
-      const entityObj = base44.entities[entity];
+      const entityObj = db[entity];
       if (type === 'create') return entityObj.create(data);
       if (type === 'update') return entityObj.update(entityId, data);
       if (type === 'delete') return entityObj.delete(entityId);

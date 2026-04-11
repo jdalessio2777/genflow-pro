@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { toast } from "sonner";
 import { debounce } from "lodash";
+import { useAuth } from "@/lib/AuthContext";
 
 const getUnit = (fieldId) => {
   if (fieldId.includes("voltage")) return "V";
@@ -24,16 +26,17 @@ export default function DocumentFill() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: doc, isLoading } = useQuery({
     queryKey: ["job-doc", id],
-    queryFn: async () => { const r = await base44.entities.JobDocument.filter({ id }); return r[0]; },
+    queryFn: async () => { const r = await db.JobDocument.filter({ id }); return r[0]; },
   });
 
   const { data: job } = useQuery({
     queryKey: ["doc-job", doc?.job_id],
     queryFn: async () => {
-      const r = await base44.entities.Job.filter({ id: doc.job_id });
+      const r = await db.Job.filter({ id: doc.job_id });
       return r[0];
     },
     enabled: !!doc?.job_id,
@@ -42,7 +45,7 @@ export default function DocumentFill() {
   const { data: customer } = useQuery({
     queryKey: ["doc-customer", job?.customer_id],
     queryFn: async () => {
-      const r = await base44.entities.Customer.filter({ id: job.customer_id });
+      const r = await db.Customer.filter({ id: job.customer_id });
       return r[0];
     },
     enabled: !!job?.customer_id,
@@ -90,18 +93,15 @@ export default function DocumentFill() {
 
   // Auto-fill technician name
   useEffect(() => {
-    base44.auth.me().then(user => {
-      if (user?.full_name) {
-        setValues(prev => {
-          if (prev.tech_name) return prev;
-          return { ...prev, tech_name: user.full_name };
-        });
-      }
-    }).catch(() => {});
-  }, []);
+    if (!user?.full_name) return;
+    setValues(prev => {
+      if (prev.tech_name) return prev;
+      return { ...prev, tech_name: user.full_name };
+    });
+  }, [user]);
 
   const saveMutation = useMutation({
-    mutationFn: (data) => base44.entities.JobDocument.update(id, data),
+    mutationFn: (data) => db.JobDocument.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["job-doc", id] }),
   });
 
@@ -119,7 +119,7 @@ export default function DocumentFill() {
   };
 
   const handlePhotoUpload = async (fieldId, file) => {
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await integrationsCore.UploadFile({ file });
     updateValue(fieldId, file_url);
     toast.success("Photo uploaded");
   };

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
@@ -33,7 +33,7 @@ export default function CustomerForm() {
   const { isLoading: loadingCustomer } = useQuery({
     queryKey: ["customer", id],
     queryFn: async () => {
-      const customers = await base44.entities.Customer.filter({ id });
+      const customers = await db.Customer.filter({ id });
       if (customers.length > 0) setForm(prev => ({ ...prev, ...customers[0] }));
       return customers[0];
     },
@@ -42,8 +42,8 @@ export default function CustomerForm() {
 
   const mutation = useMutation({
     mutationFn: (data) => isEdit
-      ? base44.entities.Customer.update(id, data)
-      : base44.entities.Customer.create(data),
+      ? db.Customer.update(id, data)
+      : db.Customer.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success(isEdit ? "Customer updated" : "Customer created");

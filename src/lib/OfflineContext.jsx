@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { base44 } from '@/api/base44Client';
+import { db } from '@/lib/db';
 import { getPendingOperations, removeOperation, getPendingCount } from './offlineQueue';
 import { toast } from 'sonner';
 
@@ -30,7 +30,7 @@ export function OfflineProvider({ children }) {
 
       for (const op of ops) {
         try {
-          const entity = base44.entities[op.entity];
+          const entity = db[op.entity];
           if (!entity) { await removeOperation(op.id); continue; }
 
           if (op.type === 'create') {
