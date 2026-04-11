@@ -1,0 +1,17 @@
+{
+  "name": "AppSettings",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Unique identifier for the setting"
+    },
+    "value": {
+      "type": "string",
+      "description": "The stored value"
+    }
+  },
+  "required": [
+    "key"
+  ]
+}

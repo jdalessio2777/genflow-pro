@@ -1,0 +1,42 @@
+{
+  "name": "Vehicle",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Short display name, e.g. White Ford F-250"
+    },
+    "year": {
+      "type": "string",
+      "description": "Vehicle year"
+    },
+    "make": {
+      "type": "string",
+      "description": "Vehicle make"
+    },
+    "model": {
+      "type": "string",
+      "description": "Vehicle model"
+    },
+    "plate": {
+      "type": "string",
+      "description": "License plate"
+    },
+    "color": {
+      "type": "string",
+      "description": "Vehicle color"
+    },
+    "assigned_to_name": {
+      "type": "string",
+      "description": "Primary driver name \u2014 Jeremy, Alex, Derek, or blank for shared"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the vehicle is active"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

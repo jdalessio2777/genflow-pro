@@ -1,0 +1,112 @@
+{
+  "name": "Job",
+  "type": "object",
+  "properties": {
+    "customer_id": {
+      "type": "string",
+      "description": "Customer ID"
+    },
+    "customer_name": {
+      "type": "string",
+      "description": "Customer name (denormalized)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Job title/description"
+    },
+    "job_type": {
+      "type": "string",
+      "enum": [
+        "maintenance",
+        "repair",
+        "install",
+        "emergency",
+        "inspection",
+        "other"
+      ],
+      "description": "Type of job"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "quote",
+        "scheduled",
+        "in_progress",
+        "completed",
+        "invoiced",
+        "canceled"
+      ],
+      "default": "quote"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Email of assigned technician"
+    },
+    "assigned_to_name": {
+      "type": "string",
+      "description": "Name of assigned technician"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Job notes"
+    },
+    "invoice_notes": {
+      "type": "string",
+      "description": "Summary for invoice \u2014 what was performed"
+    },
+    "cancel_reason": {
+      "type": "string"
+    },
+    "total_parts_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "total_parts_price": {
+      "type": "number",
+      "default": 0
+    },
+    "total_labor_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "total_labor_price": {
+      "type": "number",
+      "default": 0
+    },
+    "total_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "total_price": {
+      "type": "number",
+      "default": 0
+    },
+    "profit": {
+      "type": "number",
+      "default": 0
+    },
+    "requires_document": {
+      "type": "boolean",
+      "default": false
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "customer_id",
+    "title",
+    "job_type"
+  ]
+}

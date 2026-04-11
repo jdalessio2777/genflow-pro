@@ -1,0 +1,52 @@
+{
+  "name": "MileageLog",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of the mileage entry"
+    },
+    "miles": {
+      "type": "number",
+      "description": "Miles driven"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the trip"
+    },
+    "from_address": {
+      "type": "string",
+      "description": "Origin address"
+    },
+    "to_address": {
+      "type": "string",
+      "description": "Destination address"
+    },
+    "job_id": {
+      "type": "string",
+      "description": "Associated job ID (optional)"
+    },
+    "vehicle_id": {
+      "type": "string",
+      "description": "Associated vehicle ID"
+    },
+    "vehicle_name": {
+      "type": "string",
+      "description": "Vehicle display name (denormalized)"
+    },
+    "author_name": {
+      "type": "string",
+      "description": "Name of the person logging"
+    },
+    "author_email": {
+      "type": "string",
+      "description": "Email of the person logging"
+    }
+  },
+  "required": [
+    "date",
+    "miles",
+    "description"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "TeamNote",
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "description": "Note text content"
+    },
+    "author_email": {
+      "type": "string",
+      "description": "Email of the author"
+    },
+    "author_name": {
+      "type": "string",
+      "description": "Display name of the author"
+    }
+  },
+  "required": [
+    "text"
+  ]
+}

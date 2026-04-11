@@ -1,0 +1,45 @@
+{
+  "name": "Expense",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Expense date"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Expense amount"
+    },
+    "category": {
+      "type": "string",
+      "description": "Expense category"
+    },
+    "description": {
+      "type": "string",
+      "description": "Expense description"
+    },
+    "receipt_url": {
+      "type": "string",
+      "description": "URL of the uploaded receipt photo"
+    },
+    "scanned_by_ai": {
+      "type": "boolean",
+      "description": "Whether AI auto-filled this expense from a receipt scan"
+    },
+    "author_name": {
+      "type": "string",
+      "description": "Name of the person logging the expense"
+    },
+    "author_email": {
+      "type": "string",
+      "description": "Email of the person logging the expense"
+    }
+  },
+  "required": [
+    "date",
+    "amount",
+    "category",
+    "description"
+  ]
+}
