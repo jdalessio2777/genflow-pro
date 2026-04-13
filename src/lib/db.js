@@ -1,10 +1,37 @@
 import { supabase } from '@/lib/supabaseClient';
 
+/**
+ * Base44 used `created_date` / `updated_date`; Supabase/Postgres typically use
+ * `created_at` / `updated_at`. Ordering by a missing column makes PostgREST
+ * error and the query returns no usable data (React Query then shows `[]`).
+ */
+function resolveOrderColumn(rawCol) {
+  const map = {
+    created_date: 'created_at',
+    updated_date: 'updated_at',
+  };
+  return map[rawCol] ?? rawCol;
+}
+
+function normalizeRow(row) {
+  if (!row || typeof row !== 'object') return row;
+  const out = { ...row };
+  if (out.created_at != null && out.created_date == null) out.created_date = out.created_at;
+  if (out.updated_at != null && out.updated_date == null) out.updated_date = out.updated_at;
+  return out;
+}
+
+function normalizeRows(data) {
+  if (!Array.isArray(data)) return data;
+  return data.map(normalizeRow);
+}
+
 function parseOrder(orderField) {
   if (orderField == null || orderField === '') return null;
   const s = String(orderField);
   const desc = s.startsWith('-');
-  const col = desc ? s.slice(1) : s;
+  const rawCol = desc ? s.slice(1) : s;
+  const col = resolveOrderColumn(rawCol);
   return { col, ascending: !desc };
 }
 
@@ -24,7 +51,7 @@ function createEntityApi(table) {
       if (ord) q = q.order(ord.col, { ascending: ord.ascending });
       const { data, error } = await q;
       assertNoError(error);
-      return data ?? [];
+      return normalizeRows(data ?? []);
     },
 
     async list(orderField, limit) {
@@ -36,19 +63,19 @@ function createEntityApi(table) {
       }
       const { data, error } = await q;
       assertNoError(error);
-      return data ?? [];
+      return normalizeRows(data ?? []);
     },
 
     async create(payload) {
       const { data, error } = await supabase.from(table).insert(payload).select().single();
       assertNoError(error);
-      return data;
+      return normalizeRow(data);
     },
 
     async update(id, payload) {
       const { data, error } = await supabase.from(table).update(payload).eq('id', id).select().single();
       assertNoError(error);
-      return data;
+      return normalizeRow(data);
     },
 
     async delete(id) {

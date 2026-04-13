@@ -1,0 +1,3466 @@
+[
+  {
+    "name": "Air Filter",
+    "part_number": "0F5418",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0E9371AS",
+    "category": "air_filters",
+    "order_price": 11.99,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0J8478S",
+    "category": "air_filters",
+    "order_price": 14.88,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Air Filter Portable",
+    "part_number": "0G84420151",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0H3375A122",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0J1240",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "G073912",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0C8127",
+    "category": "air_filters",
+    "order_price": 12.99,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "G073123",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0E9581",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "G059402",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0G5894",
+    "category": "air_filters",
+    "order_price": 33.99,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "G078601",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "073111",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter Portable",
+    "part_number": "0D9723S",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter 7KW Core Power",
+    "part_number": "0H6104",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0G3332",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "0F5419",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Cleaner Assembly 8KW HSB",
+    "part_number": "0H08840SRV",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Cleaner",
+    "part_number": "073267",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Cleaner Element w/ Plate",
+    "part_number": "0A46370SRV",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 2359",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 22095",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 1372",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 2791",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 2098",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 2050",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 6755",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "NAPA 2150",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "32 083 12-S",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "62 083 04-S",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "253107",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "24 083 09-S",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "2408309S",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "841359",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "394018S",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "798748",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter",
+    "part_number": "100149",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "G055505",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0A45310244",
+    "category": "oil_filters",
+    "order_price": 32.99,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0E7080",
+    "category": "oil_filters",
+    "order_price": 9.5,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0A3970001",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0A86220296",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0D5419",
+    "category": "oil_filters",
+    "order_price": 13.49,
+    "sale_price": 0,
+    "supplier": "Napa"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "099021",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0E7415",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "070185DS",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "070185BS",
+    "category": "oil_filters",
+    "order_price": 16.88,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "070185ES",
+    "category": "oil_filters",
+    "order_price": 164.95,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0J74890248",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0H48930301",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "0H20520369",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil/Fuel Kit",
+    "part_number": "G0709390126",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1056",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 3528",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7299",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1791",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1040",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7094",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1607",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1356",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7400",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 3394",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1515",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 3691",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 21060",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1395",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7095",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1243",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7035",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 21356",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 21036",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7000",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7145",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1334",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7037",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1516",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1348",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 27145",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1374",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1335",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1069",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 1376",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "NAPA 7750S",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "52 050 02-S",
+    "category": "oil_filters",
+    "order_price": 12.99,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "GM16703",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "GM28351",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter",
+    "part_number": "360031",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "SPARK PLUGS",
+    "part_number": "",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug NGK BKR5E",
+    "part_number": "BKR5E",
+    "category": "spark_plugs",
+    "order_price": 26.29,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Spark Plug NGK BPR6HS",
+    "part_number": "NGK BPR6HS",
+    "category": "spark_plugs",
+    "order_price": 36.33,
+    "sale_price": 0,
+    "supplier": "Amazon"
+  },
+  {
+    "name": "Spark Plug NGK BPR6ES",
+    "part_number": "NGK BPR6ES",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug NGK BPR5ES",
+    "part_number": "NGK BPR5ES",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug RC9YC",
+    "part_number": "NAPA 344",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug RC14YC",
+    "part_number": "NAPA 431",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug RC12YC",
+    "part_number": "NAPA 71",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug RN9YC",
+    "part_number": "NAPA RN9YC",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug Autolight 764",
+    "part_number": "NAPA AUTOLIGHT 764",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug Champion 3401",
+    "part_number": "CHAMPION 3401",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "BATTERIES",
+    "part_number": "",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Small 26R",
+    "part_number": "0H3421S",
+    "category": "batteries",
+    "order_price": 79.0,
+    "sale_price": 0,
+    "supplier": "Walmart, 12 bucks off for batt exchange"
+  },
+  {
+    "name": "Battery NAPA 51-R",
+    "part_number": "NAPA 7551R",
+    "category": "batteries",
+    "order_price": 79.0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery NAPA 7524F",
+    "part_number": "NAPA 7524F",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery NAPA 7527F",
+    "part_number": "NAPA 7527F",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery NAPA 31",
+    "part_number": "NAPA 7237",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Portable",
+    "part_number": "0G9449",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Portable Large",
+    "part_number": "0H1663",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery 9V",
+    "part_number": "G063998",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Lawn & Garden",
+    "part_number": "NAPA 8229",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Charger",
+    "part_number": "0D5070A",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Charger",
+    "part_number": "0G8023",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Charger 13.4VDC 2.5A",
+    "part_number": "0G8023A",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Charger",
+    "part_number": "0F15770SRV",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Charger",
+    "part_number": "0G8487",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Charger",
+    "part_number": "0A18010SRV",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Cable w/ Terminal 30ft",
+    "part_number": "NAPA 781104",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller Evolution 2",
+    "part_number": "10000003275",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB HSB 2.5L",
+    "part_number": "0E97040SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB HSB 3.0/3.9L",
+    "part_number": "0E96680SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller HSB 7KW",
+    "part_number": "0F15040SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB HSB",
+    "part_number": "0D86150SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB 50/60Hz",
+    "part_number": "076009ASRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller Evolution",
+    "part_number": "0J8371C",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 2010 Core Power",
+    "part_number": "0J0064",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller HSB 2008",
+    "part_number": "0H06430SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB HSB",
+    "part_number": "0C15370SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB Modified",
+    "part_number": "0G58840SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 0H6680D",
+    "part_number": "0H6680D",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller OH6680B",
+    "part_number": "0H6680DSRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 8KW 2008",
+    "part_number": "0G79010SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB Governor Driver",
+    "part_number": "098647ASRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 2010 Programmable",
+    "part_number": "0H7668DSRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller Deluxe Exerciser",
+    "part_number": "0639190SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB 3600RPM R-200B",
+    "part_number": "0G8455DSRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller PCB 3600RPM",
+    "part_number": "0F8710BSRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 3600RPM R200C",
+    "part_number": "0H1176BSRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 3600RPM R200A",
+    "part_number": "0G3958DSRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 1800RPM R200A",
+    "part_number": "0G3958CSRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 1800RPM R200B",
+    "part_number": "0G8455ESRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 1800RPM R200C",
+    "part_number": "0H1176ASRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller AC HSB Assembly",
+    "part_number": "10000003293",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller Compact Diesel",
+    "part_number": "0K2267A",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller Protector CPL",
+    "part_number": "0K2267C",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller WiFi",
+    "part_number": "10000003293",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 2013 AC HSB",
+    "part_number": "0J8371C",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller AC Load",
+    "part_number": "0k7341A",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller Load Management",
+    "part_number": "0K0220A",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller 12/24C",
+    "part_number": "0830890SRV",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "WiFi Module",
+    "part_number": "0L6784",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller DC2",
+    "part_number": "GM92089",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller DC2",
+    "part_number": "GM92090",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Conversion RDC2",
+    "part_number": "GM95104",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Control Board",
+    "part_number": "GM49103",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Programmable Interface Module",
+    "part_number": "GM81529-KP1",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "OnCue Plus",
+    "part_number": "GM81385-KP3",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Load Management Module",
+    "part_number": "GM92001-KP1",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "PCB Assembly Cyl/Crank",
+    "part_number": "C284507",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "LOAD SHED MODULES",
+    "part_number": "",
+    "category": "load_shed",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Smart Management Module (SMM)",
+    "part_number": "7000",
+    "category": "smm_boards",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Smart Management Module 100A",
+    "part_number": "7006",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "SMM PCB Board NO",
+    "part_number": "A0001281459",
+    "category": "smm_boards",
+    "order_price": 88.79,
+    "sale_price": 0,
+    "supplier": "Generator Magic"
+  },
+  {
+    "name": "SMM PCB Board NC",
+    "part_number": "A0001272964",
+    "category": "smm_boards",
+    "order_price": 93.89,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Smart AC Module Assembly",
+    "part_number": "10000004183",
+    "category": "smm_boards",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller AC Load",
+    "part_number": "0k7341A",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler Load Control Kit",
+    "part_number": "GM88281KP1Q",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler ATS LCM w/ Harness",
+    "part_number": "GM77177KP1QS",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler ATS LCM w/ Terminal Block",
+    "part_number": "GM77177KP2QS",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "STARTERS",
+    "part_number": "",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Motor",
+    "part_number": "A0000501971",
+    "category": "starters",
+    "order_price": 134.99,
+    "sale_price": 0,
+    "supplier": "Generator Magic"
+  },
+  {
+    "name": "Starter Motor Gear Reduced 1KW",
+    "part_number": "0E9323",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Motor",
+    "part_number": "0H58410154",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Motor",
+    "part_number": "0D5418",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter SD80",
+    "part_number": "0E42710SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Kit 191/220/360",
+    "part_number": "0D92300ESV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Kit 191/200/360/410",
+    "part_number": "0E0601ASRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Motor 12V Rework",
+    "part_number": "0G7461RWK",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Recoil Assembly",
+    "part_number": "0G9798",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Starter Solenoid Contactor",
+    "part_number": "G086729",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Solenoid Starter Gear Reduced",
+    "part_number": "0G3351",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler Starter Electric",
+    "part_number": "2509820-S",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler Starter Electric Solenoid Shaft",
+    "part_number": "2509811-S",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "OIL PRESSURE SWITCHES",
+    "part_number": "",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch",
+    "part_number": "0D9235BSRV",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch",
+    "part_number": "0L2917C",
+    "category": "oil_pressure_switches",
+    "order_price": 26.69,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch",
+    "part_number": "0L2917D",
+    "category": "oil_pressure_switches",
+    "order_price": 26.69,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch",
+    "part_number": "0H1315",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch",
+    "part_number": "0C3025",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch",
+    "part_number": "0G6820",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch Low",
+    "part_number": "0G6542",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Thermal Switch",
+    "part_number": "G094090",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Temperature Sender",
+    "part_number": "0E0502",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Temperature Switch Hi",
+    "part_number": "0A6751",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Temperature Switch VTwin",
+    "part_number": "G075281",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "FUEL REGULATORS & FUEL SYSTEM",
+    "part_number": "",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 1.5L Dual",
+    "part_number": "0E1006",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 1.5L Dual",
+    "part_number": "OE1006A",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 2.4L Assembly",
+    "part_number": "0F6390KSRV",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 2.4L Rework",
+    "part_number": "0G1397CSRV",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 7KW Vert",
+    "part_number": "0H6620",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 8KW",
+    "part_number": "0G7622C",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator",
+    "part_number": "0G7622H",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 10KW",
+    "part_number": "0G7622A",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 11KW",
+    "part_number": "0G7622FSRV",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 13-17KW",
+    "part_number": "0J9045",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator",
+    "part_number": "0J8312",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator",
+    "part_number": "0F9078",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator",
+    "part_number": "0G7581",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator 075211",
+    "part_number": "075211",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Regulator",
+    "part_number": "0F8977",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel System Update Kit 8KW",
+    "part_number": "0K80950SRV",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Solenoid Coil",
+    "part_number": "0F5022",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Solenoid 6VDC Molex",
+    "part_number": "0F9273",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Solenoid Plunger & Spring",
+    "part_number": "0J8315A",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Solenoid Plunger & Spring",
+    "part_number": "0D4166A",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Solenoid Shutoff",
+    "part_number": "0J7137",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Flex Hose 1/2\"",
+    "part_number": "0F9968",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Flex Hose 3/4\"",
+    "part_number": "0D3031",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Shutoff Valve",
+    "part_number": "0H3419",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Shutoff Valve",
+    "part_number": "0J0974",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "0H1326",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "0D6313",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "0J74890247",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "0H48930266",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3908",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3978",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3393",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3808",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3744",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3531",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3472",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3426",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3827",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3357",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3351",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 3961",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter",
+    "part_number": "NAPA 600158",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Filter G19-389",
+    "part_number": "0G9914",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler Fuel Filter",
+    "part_number": "275501",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "BRUSHES",
+    "part_number": "",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Brush Assembly",
+    "part_number": "0H0919",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Brush Assembly",
+    "part_number": "066386SRV",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Brush Holder 2-Position",
+    "part_number": "0J8415",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Brush Holder",
+    "part_number": "0F7874",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Brush Assembly Liquid Cooled",
+    "part_number": "G075591",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "STEPPER MOTORS",
+    "part_number": "",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Stepper Motor 530",
+    "part_number": "0G6452",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Stepper Motor",
+    "part_number": "G098290",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Stepper Motor 990",
+    "part_number": "0G6453",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Stepper Motor 990 Assembly",
+    "part_number": "0G6454",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Stepper Motor Carb Assembly",
+    "part_number": "0G49290",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Stepper Motor 8KW",
+    "part_number": "0H6677",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Stepper Motor Inverter Kit",
+    "part_number": "0H43470146",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "AIR BOXES & MIXERS",
+    "part_number": "",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox 8KW 2010",
+    "part_number": "0H6669",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Box Assembly",
+    "part_number": "0J1240A",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox 10KW 2013",
+    "part_number": "0J7782",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Mixer 13-14KW 2013",
+    "part_number": "0J9892",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Mixer Assembly 15-17KW HSB",
+    "part_number": "0J9742",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox 990 13-16KW",
+    "part_number": "0F92550SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Throttle Body Assembly",
+    "part_number": "0C9619",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox 990 14-17KW",
+    "part_number": "0G8297SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Mixer 20KW Assembly",
+    "part_number": "0K8424",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Mixer 20KW 2013",
+    "part_number": "0J9743",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox GT990 Assembly",
+    "part_number": "0D5864A",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox GT990",
+    "part_number": "0G1163",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox 20KW GTH999",
+    "part_number": "0J00990SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox GTH530 Dual Fuel",
+    "part_number": "0E9443",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Airbox Assembly GT530",
+    "part_number": "0K1902",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Choke Arm",
+    "part_number": "0J0602",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Choke Arm 28MM Assembly",
+    "part_number": "0E92950",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Valve Choke GTH530",
+    "part_number": "0E9542",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "TRANSFER SWITCH PARTS",
+    "part_number": "",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Transfer Switch HSB 200A 250V",
+    "part_number": "0D9618",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "XFR Switch HSB 100A 2P 250V",
+    "part_number": "0L2910",
+    "category": "load_shed",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "XFR Switch HSB 200A 2P 250V",
+    "part_number": "0L2911",
+    "category": "load_shed",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coil Utility ATS",
+    "part_number": "0E6154",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coil Utility HSB 100A",
+    "part_number": "077220",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coil Utility HSB",
+    "part_number": "0E6154A",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coil Utility Standby",
+    "part_number": "077220A",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Transfer EZ Operator",
+    "part_number": "0G4747",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "GFI Sensing Module",
+    "part_number": "0J2353",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Transformer 240/16V 1VA",
+    "part_number": "0G0627",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Transformer 208/16V 6VA",
+    "part_number": "0F6366A",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Transformer 400A 12.5VA",
+    "part_number": "G057909",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Transformer CMA 240/120V",
+    "part_number": "G083264",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Transformer 16V 56VA",
+    "part_number": "G099076",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "GASKETS & SEALS",
+    "part_number": "",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Valve Cover Gasket",
+    "part_number": "A0002791673",
+    "category": "gaskets_seals",
+    "order_price": 2.11,
+    "sale_price": 0,
+    "supplier": "Gentek Power"
+  },
+  {
+    "name": "Valve Cover Gasket",
+    "part_number": "",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust 8KW",
+    "part_number": "G090239",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust 8KW",
+    "part_number": "0J6184A",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust 10KW",
+    "part_number": "0E9369",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust 11KW",
+    "part_number": "0J6184",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust 20KW",
+    "part_number": "0J7546B",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust",
+    "part_number": "0C4138",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust Manifold",
+    "part_number": "0A88290266",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Exhaust 13-17KW",
+    "part_number": "0J7546A",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Carburetor Loncin",
+    "part_number": "0G9916",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Intake",
+    "part_number": "G0590890353",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Intake",
+    "part_number": "0C3043",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Intake GT990",
+    "part_number": "0C2977",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Intake",
+    "part_number": "0H33750175",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Carb Gasket",
+    "part_number": "G098228",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Manifold to Carb",
+    "part_number": "0E9471",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Airbox to Carb",
+    "part_number": "0E9472",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Carb to Air Cleaner",
+    "part_number": "0G84420156",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Breather Cover",
+    "part_number": "0C3005",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Air Cleaner",
+    "part_number": "G090970",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Head",
+    "part_number": "0C2978",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Cylinder Head Cover",
+    "part_number": "0H33750",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Cylinder Head 510",
+    "part_number": "021713B",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Cylinder Head GT530",
+    "part_number": "0E9351",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Cylinder Head",
+    "part_number": "0H58410111",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Valve Cover GT530",
+    "part_number": "0E9352",
+    "category": "gaskets_seals",
+    "order_price": 1.93,
+    "sale_price": 0,
+    "supplier": "Gentek Power"
+  },
+  {
+    "name": "Gasket Exhaust GT530",
+    "part_number": "0E9369",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Valve Cover VTwin",
+    "part_number": "0C2979",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Valve Cover Single",
+    "part_number": "0C3150A",
+    "category": "gaskets_seals",
+    "order_price": 12.99,
+    "sale_price": 0,
+    "supplier": "Generator Magic"
+  },
+  {
+    "name": "Gasket Rocker Cover 410C",
+    "part_number": "0C3150",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Crankcase",
+    "part_number": "G076701",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Bosch 32 & 49",
+    "part_number": "0E6586",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Thermostat",
+    "part_number": "0C23980102",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Solenoid",
+    "part_number": "0C4647",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Oil Filter Adapter",
+    "part_number": "G086999",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter Adapter GT530",
+    "part_number": "0E9370",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Seal Crankshaft Flywheel Red",
+    "part_number": "0K1534",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Seal Crankshaft Green",
+    "part_number": "0K2035",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Seal Oil Passage",
+    "part_number": "0C5943",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Seal Oil Pipe",
+    "part_number": "0J33750146",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Seal 8KW Portable",
+    "part_number": "0E3812",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "O-Ring Viton 031",
+    "part_number": "0K0710",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Gasket Maker",
+    "part_number": "NAPA 745-1461",
+    "category": "gaskets_seals",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "VOLTAGE REGULATORS",
+    "part_number": "",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Voltage Regulator PCB 2006",
+    "part_number": "0F97190SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Voltage Regulator 60Hz",
+    "part_number": "0676800SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Voltage Regulator PCB w/o Fin",
+    "part_number": "0830480SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Voltage Regulator PCB",
+    "part_number": "0G28850SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Voltage Regulator Portable",
+    "part_number": "0H2579B",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Regulator DC Alt",
+    "part_number": "0A1354A",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Bridge Diode",
+    "part_number": "G029673",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Diode Bridge 1P 35A 1000V",
+    "part_number": "0D7177V",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "IGNITION",
+    "part_number": "",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil GH410 w/ Advance",
+    "part_number": "0G9241T",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil w/ Diode GTH530",
+    "part_number": "0G3251TB",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil w/ Diode GTH530 Assembly",
+    "part_number": "0G3251TA",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil No Advance 760/990",
+    "part_number": "0G3224TB",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil Assembly",
+    "part_number": "0G84420150",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil w/ Diode Cyl 1",
+    "part_number": "0G3224TA",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Module 4.2L PCB",
+    "part_number": "0H0348",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil 3.9L G8",
+    "part_number": "0E7953",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Module 2.4L No Turbo",
+    "part_number": "0H1083",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Module 2.4L Turbo",
+    "part_number": "0G8951",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Module 6 Cyl Prog",
+    "part_number": "0H6169B",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Wire #18",
+    "part_number": "0K3166",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Wire #18 4389",
+    "part_number": "0D6525",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Magneto Kit",
+    "part_number": "0K63030SRV",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Mag Pickup Assembly",
+    "part_number": "G082130",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Mag Pickup Assembly",
+    "part_number": "0D2244M",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Cam Sensor",
+    "part_number": "0G1472A",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Distributor Cap",
+    "part_number": "0E83360242",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Distributor Cap",
+    "part_number": "0H33750131",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "CIRCUIT BREAKERS & FUSES",
+    "part_number": "",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 2.5A Single",
+    "part_number": "G053623",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 3A V-Twin",
+    "part_number": "G054502",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 4A Single",
+    "part_number": "G049350",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 5A 1P Auto",
+    "part_number": "G048512",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 15A",
+    "part_number": "0E5840",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 24A 2P Shunt Trip",
+    "part_number": "0G5644C",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 30A",
+    "part_number": "0E7888A",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 45A",
+    "part_number": "0E7886D",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 50A",
+    "part_number": "G039765",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 55A",
+    "part_number": "0E7886K",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 60A",
+    "part_number": "0E7886F",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 65A",
+    "part_number": "0E7886J",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 90A 2P 250V",
+    "part_number": "0E7886M",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Circuit Breaker 150A 2-Pole",
+    "part_number": "0K0971",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 2A",
+    "part_number": "099727",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 4A",
+    "part_number": "067682B",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 5A BBS",
+    "part_number": "073590A",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 5A ATO",
+    "part_number": "0E7403A",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 7.5A",
+    "part_number": "0A9611",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 7.5A ATO",
+    "part_number": "0D7178T",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 7.5A",
+    "part_number": "G039985",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 10A",
+    "part_number": "028578",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 10A Auto",
+    "part_number": "0E7403B",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 15A",
+    "part_number": "G022676",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse 15A Auto",
+    "part_number": "0E7403C",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse Holder",
+    "part_number": "G032300",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuse Holder",
+    "part_number": "022669",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "RELAYS & CONTACTORS",
+    "part_number": "",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay 10A 120VDC",
+    "part_number": "G063617",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay 12V DC DPDT 10A 240V",
+    "part_number": "G027911",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay",
+    "part_number": "0C2174",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay w/ Diode",
+    "part_number": "0E6875A",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay",
+    "part_number": "0K0103",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay Solenoid 12VDC Panel Mount",
+    "part_number": "G056739",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay 120V 30A SPDT",
+    "part_number": "GRAINGER 6CWZ1",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Relay 12V 30A SPST",
+    "part_number": "0K2098",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coil Governor Assembly",
+    "part_number": "0C1503",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Actuator Bosch 32 Governor",
+    "part_number": "0E4395",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Actuator Bosch 40 Governor",
+    "part_number": "0E4394",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler Relay Service Kit",
+    "part_number": "GM50772",
+    "category": "electrical",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Kohler Toggle Switch 2-Pole",
+    "part_number": "GM287812",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "OILS & FLUIDS",
+    "part_number": "",
+    "category": "fluids",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil 5W-30",
+    "part_number": "5W-30",
+    "category": "fluids",
+    "order_price": 51.0,
+    "sale_price": 0,
+    "supplier": "Walmart, Call Napa for bulk"
+  },
+  {
+    "name": "Oil SAE 30",
+    "part_number": "0G0752",
+    "category": "fluids",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil 10W-30",
+    "part_number": "0J5154A",
+    "category": "fluids",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Synthetic 10W-30",
+    "part_number": "NAPA VAL296",
+    "category": "fluids",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Diesel 15W-40",
+    "part_number": "NOL 75123",
+    "category": "fluids",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coolant Universal",
+    "part_number": "UNIVERSAL",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coolant Orange",
+    "part_number": "NAPA ORANGE",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coolant Blue",
+    "part_number": "NAPA BLUE",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coolant Green 50/50",
+    "part_number": "NAPA GREEN",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "NAPA"
+  },
+  {
+    "name": "Brake Cleaner 14oz",
+    "part_number": "NAPA 2417",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Carb Cleaner / Gum Cutter",
+    "part_number": "NAPA B-101",
+    "category": "other",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Fuel Treatment",
+    "part_number": "NAPA 9016",
+    "category": "fuel_system",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch 3.0 PSI",
+    "part_number": "0C30250SRV",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug Wire Assembly",
+    "part_number": "0J0833A",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Battery Cable Assembly",
+    "part_number": "0K48480SRV",
+    "category": "batteries",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug RC12YC",
+    "part_number": "0K8904",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug RC14YC",
+    "part_number": "0K8946",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug BPR5ES",
+    "part_number": "0K9467",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch 1.5 PSI",
+    "part_number": "0L2917A",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Pressure Switch 2.0 PSI",
+    "part_number": "0L2917B",
+    "category": "oil_pressure_switches",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Load Shed Module 50A",
+    "part_number": "0L3123",
+    "category": "load_shed",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Load Shed Module 100A",
+    "part_number": "0L3247",
+    "category": "load_shed",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Controller Nexus",
+    "part_number": "0L6733B",
+    "category": "controllers",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil Assembly",
+    "part_number": "10000004916",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Ignition Coil Assembly V-Twin",
+    "part_number": "10000004931",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Spark Plug Kit",
+    "part_number": "10000005117",
+    "category": "spark_plugs",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Oil Filter HSB",
+    "part_number": "10000005872",
+    "category": "oil_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Air Filter HSB",
+    "part_number": "10000016218",
+    "category": "air_filters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Coil Utility Standby Alt",
+    "part_number": "G077220",
+    "category": "ignition",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  },
+  {
+    "name": "Brush Assembly",
+    "part_number": "G084464",
+    "category": "starters",
+    "order_price": 0,
+    "sale_price": 0,
+    "supplier": "Generac"
+  }
+]
