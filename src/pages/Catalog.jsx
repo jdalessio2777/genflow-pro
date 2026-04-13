@@ -1,24 +1,28 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench } from "lucide-react";
+import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { toast } from "sonner";
 
+/** Slugs align with Supabase `parts.category` (AJGS / fix_all_categories). */
 const PART_CATEGORIES = [
-  { key: "air_filter", label: "Air Filters", icon: "🌬️" },
-  { key: "oil_filter", label: "Oil Filters", icon: "🛢️" },
-  { key: "oil", label: "Oil", icon: "💧" },
-  { key: "spark_plug", label: "Spark Plugs", icon: "⚡" },
-  { key: "battery", label: "Batteries", icon: "🔋" },
+  { key: "air_filters", label: "Air Filters", icon: "🌬️" },
+  { key: "oil_filters", label: "Oil Filters", icon: "🛢️" },
+  { key: "oils_fluids", label: "Oils & Fluids", icon: "💧" },
+  { key: "spark_plugs", label: "Spark Plugs", icon: "⚡" },
+  { key: "batteries", label: "Batteries", icon: "🔋" },
+  { key: "battery_chargers", label: "Battery Chargers", icon: "🔌" },
   { key: "belt", label: "Belts", icon: "🔄" },
   { key: "gasket", label: "Gaskets", icon: "🔩" },
   { key: "electrical", label: "Electrical", icon: "⚡" },
@@ -33,9 +37,35 @@ const FLAT_RATE_FOLDERS = [
   { key: "controllers", label: "Controllers", icon: "🖥️" },
   { key: "load_shed", label: "Load Shed", icon: "🔌" },
   { key: "smm_boards", label: "SMM Boards", icon: "📟" },
+  { key: "fuel_system", label: "Fuel System", icon: "⛽" },
+  { key: "brushes", label: "Brushes", icon: "✏️" },
+  { key: "stepper_motors", label: "Stepper Motors", icon: "⚙️" },
+  { key: "air_boxes", label: "Air Boxes & Mixers", icon: "📦" },
+  { key: "transfer_switch", label: "Transfer Switch", icon: "🔀" },
+  { key: "gaskets_seals", label: "Gaskets & Seals", icon: "🔩" },
+  { key: "voltage_regulators", label: "Voltage Regulators", icon: "📈" },
+  { key: "ignition", label: "Ignition", icon: "🔥" },
+  { key: "circuit_breakers", label: "Circuit Breakers", icon: "💥" },
+  { key: "relays", label: "Relays & Contactors", icon: "🔗" },
   { key: "batteries", label: "Batteries", icon: "🔋" },
   { key: "other", label: "Other", icon: "📦" },
 ];
+
+/** Main parts grid: primary rows + flat-rate-style categories (deduped by key). */
+const CATALOG_PART_BROWSE_ROWS = (() => {
+  const byKey = new Map();
+  for (const c of PART_CATEGORIES) {
+    if (c.key === "other") continue;
+    byKey.set(c.key, c);
+  }
+  for (const f of FLAT_RATE_FOLDERS) {
+    if (f.key === "other") continue;
+    if (!byKey.has(f.key)) byKey.set(f.key, f);
+  }
+  return [...byKey.values(), { key: "other", label: "Other", icon: "📦" }];
+})();
+
+const ALL_CATALOG_PART_KEYS = CATALOG_PART_BROWSE_ROWS.filter((r) => r.key !== "other").map((r) => r.key);
 
 const TOP_FOLDERS = [
   { key: "parts", label: "Parts", icon: Package, color: "bg-blue-100 text-blue-700", description: "Parts catalog & inventory" },
@@ -47,7 +77,7 @@ const TOP_FOLDERS = [
 // ─── PARTS CATEGORY LIST ──────────────────────────────────────────────────────
 function PartsCategoryList({ parts, onSelectCategory }) {
   const queryClient = useQueryClient();
-  const knownKeys = PART_CATEGORIES.filter(c => c.key !== "other").map(c => c.key);
+  const knownKeys = ALL_CATALOG_PART_KEYS;
   const reorderParts = parts.filter(p => p.reorder_flagged);
   return (
     <div className="space-y-2">
@@ -77,7 +107,7 @@ function PartsCategoryList({ parts, onSelectCategory }) {
           </div>
         </Card>
       )}
-      {PART_CATEGORIES.map(cat => {
+      {CATALOG_PART_BROWSE_ROWS.map((cat) => {
         const count = cat.key === "other"
           ? parts.filter(p => !knownKeys.includes(p.category)).length
           : parts.filter(p => p.category === cat.key).length;
@@ -108,7 +138,7 @@ function PartsItemList({ category, parts }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", part_number: "", cost: 0, default_price: 0, in_stock: 0 });
 
-  const knownKeys = PART_CATEGORIES.filter(c => c.key !== "other").map(c => c.key);
+  const knownKeys = ALL_CATALOG_PART_KEYS;
   const items = category.key === "other"
     ? parts.filter(p => !knownKeys.includes(p.category))
     : parts.filter(p => p.category === category.key);
@@ -444,51 +474,56 @@ function MaintenanceList() {
 }
 
 // ─── MAIN CATALOG ─────────────────────────────────────────────────────────────
+function escapeIlikeTerm(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_").replace(/,/g, "");
+}
+
 export default function Catalog() {
   const queryClient = useQueryClient();
   const [folder, setFolder] = useState(null);
   const [subFolder, setSubFolder] = useState(null);
   const [partsCategory, setPartsCategory] = useState(null);
   const [search, setSearch] = useState("");
+  const [partsBrowseSearch, setPartsBrowseSearch] = useState("");
+  const [debouncedPartsBrowse, setDebouncedPartsBrowse] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPartsBrowse(partsBrowseSearch.trim()), 400);
+    return () => clearTimeout(t);
+  }, [partsBrowseSearch]);
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const { data: parts = [] } = useQuery({ queryKey: ["parts-catalog"], queryFn: () => db.Part.list("name") });
 
-  // One-time migration: fix parts with missing/wrong categories
-  useEffect(() => {
-    const inferCategory = (name) => {
-      const n = name.toLowerCase();
-      if (n.includes("air filter") || n.includes("air cleaner") || n.includes("precleaner")) return "air_filter";
-      if (n.includes("oil filter")) return "oil_filter";
-      if ((n.includes("oil") || n.includes("5w-30") || n.includes("10w-30") || n.includes("synthetic")) && !n.includes("filter")) return "oil";
-      if (n.includes("spark plug") || n.includes("plug")) return "spark_plug";
-      if (n.includes("battery") || n.includes("26r") || n.includes("51r") || n.includes("group 26")) return "battery";
-      if (n.includes("belt") || n.includes("drive belt") || n.includes("serpentine")) return "belt";
-      if (n.includes("gasket") || n.includes("head gasket") || n.includes("valve cover")) return "gasket";
-      if (n.includes("coolant") || n.includes("antifreeze") || n.includes("dexcool")) return "coolant";
-      if (n.includes("coil") || n.includes("ignition") || n.includes("sensor") || n.includes("fuse") || n.includes("relay") || n.includes("capacitor") || n.includes("wire") || n.includes("harness") || n.includes("rectifier") || n.includes("alternator") || n.includes("voltage regulator")) return "electrical";
-      if (n.includes("bolt") || n.includes("nut") || n.includes("screw") || n.includes("washer") || n.includes("clamp") || n.includes("fitting") || n.includes("hose") || n.includes("bracket")) return "hardware";
-      return null;
-    };
+  const partsBrowseTrim = partsBrowseSearch.trim();
+  const partsSearchEnabled =
+    folder === "parts" && !partsCategory && debouncedPartsBrowse.length > 0;
 
-    const KNOWN_KEYS = ["air_filter", "oil_filter", "oil", "spark_plug", "battery", "belt", "gasket", "coolant", "electrical", "hardware", "other"];
+  const {
+    data: partsSearchResults = [],
+    isFetching: partsSearchFetching,
+    error: partsSearchError,
+  } = useQuery({
+    queryKey: ["catalog-parts-search", debouncedPartsBrowse],
+    queryFn: async () => {
+      const raw = debouncedPartsBrowse.slice(0, 120);
+      const esc = escapeIlikeTerm(raw);
+      const p = `%${esc}%`;
+      const { data, error } = await supabase
+        .from("parts")
+        .select("*")
+        .or(`name.ilike.${p},part_number.ilike.${p}`)
+        .order("name")
+        .limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: partsSearchEnabled,
+  });
 
-    const migrateParts = async () => {
-      try {
-        const allParts = await db.Part.list("name");
-        const toUpdate = allParts.filter(p => {
-          const needsMigration = !p.category || p.category === "" || !KNOWN_KEYS.includes(p.category);
-          if (!needsMigration) return false;
-          return inferCategory(p.name) !== null;
-        });
-        for (const part of toUpdate) {
-          await db.Part.update(part.id, { category: inferCategory(part.name) });
-        }
-        if (toUpdate.length > 0) queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
-      } catch (e) { /* silently fail */ }
-    };
-    migrateParts();
-  }, []);
+  const partsSearchPending =
+    partsBrowseTrim.length > 0 &&
+    (partsBrowseTrim !== debouncedPartsBrowse || (partsSearchEnabled && partsSearchFetching));
 
   // Seed Battery 26R if missing
   useEffect(() => {
@@ -510,7 +545,12 @@ export default function Catalog() {
   const goBack = () => {
     if (subFolder) { setSubFolder(null); return; }
     if (partsCategory) { setPartsCategory(null); return; }
-    if (folder) { setFolder(null); return; }
+    if (folder) {
+      setPartsBrowseSearch("");
+      setDebouncedPartsBrowse("");
+      setFolder(null);
+      return;
+    }
   };
 
   const getTitle = () => {
@@ -638,7 +678,82 @@ export default function Catalog() {
           </div>
         )}
 
-        {folder === "parts" && !partsCategory && <PartsCategoryList parts={parts} onSelectCategory={setPartsCategory} />}
+        {folder === "parts" && !partsCategory && (
+          <div className="space-y-3">
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search parts by name or part number..."
+                  value={partsBrowseSearch}
+                  onChange={(e) => setPartsBrowseSearch(e.target.value)}
+                  className="pl-9 pr-10 h-10 rounded-xl border-border bg-background"
+                  aria-label="Search parts catalog"
+                />
+                {partsBrowseSearch ? (
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={() => {
+                      setPartsBrowseSearch("");
+                      setDebouncedPartsBrowse("");
+                    }}
+                    aria-label="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {!partsBrowseTrim ? (
+              <PartsCategoryList parts={parts} onSelectCategory={setPartsCategory} />
+            ) : partsSearchPending ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <p className="text-sm">Searching…</p>
+              </div>
+            ) : partsSearchError ? (
+              <Card className="p-6 text-center border-destructive/30">
+                <p className="text-sm text-destructive">Search failed. Try again.</p>
+              </Card>
+            ) : partsSearchResults.length === 0 ? (
+              <Card className="p-8 text-center rounded-xl border-border">
+                <Package className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {`No parts found for "${partsBrowseTrim}"`}
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {partsSearchResults.length} result{partsSearchResults.length !== 1 ? "s" : ""}
+                </p>
+                {partsSearchResults.map((part) => {
+                  const orderPrice = part.order_price ?? part.default_price ?? 0;
+                  return (
+                    <Card key={part.id} className="p-3.5 rounded-xl border-border">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium leading-snug">{part.name}</p>
+                          {part.part_number ? (
+                            <p className="text-xs text-muted-foreground mt-0.5">#{part.part_number}</p>
+                          ) : null}
+                          <div className="mt-2">
+                            <StatusBadge status={part.category || "other"} />
+                          </div>
+                        </div>
+                        {orderPrice > 0 ? (
+                          <p className="text-sm font-bold text-primary shrink-0">{formatCurrency(orderPrice)}</p>
+                        ) : null}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {folder === "parts" && partsCategory && <PartsItemList category={partsCategory} parts={parts} />}
         {folder === "labor_rates" && <LaborRatesList />}
         {folder === "flat_rates" && !subFolder && <FlatRatesFolderList onSelectFolder={setSubFolder} />}

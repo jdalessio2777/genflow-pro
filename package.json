@@ -9,7 +9,10 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "fix-parts-catalog": "node fix_parts_catalog.js",
+    "seed-pricing": "node seed_pricing.js",
+    "fix-all-categories": "node fix_all_categories.js"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.24",
