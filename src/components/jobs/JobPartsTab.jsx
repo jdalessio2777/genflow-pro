@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Package, ChevronRight, ChevronLeft } from "lucide-react";
+import { Plus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { toast } from "sonner";
 
@@ -29,6 +29,9 @@ export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscount
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [partsFolder, setPartsFolder] = useState(null);
+  const [editingPriceId, setEditingPriceId] = useState(null);
+  const [editingPriceValue, setEditingPriceValue] = useState("");
+  const [overriddenPriceIds, setOverriddenPriceIds] = useState(new Set());
   const [form, setForm] = useState({
     name: "",
     part_number: "",
@@ -58,6 +61,34 @@ export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscount
       toast.success("Part removed");
     },
   });
+
+  const updatePriceMutation = useMutation({
+    mutationFn: ({ id, price, quantity }) =>
+      db.JobPart.update(id, { price, total_price: price * quantity }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
+      setOverriddenPriceIds(prev => new Set(prev).add(id));
+      setEditingPriceId(null);
+      toast.success("Price updated");
+    },
+    onError: () => toast.error("Failed to update price"),
+  });
+
+  const startEditingPrice = (part) => {
+    setEditingPriceId(part.id);
+    setEditingPriceValue(String(part.price ?? 0));
+  };
+
+  const commitPriceEdit = (part) => {
+    const newPrice = parseFloat(editingPriceValue);
+    if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
+    updatePriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity });
+  };
+
+  const cancelPriceEdit = () => {
+    setEditingPriceId(null);
+    setEditingPriceValue("");
+  };
 
   const saveCatalogMutation = useMutation({
     mutationFn: (data) => db.Part.create(data),
@@ -371,11 +402,63 @@ export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscount
                     <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">{part.description}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{formatCurrency(part.total_price)}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Remove "${part.name}" from this job?`)) { deleteMutation.mutate(part.id); } }}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {editingPriceId === part.id ? (
+                    <>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editingPriceValue}
+                        onChange={e => setEditingPriceValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") commitPriceEdit(part);
+                          if (e.key === "Escape") cancelPriceEdit();
+                        }}
+                        className="w-20 h-7 text-sm text-right px-2 rounded-lg"
+                        autoFocus
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-green-600 hover:bg-green-50"
+                        onClick={() => commitPriceEdit(part)}
+                        disabled={updatePriceMutation.isPending}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground"
+                        onClick={cancelPriceEdit}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-right">
+                        <span className="text-sm font-semibold">{formatCurrency(part.total_price)}</span>
+                        {overriddenPriceIds.has(part.id) && (
+                          <p className="text-[10px] text-muted-foreground leading-none mt-0.5">edited</p>
+                        )}
+                      </div>
+                      {part.charge_for_part !== false && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => startEditingPrice(part)}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Remove "${part.name}" from this job?`)) { deleteMutation.mutate(part.id); } }}>
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </Card>
