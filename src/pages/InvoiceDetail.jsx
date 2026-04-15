@@ -47,6 +47,7 @@ export default function InvoiceDetail() {
       { status: "paid", payment_method: method, paid_date: new Date().toISOString() },
       {
         onSuccess: () => {
+          toast.success("Invoice marked as paid");
           notifyTeam({
             subject: `Invoice Paid — ${invoice.customer_name} · $${(invoice.total || 0).toFixed(2)}`,
             body: `
@@ -64,7 +65,6 @@ export default function InvoiceDetail() {
         }
       }
     );
-    toast.success("Invoice marked as paid");
   };
 
   if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;

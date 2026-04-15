@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 
 export const SETTING_DEFAULTS = {
-  home_address: "31209 Courtnay Lane, Wharton NJ 07885",
+  home_address: "",
   business_name: "AJ's Generator Service",
   business_phone: "",
   business_email: "",

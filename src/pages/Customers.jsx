@@ -192,7 +192,7 @@ function CallListCard({ customer, category }) {
               </a>
             )}
             <Link
-              to={`/jobs/new?customer_id=${customer.id}`}
+              to={`/jobs/new?customer=${customer.id}`}
               className="flex items-center gap-1 text-xs font-semibold text-primary border border-primary rounded-lg px-2.5 py-1.5 hover:bg-primary/5 active:scale-95 transition-all bg-white"
             >
               <Calendar className="w-3.5 h-3.5" /> Schedule

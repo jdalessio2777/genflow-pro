@@ -101,7 +101,7 @@ Approval Link: ${approvalUrl}
 
 Design requirements:
 - Professional, clean layout suitable for printing and viewing on mobile
-- Company name "GenFlow Pro Services" at top with a deep blue (#1e3a5f) header
+- Company name "AJ's Generator Service LLC" at top with a deep blue (#1e3a5f) header
 - Customer info and generator info in a clean info block
 - Line items in a table with Description and Amount columns
 - Totals section with clear grand total

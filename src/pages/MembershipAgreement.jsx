@@ -66,7 +66,7 @@ const PLANS = {
     headerColor: "bg-blue-600",
     includes: [
       "One (1) full annual maintenance service",
-      "10% discount on all parts, labor & flat-rate services",
+      "10% off all parts, labor, and repair services",
       "Priority emergency service (24-hour response)",
     ],
   },
@@ -78,9 +78,9 @@ const PLANS = {
     headerColor: "bg-emerald-600",
     includes: [
       "Two (2) maintenance visits per year",
-      "10% discount on all parts, labor & flat-rate services",
+      "15% off all parts, labor, and repair services",
       "Priority emergency service (24-hour response)",
-      "First 30 minutes of diagnostic labor free, per visit",
+      "First 30 minutes of diagnostic labor free, per visit, during normal business hours",
     ],
   },
 };
@@ -91,12 +91,12 @@ const TERMS = [
   { n: "3", title: "Cancellation", body: "After automatic renewal, cancellations submitted in writing within 7 days receive a full refund. Cancellations after that period and mid-term cancellations are non-refundable." },
   { n: "4", title: "Included Services", body: "Scheduled maintenance includes engine oil and filter replacement, air filtration inspection, spark plug inspection, battery and charging system check, fuel system verification, and full operational load test." },
   { n: "5", title: "Rollover Policy", body: "Unused included maintenance visits do not expire at the end of the agreement year. Any unused visit carries forward and remains available after renewal." },
-  { n: "6", title: "Discount Application", body: "The 10% member discount applies to all billable parts, hourly labor, and flat-rate services during the agreement term. Applied at time of service only — not retroactively. Does not apply to the Agreement cost itself or third-party fees." },
-  { n: "7", title: "Emergency Service", body: "Agreement holders receive priority emergency scheduling. GenFlow Pro Services will make reasonable effort to respond within 24 hours to generators that fail to operate during or immediately following a utility power outage. Subject to technician availability — not a guaranteed response time." },
+  { n: "6", title: "Discount Application", body: "The member discount (10% for Annual plan; 15% for Semi-Annual plan) applies to all billable parts, hourly labor, and flat-rate services during the agreement term. Applied at time of service only — not retroactively. Does not apply to the Agreement cost itself or third-party fees." },
+  { n: "7", title: "Emergency Service", body: "Agreement holders receive priority emergency scheduling. AJ's Generator Service LLC will make reasonable effort to respond within 24 hours to generators that fail to operate during or immediately following a utility power outage. Subject to technician availability — not a guaranteed response time." },
   { n: "8", title: "Unit Specificity & Transferability", body: "This Agreement is specific to the generator identified above and is not transferable to a new property owner or any third party. However, if the covered unit is replaced with a new generator at the same customer's property, this Agreement transfers to the replacement unit at no charge upon notification and verification of the new unit's information. This Agreement follows the customer, not the address." },
   { n: "9", title: "Air-Cooled Units Only", body: "This Agreement applies exclusively to air-cooled generator units rated at 26kW or less. Liquid-cooled or industrial-grade units are not covered under this Agreement." },
-  { n: "10", title: "Exclusions", body: "Does not cover repairs resulting from misuse, neglect, acts of nature, flood, fire, vandalism, or damage caused by installation not performed by GenFlow Pro Services. Repair parts and labor are billed separately, subject to the member discount." },
-  { n: "11", title: "Limitation of Liability", body: "GenFlow Pro Services' liability under this Agreement is limited to the cost of the Agreement. Not liable for consequential, incidental, or special damages including food spoilage, property damage, or loss of income resulting from generator failure." },
+  { n: "10", title: "Exclusions", body: "Does not cover repairs resulting from misuse, neglect, acts of nature, flood, fire, vandalism, or damage caused by installation not performed by AJ's Generator Service LLC. Repair parts and labor are billed separately, subject to the member discount." },
+  { n: "11", title: "Limitation of Liability", body: "AJ's Generator Service LLC's liability under this Agreement is limited to the cost of the Agreement. Not liable for consequential, incidental, or special damages including food spoilage, property damage, or loss of income resulting from generator failure." },
   { n: "12", title: "Governing Law", body: "This Agreement is governed by the laws of the State of New Jersey. Disputes shall be resolved in the county where service was performed." },
 ];
 
@@ -161,7 +161,7 @@ export default function MembershipAgreement() {
                 <ul style="margin:0;padding-left:18px;font-size:13px;color:#444;">${plan.includes.map(i => `<li style="margin-bottom:3px;">${i}</li>`).join("")}</ul>
               </div>
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:11px;margin-bottom:14px;">
-                <p style="margin:0;font-size:13px;color:#166534;">✓ Your 10% member discount will be automatically applied to all qualifying services.</p>
+                <p style="margin:0;font-size:13px;color:#166534;">✓ Your {selectedPlan === "semi_annual" ? "15%" : "10%"} member discount will be automatically applied to all qualifying services.</p>
               </div>
               ${selectedPlan === "semi_annual" ? `<p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are complimentary on each visit.</p>` : ""}
               <p style="font-size:12px;color:#666;margin-top:16px;">Thank you for choosing AJ's Generator Service.</p>
@@ -315,7 +315,7 @@ export default function MembershipAgreement() {
 
             {/* Agreement header */}
             <Card className="p-4 bg-muted/30">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">GenFlow Pro Services</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">AJ's Generator Service LLC</p>
               <div className="grid grid-cols-2 gap-y-1.5 text-xs">
                 <span className="text-muted-foreground">Customer</span><span className="font-medium">{customer.name}</span>
                 <span className="text-muted-foreground">Address</span><span className="font-medium">{customer.address || "—"}</span>

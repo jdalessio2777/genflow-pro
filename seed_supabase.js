@@ -17,18 +17,18 @@ const parts = JSON.parse(readFileSync('./parts_seed.json', 'utf8'));
 // ── CUSTOMERS ──────────────────────────────────────────────────────────────
 const customers = [
   {
-    name: 'Don Grennon',
-    phone: '2017872400',
-    address: '58 Druid Hill Rd, Summit, NJ 07901',
+    name: 'Sample Customer A',
+    phone: '5550001111',
+    address: '100 Main St, Anytown, NJ 07000',
     generator_model: '17kW Generac',
-    generator_serial: '6737426',
+    generator_serial: '0000001',
     service_interval: '12_months',
     repeat_note: 'Controller: Nexus',
   },
   {
-    name: 'Judy & Terry White',
-    phone: '9738953335',
-    address: '5 Cushing Court, Randolph, NJ 07869',
+    name: 'Sample Customer B',
+    phone: '5550002222',
+    address: '200 Oak Ave, Sometown, NJ 07000',
     generator_model: '20kW Generac',
     generator_serial: null,
     service_interval: '12_months',

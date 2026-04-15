@@ -19,7 +19,6 @@ import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { useSettings } from "@/lib/useSettings";
 
-const HOME_ADDRESS = "31209 Courtnay Lane, Wharton NJ 07885"; // fallback default
 const IRS_RATE = 0.725;
 
 const EXPENSE_CATEGORIES = [
@@ -34,7 +33,6 @@ const EXPENSE_CATEGORIES = [
   "Other",
 ];
 
-const IRS_MILEAGE_RATE = 0.725;
 
 // ─── OVERVIEW TAB ─────────────────────────────────────────────────────────────
 function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
@@ -59,7 +57,7 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
   const expenseTotal = periodExpenses.reduce((s, e) => s + (e.amount || 0), 0);
   const periodMileage = mileage.filter(m => filterByPeriod(m.date));
   const mileageTotal = periodMileage.reduce((s, m) => s + (m.miles || 0), 0);
-  const mileageDeduction = mileageTotal * IRS_MILEAGE_RATE;
+  const mileageDeduction = mileageTotal * IRS_RATE;
   const netProfit = revenue - expenseTotal;
   const outstandingInvoices = invoices.filter(i => i.status === "sent");
   const outstanding = outstandingInvoices.reduce((s, i) => s + (i.total || 0), 0);
@@ -455,7 +453,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
   const [smartOpen, setSmartOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [tripDate, setTripDate] = useState(new Date().toISOString().split("T")[0]);
-  const effectiveHomeAddress = homeAddress || HOME_ADDRESS;
+  const effectiveHomeAddress = homeAddress || "";
   const effectiveApiKey = googleApiKey || "";
   const [tripFrom, setTripFrom] = useState(effectiveHomeAddress);
   const [tripTo, setTripTo] = useState("");
@@ -878,7 +876,7 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
       return d.getFullYear() === year && months.includes(d.getMonth());
     }).reduce((s, m) => s + (m.miles || 0), 0);
 
-    const mileageDeduction = qMiles * IRS_MILEAGE_RATE;
+    const mileageDeduction = qMiles * IRS_RATE;
     const netProfit = qRevenue - qExpenses - mileageDeduction;
     return { qRevenue, qExpenses, qMiles, mileageDeduction, netProfit };
   };
@@ -886,7 +884,7 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
   const yearRevenue = invoices.filter(i => i.status === "paid" && i.paid_date && new Date(i.paid_date).getFullYear() === year).reduce((s, i) => s + (i.total || 0), 0);
   const yearExpenses = expenses.filter(e => e.date && new Date(e.date).getFullYear() === year).reduce((s, e) => s + (e.amount || 0), 0);
   const yearMiles = mileage.filter(m => m.date && new Date(m.date).getFullYear() === year).reduce((s, m) => s + (m.miles || 0), 0);
-  const yearMileageDeduction = yearMiles * IRS_MILEAGE_RATE;
+  const yearMileageDeduction = yearMiles * IRS_RATE;
   const yearNetProfit = yearRevenue - yearExpenses - yearMileageDeduction;
 
   return (

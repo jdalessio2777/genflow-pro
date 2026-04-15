@@ -11,11 +11,11 @@ import { formatCurrency } from "@/lib/utils/format";
 import { toast } from "sonner";
 
 const PART_CATEGORIES = [
-  { key: "air_filter", label: "Air Filters", icon: "🌬️" },
-  { key: "oil_filter", label: "Oil Filters", icon: "🛢️" },
-  { key: "oil", label: "Oil", icon: "💧" },
-  { key: "spark_plug", label: "Spark Plugs", icon: "⚡" },
-  { key: "battery", label: "Batteries", icon: "🔋" },
+  { key: "air_filters", label: "Air Filters", icon: "🌬️" },
+  { key: "oil_filters", label: "Oil Filters", icon: "🛢️" },
+  { key: "oils_fluids", label: "Oil", icon: "💧" },
+  { key: "spark_plugs", label: "Spark Plugs", icon: "⚡" },
+  { key: "batteries", label: "Batteries", icon: "🔋" },
   { key: "belt", label: "Belts", icon: "🔄" },
   { key: "gasket", label: "Gaskets", icon: "🔩" },
   { key: "electrical", label: "Electrical", icon: "⚡" },
@@ -24,7 +24,18 @@ const PART_CATEGORIES = [
   { key: "other", label: "Other", icon: "📦" },
 ];
 
-export default function JobPartsTab({ jobId, parts, catalogParts, memberDiscountRate = 1.0, searchFilter = "" }) {
+const LEGACY_CATEGORY_MAP = {
+  air_filter: "air_filters",
+  oil_filter: "oil_filters",
+  oil: "oils_fluids",
+  spark_plug: "spark_plugs",
+  battery: "batteries",
+};
+const normalizeCatalogPart = (p) =>
+  LEGACY_CATEGORY_MAP[p.category] ? { ...p, category: LEGACY_CATEGORY_MAP[p.category] } : p;
+
+export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogParts, memberDiscountRate = 1.0, searchFilter = "" }) {
+  const catalogParts = (rawCatalogParts ?? []).map(normalizeCatalogPart);
   const isMember = memberDiscountRate < 1.0;
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);

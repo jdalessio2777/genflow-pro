@@ -379,9 +379,8 @@ export default function JobDetail() {
   };
 
   const handleCancel = () => {
-    updateJob.mutate({ status: "canceled", cancel_reason: cancelReason });
     setCancelOpen(false);
-    toast.success("Job canceled");
+    handleStatusChange("canceled", { cancel_reason: cancelReason });
   };
 
   const buildInvoiceData = () => {
@@ -425,15 +424,27 @@ export default function JobDetail() {
   };
 
   const addServiceAgreement = async (type) => {
-    if (type !== "annual_air_cooled") return;
-    const description = "Annual Service Agreement — Air-Cooled Generator · 1 maintenance visit/yr · 10% off parts, labor & repairs";
+    const AGREEMENT_DETAILS = {
+      annual_air_cooled: {
+        description: "Annual Service Agreement — Air-Cooled Generator · 1 maintenance visit/yr · 10% off parts, labor & repairs",
+        flat_rate_amount: 340,
+      },
+      semi_annual_air_cooled: {
+        description: "Semi-Annual Service Agreement — Air-Cooled Generator · 2 maintenance visits/yr · 15% off parts, labor & repairs",
+        flat_rate_amount: 595,
+      },
+    };
+    const details = AGREEMENT_DETAILS[type] ?? {
+      description: `Service Agreement — ${type.replace(/_/g, " ")}`,
+      flat_rate_amount: 0,
+    };
     await db.JobLabor.create({
       job_id: id,
-      description,
+      description: details.description,
       is_flat_rate: true,
-      flat_rate_amount: 340,
+      flat_rate_amount: details.flat_rate_amount,
       flat_rate_cost: 0,
-      total_price: 340,
+      total_price: details.flat_rate_amount,
       total_cost: 0,
       requires_agreement: type,
     });
@@ -446,9 +457,9 @@ export default function JobDetail() {
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
   const isClosed = ["invoiced", "canceled"].includes(job.status);
+  const isMember = !!(customer?.membership_plan && customer?.membership_signed);
   const isSemiMember = !!(customer?.membership_plan === "semi_annual" && customer?.membership_signed);
   const memberDiscountRate = isSemiMember ? 0.85 : isMember ? 0.90 : 1.0;
-  const isMember = !!(customer?.membership_plan && customer?.membership_signed);
   const hasPendingAgreement = labor.some(l => l.requires_agreement);
   const isActive = ["dispatched", "on_site"].includes(job.status);
   const headerBg = job.status === "on_site" ? "bg-amber-500" : job.status === "dispatched" ? "bg-cyan-600" : isClosed ? "bg-gray-600" : "bg-primary";
