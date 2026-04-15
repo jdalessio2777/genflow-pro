@@ -67,6 +67,21 @@ const CATALOG_PART_BROWSE_ROWS = (() => {
 
 const ALL_CATALOG_PART_KEYS = CATALOG_PART_BROWSE_ROWS.filter((r) => r.key !== "other").map((r) => r.key);
 
+// Parts written to Supabase before the recategorization commit used the old
+// singular slugs. Normalize them to the current plural keys on read so existing
+// rows appear in the correct folder without a DB migration.
+const LEGACY_CATEGORY_MAP = {
+  air_filter: "air_filters",
+  oil_filter: "oil_filters",
+  oil:        "oils_fluids",
+  spark_plug: "spark_plugs",
+  battery:    "batteries",
+};
+const normalizePart = (p) =>
+  LEGACY_CATEGORY_MAP[p.category]
+    ? { ...p, category: LEGACY_CATEGORY_MAP[p.category] }
+    : p;
+
 const TOP_FOLDERS = [
   { key: "parts", label: "Parts", icon: Package, color: "bg-blue-100 text-blue-700", description: "Parts catalog & inventory" },
   { key: "labor_rates", label: "Labor Rates", icon: Clock, color: "bg-amber-100 text-amber-700", description: "Hourly billing rates" },
@@ -493,7 +508,7 @@ export default function Catalog() {
   }, [partsBrowseSearch]);
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
-  const { data: parts = [] } = useQuery({ queryKey: ["parts-catalog"], queryFn: () => db.Part.list("name") });
+  const { data: parts = [] } = useQuery({ queryKey: ["parts-catalog"], queryFn: () => db.Part.list("name").then(rows => rows.map(normalizePart)) });
 
   const partsBrowseTrim = partsBrowseSearch.trim();
   const partsSearchEnabled =
@@ -516,7 +531,7 @@ export default function Catalog() {
         .order("name")
         .limit(500);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map(normalizePart);
     },
     enabled: partsSearchEnabled,
   });

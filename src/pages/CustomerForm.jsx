@@ -40,10 +40,28 @@ export default function CustomerForm() {
     enabled: isEdit,
   });
 
+  // Strip empty strings for optional fields so Postgres doesn't reject the row
+  // (e.g. date columns reject "" but accept NULL).
+  const cleanPayload = (data) => {
+    const nullableFields = [
+      "generator_install_date", "membership_start", "membership_expiry",
+      "service_interval", "membership_plan",
+    ];
+    const out = { ...data };
+    nullableFields.forEach((f) => {
+      if (out[f] === "") out[f] = null;
+    });
+    return out;
+  };
+
   const mutation = useMutation({
     mutationFn: (data) => isEdit
-      ? db.Customer.update(id, data)
-      : db.Customer.create(data),
+      ? db.Customer.update(id, cleanPayload(data))
+      : db.Customer.create(cleanPayload(data)),
+    onError: (err) => {
+      console.error("Customer save failed:", err);
+      toast.error(err?.message ?? "Failed to save customer");
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success(isEdit ? "Customer updated" : "Customer created");
