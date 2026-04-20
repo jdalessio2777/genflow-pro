@@ -49,7 +49,6 @@ export default function CustomerForm() {
       "generator_model", "generator_serial", "service_interval",
       "membership_plan", "membership_start", "membership_expiry",
       "membership_signed", "repeat_note", "credit_card_on_file",
-      "notes", "referred_by",
     ];
     const nullableFields = [
       "membership_start", "membership_expiry", "service_interval", "membership_plan",
