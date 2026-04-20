@@ -62,7 +62,7 @@ export default function CustomerForm() {
       console.error("Customer save failed:", err);
       toast.error(err?.message ?? "Failed to save customer");
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success(isEdit ? "Customer updated" : "Customer created");
       if (!isEdit) {
@@ -81,8 +81,10 @@ export default function CustomerForm() {
           `,
           triggeredBy: getUserDisplayName(user),
         });
+        navigate(`/customers/${result.id}`);
+      } else {
+        navigate(`/customers/${id}`);
       }
-      navigate("/customers");
     },
   });
 
