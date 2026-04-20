@@ -40,22 +40,25 @@ export default function CustomerForm() {
     enabled: isEdit,
   });
 
-  // Only send fields that exist in the customers table. Strips any form-only
-  // state (notes, status, generator_install_date, referred_by) that has no
-  // corresponding column, and converts empty strings to null for date/enum cols.
   const cleanPayload = (data) => {
-    const schemaFields = [
-      "name", "phone", "email", "address", "property_notes",
-      "generator_model", "generator_serial", "service_interval",
-      "membership_plan", "membership_start", "membership_expiry",
-      "membership_signed", "repeat_note", "credit_card_on_file",
+    const allowedFields = [
+      'name', 'phone', 'email', 'address',
+      'generator_model', 'generator_serial', 'service_interval',
+      'last_service_date', 'membership_plan', 'membership_start',
+      'membership_expiry', 'membership_signed', 'membership_signature',
+      'repeat_note', 'property_notes', 'credit_card_on_file'
     ];
     const nullableFields = [
-      "membership_start", "membership_expiry", "service_interval", "membership_plan",
+      'last_service_date', 'membership_start', 'membership_expiry',
+      'membership_plan', 'service_interval', 'membership_signature',
+      'credit_card_on_file'
     ];
     const out = {};
-    schemaFields.forEach((f) => { if (f in data) out[f] = data[f]; });
-    nullableFields.forEach((f) => { if (out[f] === "") out[f] = null; });
+    allowedFields.forEach(f => {
+      if (data[f] !== undefined) {
+        out[f] = nullableFields.includes(f) && data[f] === '' ? null : data[f];
+      }
+    });
     return out;
   };
 
