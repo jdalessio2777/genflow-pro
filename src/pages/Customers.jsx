@@ -10,7 +10,7 @@ import { Plus, Search, Phone, MapPin, Shield, Calendar, Trash2 } from "lucide-re
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import { Users } from "lucide-react";
-import { formatPhone } from "@/lib/utils/format";
+import { formatPhone, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 
 function getServiceStatus(customer) {
@@ -76,40 +76,27 @@ function CustomerCard({ customer }) {
   return (
     <div className="relative">
       <Link to={`/customers/${customer.id}`}>
-        <div className="bg-card border border-border rounded-2xl p-3.5 hover:border-primary/20 hover:shadow-sm transition-all duration-150 active:scale-[0.99] pr-10">
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-sm">{customer.name}</p>
-              {customer.generator_model && (
-                <p className="text-xs text-primary font-medium mt-0.5">{customer.generator_model}</p>
-              )}
-              {svcBadge && (
-                <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-lg border mt-1 ${svcBadge.style}`}>
-                  {svcBadge.label}
-                </span>
-              )}
-              {customer.membership_plan && customer.membership_signed && (
-                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-lg border mt-1 ${customer.membership_plan === "semi_annual" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
-                  <Shield className="w-3 h-3" /> {customer.membership_plan === "semi_annual" ? "Semi-Annual" : "Annual"} Member
-                </span>
-              )}
-              {customer.address && (
-                <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                  <MapPin className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{customer.address}</span>
-                </div>
-              )}
-            </div>
-            {customer.phone && (
-              <a
-                href={`tel:${customer.phone}`}
-                onClick={e => e.stopPropagation()}
-                className="touch-target flex items-center justify-center text-primary"
-              >
-                <Phone className="w-4 h-4" />
-              </a>
+        <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
+          <p className="text-sm font-semibold text-foreground">{customer.name}</p>
+          <p className={`text-xs mt-0.5 ${customer.generator_model ? "text-muted-foreground" : "text-muted-foreground/50"}`}>
+            {customer.generator_model || "Generator not specified"}
+          </p>
+          <div className="flex items-center justify-between mt-1.5 gap-2">
+            <p className={`text-xs ${customer.last_service_date ? "text-muted-foreground" : "text-amber-600 font-medium"}`}>
+              {customer.last_service_date ? `Last service: ${formatDate(customer.last_service_date)}` : "Never serviced"}
+            </p>
+            {customer.membership_plan && customer.membership_signed && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200/60 shrink-0">
+                <Shield className="w-2.5 h-2.5" /> Member
+              </span>
             )}
           </div>
+          {customer.address && (
+            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate">{customer.address}</span>
+            </div>
+          )}
         </div>
       </Link>
       <AlertDialog>
@@ -261,50 +248,53 @@ export default function Customers() {
           </TabsList>
 
           <TabsContent value="all" className="space-y-3 mt-0">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search customers..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9 rounded-xl"
-              />
-            </div>
-
-            {filtered.length === 0 && !isLoading ? (
-              <EmptyState
-                icon={Users}
-                title="No customers yet"
-                description="Add your first customer to get started"
-                action={
-                  <Link to="/customers/new">
-                    <Button className="rounded-xl gap-1.5">
-                      <Plus className="w-4 h-4" /> Add Customer
-                    </Button>
-                  </Link>
-                }
-              />
-            ) : (
-              <div className="space-y-2">
-                {filtered.map(customer => (
-                  <CustomerCard key={customer.id} customer={customer} />
-                ))}
+            <div className="tab-fade">
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search customers..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9 rounded-xl"
+                />
               </div>
-            )}
+
+              {filtered.length === 0 && !isLoading ? (
+                <EmptyState
+                  icon={Users}
+                  title="No customers yet"
+                  subtitle="Add your first customer to get started"
+                  action={
+                    <Link to="/customers/new">
+                      <Button className="rounded-xl gap-1.5">
+                        <Plus className="w-4 h-4" /> Add Customer
+                      </Button>
+                    </Link>
+                  }
+                />
+              ) : (
+                <div className="space-y-2">
+                  {filtered.map(customer => (
+                    <CustomerCard key={customer.id} customer={customer} />
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="calllist" className="space-y-4 mt-0">
+            <div className="tab-fade">
             {callListCustomers.length === 0 ? (
               <EmptyState
                 icon={Phone}
-                title="No calls needed"
-                description="Customers with upcoming service will appear here"
+                title="All caught up"
+                subtitle="No customers are due for service right now"
               />
             ) : (
               <>
                 {overdue.length > 0 && (
                   <div>
-                    <p className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2">Overdue ({overdue.length})</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-2">Overdue ({overdue.length})</p>
                     <div className="space-y-2">
                       {overdue.map(c => <CallListCard key={c.id} customer={c} category="overdue" />)}
                     </div>
@@ -312,7 +302,7 @@ export default function Customers() {
                 )}
                 {dueSoon.length > 0 && (
                   <div>
-                    <p className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">Due Soon ({dueSoon.length})</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2">Due Soon ({dueSoon.length})</p>
                     <div className="space-y-2">
                       {dueSoon.map(c => <CallListCard key={c.id} customer={c} category="due_soon" />)}
                     </div>
@@ -320,7 +310,7 @@ export default function Customers() {
                 )}
                 {upcoming.length > 0 && (
                   <div>
-                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2">Upcoming ({upcoming.length})</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-2">Upcoming ({upcoming.length})</p>
                     <div className="space-y-2">
                       {upcoming.map(c => <CallListCard key={c.id} customer={c} category="upcoming" />)}
                     </div>
@@ -328,6 +318,7 @@ export default function Customers() {
                 )}
               </>
             )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

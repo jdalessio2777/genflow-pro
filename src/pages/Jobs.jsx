@@ -9,12 +9,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Wrench, Calendar, Search, CheckCircle2, Trash2 } from "lucide-react";
+import { Plus, Wrench, Calendar, Search, CheckCircle2, Trash2, ClipboardList } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
+
+function formatJobDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) {
+    return "Today, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  if (d.toDateString() === tomorrow.toDateString()) {
+    return "Tomorrow, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+const TECH_COLORS = {
+  Jeremy: "bg-blue-500",
+  Derek: "bg-red-500",
+  Sean: "bg-purple-500",
+  Alex: "bg-green-500",
+};
 
 export default function Jobs() {
   const [filter, setFilter] = useState("active");
@@ -136,7 +158,7 @@ export default function Jobs() {
           <Card className="p-3 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
             <div className="flex items-center justify-between text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">{search ? "Matching" : "Completed"} Jobs</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{search ? "Matching" : "Completed"} Jobs</p>
                 <p className="font-bold text-lg">{sortedFiltered.length}</p>
               </div>
               <div className="text-right">
@@ -151,23 +173,43 @@ export default function Jobs() {
           </Card>
         )}
 
+        <div key={filter} className="tab-fade">
         {techFiltered.length === 0 && !isLoading ? (
-          <EmptyState
-            icon={Wrench}
-            title={`No ${filter} jobs`}
-            description="Create a new job to get started"
-          />
+          filter === "completed" ? (
+            <EmptyState
+              icon={ClipboardList}
+              title="No completed jobs yet"
+              subtitle="Completed jobs will appear here"
+            />
+          ) : filter === "canceled" ? (
+            <EmptyState
+              icon={Wrench}
+              title="No canceled jobs"
+              subtitle="Canceled jobs will appear here"
+            />
+          ) : (
+            <EmptyState
+              icon={Wrench}
+              title="No active jobs"
+              subtitle="Dispatch a job or create a new one to get started"
+              action={
+                <Link to="/jobs/new">
+                  <Button className="rounded-xl gap-1.5"><Plus className="w-4 h-4" /> New Job</Button>
+                </Link>
+              }
+            />
+          )
         ) : (
           <div className="space-y-2">
             {techFiltered.map(job => (
               filter === "completed" ? (
                 <div key={job.id} className="relative">
                   <Link to={`/jobs/${job.id}`}>
-                    <div className="bg-card border border-border rounded-2xl p-3.5 hover:border-primary/20 hover:shadow-sm transition-all duration-150 active:scale-[0.99] pr-10">
+                    <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold truncate">{job.title}</p>
-                          <p className="text-xs text-primary font-medium">{job.customer_name}</p>
+                          <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
                           <div className="flex items-center gap-2 mt-1.5">
                             <StatusBadge status={job.job_type} />
                             <StatusBadge status={job.status} />
@@ -175,13 +217,13 @@ export default function Jobs() {
                           {job.completed_date && (
                             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3 text-green-600" />
-                              Completed {formatDate(job.completed_date)}
+                              {formatDate(job.completed_date)}
                             </p>
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          {job.total_price > 0 && <p className="text-base font-bold">{formatCurrency(job.total_price)}</p>}
-                          {job.profit > 0 && <p className="text-xs text-green-600 font-medium">{formatCurrency(job.profit)} profit</p>}
+                          {job.total_price > 0 && <p className="text-sm font-bold text-green-600">{formatCurrency(job.total_price)}</p>}
+                          {job.profit > 0 && <p className="text-xs text-muted-foreground font-medium">{formatCurrency(job.profit)} profit</p>}
                         </div>
                       </div>
                     </div>
@@ -212,16 +254,16 @@ export default function Jobs() {
               ) : (
                 <div key={job.id} className="relative">
                   <Link to={`/jobs/${job.id}`}>
-                    <div className="bg-card border border-border rounded-2xl p-3.5 hover:border-primary/20 hover:shadow-sm transition-all duration-150 active:scale-[0.99] pr-10">
+                    <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{job.title}</p>
+                          <div className="flex items-center gap-1.5">
+                            {job.status === "on_site" && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />}
+                            <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
+                          </div>
                           <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
                           {job.scheduled_date && (
-                            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                              <Calendar className="w-3 h-3" />
-                              {formatDateTime(job.scheduled_date)}
-                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{formatJobDate(job.scheduled_date)}</p>
                           )}
                           {customerMap[job.customer_id]?.property_notes && (
                             <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
@@ -234,16 +276,12 @@ export default function Jobs() {
                           <StatusBadge status={job.status} />
                           <StatusBadge status={job.job_type} />
                           {job.assigned_to_name && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                              job.assigned_to_name === "Jeremy" ? "bg-blue-100 text-blue-700"
-                                                          : job.assigned_to_name === "Derek" ? "bg-red-100 text-red-700"
-                                                          : job.assigned_to_name === "Sean" ? "bg-purple-100 text-purple-700"
-                                                          : "bg-green-100 text-green-700"
-                            }`}>
+                            <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                              <span className={`w-1.5 h-1.5 rounded-full ${TECH_COLORS[job.assigned_to_name] || "bg-gray-400"}`} />
                               {job.assigned_to_name}
                             </span>
                           )}
-                          {job.total_price > 0 && <span className="text-xs font-semibold">{formatCurrency(job.total_price)}</span>}
+                          {job.total_price > 0 && <span className="text-xs font-semibold text-foreground">{formatCurrency(job.total_price)}</span>}
                         </div>
                       </div>
                     </div>
@@ -275,6 +313,7 @@ export default function Jobs() {
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

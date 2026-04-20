@@ -3,11 +3,12 @@ import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { DollarSign, TrendingUp, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, StickyNote, Settings as SettingsIcon, Mail, Loader2 } from "lucide-react";
+import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, StickyNote, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
 import StatusBadge from "@/components/ui/StatusBadge";
+import EmptyState from "@/components/ui/EmptyState";
 
 function MembershipReminderCard({ c }) {
   const days = Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24));
@@ -139,6 +140,18 @@ export default function Dashboard() {
   const totalProfit = completedJobs.reduce((s, j) => s + (j.profit || 0), 0);
   const unpaidInvoices = invoices.filter(i => i.status !== "paid" && i.status !== "draft");
 
+  const [alertsOpen, setAlertsOpen] = useState(false);
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  const now = new Date();
+  const thisMonthRevenue = invoices
+    .filter(i => i.status === "paid" && i.paid_date &&
+      new Date(i.paid_date).getMonth() === now.getMonth() &&
+      new Date(i.paid_date).getFullYear() === now.getFullYear())
+    .reduce((s, i) => s + (i.total || 0), 0);
+
   const referralSummary = Object.entries(
     allCustomers
       .filter(c => c.referred_by?.trim())
@@ -160,7 +173,8 @@ export default function Dashboard() {
               <p className="text-blue-200 text-sm font-medium">
                 {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </p>
-              <h1 className="text-white text-2xl font-bold mt-0.5">AJ's Generator Service</h1>
+              <h1 className="text-white text-2xl font-bold mt-0.5">{greeting}, Jeremy</h1>
+              <p className="text-blue-200/80 text-sm mt-0.5">Here's what's happening today.</p>
             </div>
             <div className="flex items-center gap-2">
               <Link to="/settings">
@@ -181,10 +195,10 @@ export default function Dashboard() {
       {/* Stats card overlapping gradient */}
       <div className="px-4 -mt-5 mb-1 max-w-lg mx-auto">
         <div className="bg-card rounded-2xl shadow-lg shadow-black/8 border border-border/50 p-4 grid grid-cols-2 gap-4">
-          <StatCard icon={DollarSign} label="Revenue" value={formatCurrency(totalRevenue)} color="bg-green-100 text-green-700" />
-          <StatCard icon={TrendingUp} label="Profit" value={formatCurrency(totalProfit)} color="bg-blue-100 text-blue-700" />
           <StatCard icon={Wrench} label="Active Jobs" value={activeJobs.length} color="bg-amber-100 text-amber-700" />
+          <StatCard icon={DollarSign} label="This Month" value={formatCurrency(thisMonthRevenue)} color="bg-green-100 text-green-700" />
           <StatCard icon={Users} label="Customers" value={customers.length} color="bg-purple-100 text-purple-700" />
+          <StatCard icon={FileText} label="Unpaid" value={unpaidInvoices.length} color={unpaidInvoices.length > 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"} />
         </div>
       </div>
 
@@ -194,10 +208,10 @@ export default function Dashboard() {
         {todayJobs.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2.5">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block" />
                 Today — {todayJobs.length} job{todayJobs.length > 1 ? "s" : ""}
-              </h2>
+              </p>
             </div>
             <div className="space-y-2">
               {todayJobs.map(job => (
@@ -227,10 +241,10 @@ export default function Dashboard() {
         {serviceDueCustomers.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2.5">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                 Service Due Soon
-              </h2>
+              </p>
               <Link to="/customers" className="text-xs text-primary font-medium">View all</Link>
             </div>
             <div className="space-y-2">
@@ -257,81 +271,27 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Low stock alert */}
-        {lowStockParts.length > 0 && (
-          <Link to="/catalog">
-            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3.5 hover:opacity-80 transition-all">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-orange-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-orange-800">
-                    {lowStockParts.filter(p => p.in_stock <= 0).length > 0
-                      ? `${lowStockParts.filter(p => p.in_stock <= 0).length} part${lowStockParts.filter(p => p.in_stock <= 0).length > 1 ? "s" : ""} out of stock`
-                      : `${lowStockParts.length} part${lowStockParts.length > 1 ? "s" : ""} running low`}
-                  </p>
-                  <p className="text-xs text-orange-700 truncate">
-                    {lowStockParts.slice(0, 2).map(p => p.name).join(", ")}
-                    {lowStockParts.length > 2 ? ` +${lowStockParts.length - 2} more` : ""}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Link>
-        )}
-
-        {/* Expiring memberships */}
-        {expiringMemberships.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold flex items-center gap-1.5">
-                <Shield className="w-4 h-4 text-blue-500" />
-                Agreements Expiring Soon
-              </h2>
-            </div>
-            <div className="space-y-2">
-              {expiringMemberships.map(c => (
-                <MembershipReminderCard key={c.id} c={c} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Unpaid invoices alert */}
-        {unpaidInvoices.length > 0 && (
-          <Link to="/invoices">
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 hover:opacity-80 transition-all">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <span className="text-sm font-bold text-amber-800">
-                  {unpaidInvoices.length} Unpaid Invoice{unpaidInvoices.length > 1 ? "s" : ""}
-                </span>
-              </div>
-              <p className="text-xs text-amber-700">
-                {formatCurrency(unpaidInvoices.reduce((s, i) => s + (i.total || 0), 0))} outstanding
-              </p>
-            </div>
-          </Link>
-        )}
-
         {/* Active jobs */}
         <div>
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-bold text-foreground">Active Jobs</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Active Jobs</p>
             <Link to="/jobs" className="text-xs text-primary font-medium">View all</Link>
           </div>
           {activeJobs.length === 0 ? (
-            <div className="bg-card border border-border rounded-2xl p-6 text-center">
-              <CheckCircle2 className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No active jobs</p>
-            </div>
+            <EmptyState
+              icon={CheckCircle2}
+              title="Nothing active right now"
+              subtitle="All quiet — dispatch a job when you're ready"
+              className="py-10"
+            />
           ) : (
             <div className="space-y-2">
               {activeJobs.slice(0, 5).map(job => (
                 <Link key={job.id} to={`/jobs/${job.id}`}>
-                  <div className="bg-card border border-border rounded-2xl p-3.5 hover:border-primary/30 hover:shadow-sm transition-all duration-150 active:scale-[0.99]">
+                  <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/30">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold truncate">{job.title}</p>
+                        <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
                       </div>
                       <StatusBadge status={job.status} />
@@ -344,80 +304,160 @@ export default function Dashboard() {
         </div>
 
         {/* Quick actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <Link to="/customers/new">
-            <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 hover:shadow-sm transition-all text-center active:scale-[0.99]">
-              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <Users className="w-5 h-5 text-primary" />
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Quick Actions</p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Link to="/customers/new">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/60 hover:bg-emerald-100/60 transition-colors active:scale-[0.99]">
+                <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Users className="w-4 h-4 text-emerald-600" />
+                </div>
+                <p className="text-sm font-semibold text-emerald-900">New Customer</p>
               </div>
-              <p className="text-xs font-semibold">New Customer</p>
-            </div>
-          </Link>
-          <Link to="/documents">
-            <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 hover:shadow-sm transition-all text-center active:scale-[0.99]">
-              <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <FileText className="w-5 h-5 text-amber-600" />
+            </Link>
+            <Link to="/route">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-amber-50 border border-amber-200/60 hover:bg-amber-100/60 transition-colors active:scale-[0.99]">
+                <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Navigation className="w-4 h-4 text-amber-600" />
+                </div>
+                <p className="text-sm font-semibold text-amber-900">Today's Route</p>
               </div>
-              <p className="text-xs font-semibold">Documents</p>
-            </div>
-          </Link>
-          <Link to="/route">
-            <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 hover:shadow-sm transition-all text-center active:scale-[0.99]">
-              <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <Navigation className="w-5 h-5 text-blue-600" />
+            </Link>
+            <Link to="/invoices">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 hover:bg-slate-100/60 transition-colors active:scale-[0.99]">
+                <div className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4 text-slate-600" />
+                </div>
+                <p className="text-sm font-semibold text-slate-800">Invoices</p>
               </div>
-              <p className="text-xs font-semibold">Today's Route</p>
-            </div>
-          </Link>
-          <Link to="/invoices">
-            <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 hover:shadow-sm transition-all text-center active:scale-[0.99]">
-              <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <FileText className="w-5 h-5 text-emerald-600" />
+            </Link>
+            <Link to="/finance">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-green-50 border border-green-200/60 hover:bg-green-100/60 transition-colors active:scale-[0.99]">
+                <div className="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+                  <DollarSign className="w-4 h-4 text-green-600" />
+                </div>
+                <p className="text-sm font-semibold text-green-900">Finance</p>
               </div>
-              <p className="text-xs font-semibold">Invoices</p>
-            </div>
-          </Link>
-          <Link to="/notes">
-            <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 hover:shadow-sm transition-all text-center active:scale-[0.99]">
-              <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <StickyNote className="w-5 h-5 text-purple-600" />
+            </Link>
+            <Link to="/documents">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-orange-50 border border-orange-200/60 hover:bg-orange-100/60 transition-colors active:scale-[0.99]">
+                <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4 text-orange-600" />
+                </div>
+                <p className="text-sm font-semibold text-orange-900">Documents</p>
               </div>
-              <p className="text-xs font-semibold">Team Notes</p>
-            </div>
-          </Link>
-          <Link to="/finance">
-            <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 hover:shadow-sm transition-all text-center active:scale-[0.99]">
-              <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <DollarSign className="w-5 h-5 text-green-600" />
+            </Link>
+            <Link to="/notes">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-purple-50 border border-purple-200/60 hover:bg-purple-100/60 transition-colors active:scale-[0.99]">
+                <div className="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
+                  <StickyNote className="w-4 h-4 text-purple-600" />
+                </div>
+                <p className="text-sm font-semibold text-purple-900">Team Notes</p>
               </div>
-              <p className="text-xs font-semibold">Finance</p>
-            </div>
-          </Link>
+            </Link>
+          </div>
         </div>
 
-        {/* Referral breakdown */}
-        {referralSummary.length >= 2 && (
+        {/* Collapsible Alerts */}
+        {(lowStockParts.length > 0 || expiringMemberships.length > 0 || unpaidInvoices.length > 0 || referralSummary.length >= 2) && (
           <div>
-            <h2 className="text-sm font-bold text-foreground mb-2.5 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-primary" /> How Customers Find Us
-            </h2>
-            <Card className="p-3">
-              <div className="space-y-2">
-                {referralSummary.slice(0, 5).map(({ source, count }) => {
-                  const maxCount = referralSummary[0].count;
-                  const width = Math.max((count / maxCount) * 100, 8);
-                  return (
-                    <div key={source} className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground truncate w-28 shrink-0">{source}</span>
-                      <div className="flex-1 h-4 bg-muted/40 rounded-lg overflow-hidden">
-                        <div className="h-full bg-primary/60 rounded-lg" style={{ width: `${width}%` }} />
-                      </div>
-                      <span className="text-xs font-semibold w-6 text-right shrink-0">{count}</span>
-                    </div>
-                  );
-                })}
+            <button
+              onClick={() => setAlertsOpen(v => !v)}
+              className="w-full flex items-center justify-between py-2 group"
+            >
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alerts & Insights</p>
+                {(lowStockParts.length > 0 || expiringMemberships.length > 0 || unpaidInvoices.length > 0) && (
+                  <span className="text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+                    {lowStockParts.length + expiringMemberships.length + unpaidInvoices.length}
+                  </span>
+                )}
               </div>
-            </Card>
+              {alertsOpen
+                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </button>
+
+            {alertsOpen && (
+              <div className="space-y-3 tab-fade">
+                {unpaidInvoices.length > 0 && (
+                  <Link to="/invoices">
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 hover:opacity-80 transition-all">
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        <span className="text-sm font-semibold text-amber-800">
+                          {unpaidInvoices.length} Unpaid Invoice{unpaidInvoices.length > 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-700">
+                        {formatCurrency(unpaidInvoices.reduce((s, i) => s + (i.total || 0), 0))} outstanding
+                      </p>
+                    </div>
+                  </Link>
+                )}
+
+                {lowStockParts.length > 0 && (
+                  <Link to="/catalog">
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3.5 hover:opacity-80 transition-all">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4 text-orange-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-orange-800">
+                            {lowStockParts.filter(p => p.in_stock <= 0).length > 0
+                              ? `${lowStockParts.filter(p => p.in_stock <= 0).length} part${lowStockParts.filter(p => p.in_stock <= 0).length > 1 ? "s" : ""} out of stock`
+                              : `${lowStockParts.length} part${lowStockParts.length > 1 ? "s" : ""} running low`}
+                          </p>
+                          <p className="text-xs text-orange-700 truncate">
+                            {lowStockParts.slice(0, 2).map(p => p.name).join(", ")}
+                            {lowStockParts.length > 2 ? ` +${lowStockParts.length - 2} more` : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+
+                {expiringMemberships.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-blue-500" />
+                      Agreements Expiring Soon
+                    </p>
+                    <div className="space-y-2">
+                      {expiringMemberships.map(c => (
+                        <MembershipReminderCard key={c.id} c={c} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {referralSummary.length >= 2 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-primary" />
+                      How Customers Find Us
+                    </p>
+                    <Card className="p-3">
+                      <div className="space-y-2">
+                        {referralSummary.slice(0, 5).map(({ source, count }) => {
+                          const maxCount = referralSummary[0].count;
+                          const width = Math.max((count / maxCount) * 100, 8);
+                          return (
+                            <div key={source} className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground truncate w-28 shrink-0">{source}</span>
+                              <div className="flex-1 h-4 bg-muted/40 rounded-lg overflow-hidden">
+                                <div className="h-full bg-primary/60 rounded-lg" style={{ width: `${width}%` }} />
+                              </div>
+                              <span className="text-xs font-semibold w-6 text-right shrink-0">{count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Card>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
