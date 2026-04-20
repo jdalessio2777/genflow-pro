@@ -40,17 +40,22 @@ export default function CustomerForm() {
     enabled: isEdit,
   });
 
-  // Strip empty strings for optional fields so Postgres doesn't reject the row
-  // (e.g. date columns reject "" but accept NULL).
+  // Only send fields that exist in the customers table. Strips any form-only
+  // state (notes, status, generator_install_date, referred_by) that has no
+  // corresponding column, and converts empty strings to null for date/enum cols.
   const cleanPayload = (data) => {
-    const nullableFields = [
-      "generator_install_date", "membership_start", "membership_expiry",
-      "service_interval", "membership_plan",
+    const schemaFields = [
+      "name", "phone", "email", "address", "property_notes",
+      "generator_model", "generator_serial", "service_interval",
+      "membership_plan", "membership_start", "membership_expiry",
+      "membership_signed", "repeat_note", "credit_card_on_file",
     ];
-    const out = { ...data };
-    nullableFields.forEach((f) => {
-      if (out[f] === "") out[f] = null;
-    });
+    const nullableFields = [
+      "membership_start", "membership_expiry", "service_interval", "membership_plan",
+    ];
+    const out = {};
+    schemaFields.forEach((f) => { if (f in data) out[f] = data[f]; });
+    nullableFields.forEach((f) => { if (out[f] === "") out[f] = null; });
     return out;
   };
 
