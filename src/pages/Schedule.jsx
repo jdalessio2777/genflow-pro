@@ -1,15 +1,18 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, CalendarCheck } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { getRecentCalendarChanges } from "@/lib/googleCalendar";
 
 const STATUS_COLORS = {
   quote: "bg-violet-400",
@@ -27,13 +30,90 @@ export default function Schedule() {
   const [current, setCurrent] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [techFilter, setTechFilter] = useState("all");
-  const { user } = useAuth();
+  const [pendingConflicts, setPendingConflicts] = useState([]);
+  const { user, googleToken } = useAuth();
+  const queryClient = useQueryClient();
+  const calendarSyncedRef = useRef(false);
+  const jobsRef = useRef([]);
 
 
   const { data: jobs = [] } = useQuery({
     queryKey: ["jobs"],
     queryFn: () => db.Job.list("-created_date", 200),
   });
+
+  // Keep ref current so the calendar sync closure always reads latest jobs
+  useEffect(() => { jobsRef.current = jobs; }, [jobs]);
+
+  useEffect(() => {
+    if (calendarSyncedRef.current || !googleToken) return;
+    calendarSyncedRef.current = true;
+
+    const lastSync = localStorage.getItem("genflow_last_calendar_sync");
+
+    getRecentCalendarChanges(googleToken, lastSync)
+      .then(async (changes) => {
+        localStorage.setItem("genflow_last_calendar_sync", new Date().toISOString());
+        if (changes.length === 0) return;
+
+        const currentJobs = jobsRef.current;
+        const conflicts = [];
+        const silentUpdates = [];
+
+        for (const change of changes) {
+          const changedJob = currentJobs.find(j => j.id === change.jobId);
+          if (!changedJob || !change.newStartTime) continue;
+
+          const newDateStr = new Date(change.newStartTime).toDateString();
+          const conflicting = currentJobs.find(j =>
+            j.id !== change.jobId &&
+            j.scheduled_date &&
+            new Date(j.scheduled_date).toDateString() === newDateStr &&
+            j.assigned_to_name &&
+            changedJob.assigned_to_name &&
+            j.assigned_to_name === changedJob.assigned_to_name
+          );
+
+          if (conflicting) {
+            conflicts.push({ change, changedJob, conflicting });
+          } else {
+            silentUpdates.push(change);
+          }
+        }
+
+        for (const change of silentUpdates) {
+          try {
+            await db.Job.update(change.jobId, { scheduled_date: change.newStartTime });
+          } catch { /* silent */ }
+        }
+        if (silentUpdates.length > 0) {
+          queryClient.invalidateQueries({ queryKey: ["jobs"] });
+        }
+
+        if (conflicts.length > 0) {
+          setPendingConflicts(conflicts);
+        }
+      })
+      .catch((e) => {
+        if (e?.message?.startsWith("401")) {
+          toast.warning("Please sign out and sign back in to refresh your Google connection");
+        }
+        // all other calendar errors are silent
+      });
+  }, [googleToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleConflictUpdate = async () => {
+    const { change } = pendingConflicts[0];
+    try {
+      await db.Job.update(change.jobId, { scheduled_date: change.newStartTime });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    } catch { /* silent */ }
+    setPendingConflicts(prev => prev.slice(1));
+  };
+
+  const handleConflictKeep = () => {
+    setPendingConflicts(prev => prev.slice(1));
+  };
 
   const scheduledJobs = jobs.filter(j =>
     j.scheduled_date &&
@@ -237,6 +317,9 @@ export default function Schedule() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {job.calendar_event_id && (
+                            <CalendarCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                          )}
                           <span className="text-xs text-primary font-medium">
                             {new Date(job.scheduled_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
@@ -264,6 +347,33 @@ export default function Schedule() {
           ))}
         </div>
       </div>
+
+      {/* Calendar conflict dialog */}
+      {pendingConflicts.length > 0 && (() => {
+        const { changedJob, conflicting, change } = pendingConflicts[0];
+        const newTime = new Date(change.newStartTime).toLocaleString("en-US", {
+          weekday: "short", month: "short", day: "numeric",
+          hour: "2-digit", minute: "2-digit",
+        });
+        return (
+          <AlertDialog open>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Schedule Conflict</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <strong>{changedJob.title}</strong> was moved to <strong>{newTime}</strong> in Google
+                  Calendar, but <strong>{conflicting.title}</strong> is already scheduled for{" "}
+                  {changedJob.assigned_to_name} at that time. Update GenFlow anyway?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={handleConflictKeep}>Keep Original</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConflictUpdate}>Update Anyway</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
+import { createCalendarEvent, updateCalendarEvent } from "@/lib/googleCalendar";
 
 const JOB_TYPES = [
   { value: "maintenance",         label: "Maintenance" },
@@ -33,7 +34,7 @@ export default function JobForm() {
   const isEdit = !!id;
   const urlParams = new URLSearchParams(window.location.search);
   const preCustomer = urlParams.get("customer");
-  const { user } = useAuth();
+  const { user, googleToken } = useAuth();
 
   const [form, setForm] = useState({
     customer_id: preCustomer || "",
@@ -84,13 +85,13 @@ export default function JobForm() {
     mutationFn: (data) => isEdit
       ? db.Job.update(id, data)
       : db.Job.create(data),
-    onSuccess: async (newJob) => {
+    onSuccess: async (savedJob) => {
       if (!isEdit) {
         try {
           await db.Invoice.create({
-            job_id: newJob.id,
-            customer_id: newJob.customer_id,
-            customer_name: newJob.customer_name,
+            job_id: savedJob.id,
+            customer_id: savedJob.customer_id,
+            customer_name: savedJob.customer_name,
             invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`,
             parts_total: 0, labor_total: 0, total: 0,
             line_items: [], notes: "", status: "draft",
@@ -110,14 +111,36 @@ export default function JobForm() {
           `,
           triggeredBy: getUserDisplayName(user),
         });
-        queryClient.invalidateQueries({ queryKey: ["jobs"] });
-        toast.success("Job created");
-        navigate(`/jobs/${newJob.id}`);
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["jobs"] });
-        toast.success("Job updated");
-        navigate(`/jobs/${id}`);
       }
+
+      // Calendar sync — non-fatal, runs after job is saved
+      if (savedJob.scheduled_date && googleToken) {
+        const customer = customers.find(c => c.id === savedJob.customer_id);
+        try {
+          let eventId;
+          if (savedJob.calendar_event_id) {
+            eventId = await updateCalendarEvent(savedJob.calendar_event_id, savedJob, customer, googleToken);
+          } else {
+            eventId = await createCalendarEvent(savedJob, customer, googleToken);
+          }
+          await db.Job.update(savedJob.id, {
+            calendar_event_id: eventId,
+            last_synced_at: new Date().toISOString(),
+          });
+          toast.success("Synced to Google Calendar", { duration: 2000 });
+        } catch (e) {
+          if (e?.message?.startsWith('401')) {
+            toast.warning("Please sign out and sign back in to refresh your Google connection");
+          } else {
+            toast.warning("Job saved — Google Calendar sync failed");
+          }
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["job", savedJob.id] });
+      toast.success(isEdit ? "Job updated" : "Job created");
+      navigate(isEdit ? `/jobs/${id}` : `/jobs/${savedJob.id}`);
     },
   });
 
