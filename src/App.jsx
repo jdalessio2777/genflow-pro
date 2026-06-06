@@ -33,6 +33,7 @@ import Finance from './pages/Finance';
 import InvoicePDF from './pages/InvoicePDF';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import AuthCallback from './pages/AuthCallback';
 import { OfflineProvider } from '@/lib/OfflineContext';
 
 const AuthenticatedApp = () => {
@@ -97,9 +98,10 @@ function App() {
         <Router>
           <OfflineProvider>
             <Routes>
-              {/* PUBLIC route — no auth needed */}
+              {/* PUBLIC routes — no auth needed */}
               <Route path="/approve-quote/:jobId/:token" element={<QuoteApproval />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               {/* All authenticated routes */}
               <Route path="/*" element={<AuthenticatedApp />} />
             </Routes>
