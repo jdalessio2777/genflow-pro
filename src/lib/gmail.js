@@ -36,6 +36,9 @@ export async function sendRawEmail({ to, subject, html, accessToken }) {
     const raw = await buildRaw(to, subject, html, 'GenShield Generator Service <contact@genshieldservice.com>')
     await postToGmail(raw, accessToken)
   } catch (e) {
+    if (e.status === 401) {
+      throw new Error('Google token expired — sign out and sign back in to refresh your connection')
+    }
     if (e.status === 403) {
       console.warn('[Gmail] Send As not authorized for contact@genshieldservice.com — sending from default account')
       const raw = await buildRaw(to, subject, html, null)
