@@ -132,9 +132,12 @@ export default function JobDetail() {
   const queryClient = useQueryClient();
   const { isOnline } = useOffline();
   const { settings } = useSettings();
-  const { user } = useAuth();
+  const { user, googleToken } = useAuth();
 
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [quoteEmailOpen, setQuoteEmailOpen] = useState(false);
+  const [manualEmail, setManualEmail] = useState('');
+  const [sendingQuote, setSendingQuote] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [sigOpen, setSigOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -381,6 +384,137 @@ export default function JobDetail() {
   const handleCancel = () => {
     setCancelOpen(false);
     handleStatusChange("canceled", { cancel_reason: cancelReason });
+  };
+
+  const sendViaGmail = async (to, subject, html, accessToken) => {
+    const message = [
+      `From: GenShield Generator Service <contact@genshieldservice.com>`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: text/html; charset=utf-8`,
+      ``,
+      html,
+    ].join('\r\n');
+    const bytes = new TextEncoder().encode(message);
+    const binary = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+    const raw = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Gmail ${res.status}: ${err.error?.message || 'send failed'}`);
+    }
+  };
+
+  const doSendQuote = async (email) => {
+    setSendingQuote(true);
+    try {
+      let token = job?.quote_approval_token;
+      if (!token) {
+        token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        await db.Job.update(id, { quote_approval_token: token });
+        queryClient.invalidateQueries({ queryKey: ["job", id] });
+      }
+      const approvalUrl = `${window.location.origin}/approve-quote/${id}/${token}`;
+      const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
+      const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
+      const grandTotal = partsTotal + laborTotal;
+
+      const laborRows = labor.map(l => `
+        <tr>
+          <td style="padding:8px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f3f4f6;">
+            ${l.description}
+            <span style="display:block;font-size:11px;color:#9ca3af;">${l.is_flat_rate ? 'Flat rate' : `${l.hours}h @ ${formatCurrency(l.rate)}/hr`}</span>
+          </td>
+          <td style="padding:8px 12px;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f3f4f6;">${formatCurrency(l.total_price)}</td>
+        </tr>`).join('');
+
+      const partsRows = parts.filter(p => p.total_price > 0).map(p => `
+        <tr>
+          <td style="padding:8px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f3f4f6;">
+            ${p.name}
+            <span style="display:block;font-size:11px;color:#9ca3af;">Qty ${p.quantity}</span>
+          </td>
+          <td style="padding:8px 12px;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f3f4f6;">${formatCurrency(p.total_price)}</td>
+        </tr>`).join('');
+
+      const subtotalsHtml = partsTotal > 0 && laborTotal > 0 ? `
+        <tr><td style="padding:5px 12px;font-size:12px;color:#6b7280;">Labor subtotal</td><td style="padding:5px 12px;font-size:12px;color:#6b7280;text-align:right;">${formatCurrency(laborTotal)}</td></tr>
+        <tr><td style="padding:5px 12px;font-size:12px;color:#6b7280;">Parts subtotal</td><td style="padding:5px 12px;font-size:12px;color:#6b7280;text-align:right;">${formatCurrency(partsTotal)}</td></tr>` : '';
+
+      const html = `<!DOCTYPE html><html><body style="margin:0;padding:16px;background:#f3f4f6;font-family:Arial,sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+  <div style="background:#1e3a5f;padding:24px;">
+    <h1 style="color:white;margin:0;font-size:20px;font-weight:700;">GenShield Generator Service</h1>
+    <p style="color:#93c5fd;margin:4px 0 0;font-size:13px;">Service Quote for ${customer?.name || job?.customer_name}</p>
+  </div>
+  <div style="padding:24px;">
+    <h2 style="margin:0 0 4px;font-size:18px;color:#111827;">${job?.title || 'Service Quote'}</h2>
+    ${job?.quote_notes ? `<p style="margin:0 0 20px;font-size:13px;color:#6b7280;">${job.quote_notes}</p>` : '<div style="margin-bottom:20px;"></div>'}
+    <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <thead><tr style="background:#f9fafb;">
+        <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;">Description</th>
+        <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;">Amount</th>
+      </tr></thead>
+      <tbody>${laborRows}${partsRows}</tbody>
+      <tfoot>
+        ${subtotalsHtml}
+        <tr style="background:#f9fafb;">
+          <td style="padding:12px;font-size:15px;font-weight:700;color:#111827;border-top:2px solid #e5e7eb;">Estimated Total</td>
+          <td style="padding:12px;font-size:18px;font-weight:700;color:#111827;text-align:right;border-top:2px solid #e5e7eb;">${formatCurrency(grandTotal)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div style="margin:24px 0;text-align:center;">
+      <a href="${approvalUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;">✓ Approve This Quote</a>
+      <p style="font-size:11px;color:#9ca3af;margin:8px 0 0;">One tap — no login required</p>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+      <p style="margin:0;font-size:13px;color:#374151;">Questions? Call <strong>(973) 787-2431</strong> or reply to this email to approve or request changes.</p>
+      <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">This quote is valid for 30 days.</p>
+    </div>
+  </div>
+  <div style="background:#f9fafb;padding:14px 24px;border-top:1px solid #e5e7eb;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9ca3af;">GenShield Generator Service · contact@genshieldservice.com</p>
+  </div>
+</div></body></html>`;
+
+      let sentViaGmail = false;
+      if (googleToken) {
+        try {
+          await sendViaGmail(email, 'Your Service Quote — GenShield Generator Service', html, googleToken);
+          sentViaGmail = true;
+        } catch (e) {
+          console.warn('[QuoteSend] Gmail failed, falling back to mailto:', e.message);
+        }
+      }
+
+      if (!sentViaGmail) {
+        const plainBody = `Service Quote: ${job?.title}\n\nEstimated Total: ${formatCurrency(grandTotal)}\n\nApprove online: ${approvalUrl}\n\nQuestions? Call (973) 787-2431 or reply to approve.`;
+        window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Service Quote — GenShield Generator Service')}&body=${encodeURIComponent(plainBody)}`, '_blank');
+      }
+
+      updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
+      toast.success(sentViaGmail ? `Quote sent to ${email}` : `Email drafted — mark as sent once delivered`);
+      setQuoteEmailOpen(false);
+    } catch (e) {
+      toast.error(`Failed to send quote: ${e.message}`);
+    } finally {
+      setSendingQuote(false);
+    }
+  };
+
+  const handleMarkAsSent = () => {
+    if (customer?.email) {
+      doSendQuote(customer.email);
+    } else {
+      setManualEmail('');
+      setQuoteEmailOpen(true);
+    }
   };
 
   const buildInvoiceData = () => {
@@ -827,15 +961,28 @@ export default function JobDetail() {
                     </Link>
                   </div>
                   {job.status === "quote_sent" && (
-                    <p className="text-xs text-sky-700 bg-sky-100 rounded-lg px-2.5 py-1.5 border border-sky-200">
-                      ✓ Sent to customer — awaiting approval
-                    </p>
+                    <>
+                      <p className="text-xs text-sky-700 bg-sky-100 rounded-lg px-2.5 py-1.5 border border-sky-200">
+                        ✓ Sent to customer — awaiting approval
+                      </p>
+                      <Button size="sm" variant="outline"
+                        className="w-full rounded-xl gap-1.5 mt-2 border-amber-300 text-amber-800 hover:bg-amber-50"
+                        onClick={() => handleStatusChange("scheduled", { quote_approved_date: new Date().toISOString() })}>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Proceed Without Approval
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground text-center mt-1 leading-tight">
+                        Manual override — customer approved by phone or in person
+                      </p>
+                    </>
                   )}
                   {job.status === "quote" && (
                     <>
                       <Button size="sm" className="w-full rounded-xl gap-1.5 mb-2"
-                        onClick={() => updateJob.mutate({ status: "quote_sent", quote_sent_date: new Date().toISOString() })}>
-                        <Send className="w-3.5 h-3.5" /> Mark as Sent
+                        disabled={sendingQuote}
+                        onClick={handleMarkAsSent}>
+                        {sendingQuote
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending...</>
+                          : <><Send className="w-3.5 h-3.5" /> Send Quote to Customer</>}
                       </Button>
                       <Button size="sm" variant="outline" className="w-full rounded-xl gap-1.5"
                         onClick={() => handleStatusChange("scheduled", { quote_approved_date: new Date().toISOString() })}>
@@ -847,6 +994,37 @@ export default function JobDetail() {
               )}
 
               {/* Schedule Next Service dialog */}
+              <Dialog open={quoteEmailOpen} onOpenChange={setQuoteEmailOpen}>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader><DialogTitle>Send Quote</DialogTitle></DialogHeader>
+                  <p className="text-sm text-muted-foreground">No email on file for this customer. Enter one to send the quote — it won't be saved to the profile.</p>
+                  <div>
+                    <Label className="text-xs">Customer email</Label>
+                    <Input
+                      type="email"
+                      value={manualEmail}
+                      onChange={e => setManualEmail(e.target.value)}
+                      placeholder="customer@example.com"
+                      className="rounded-xl mt-1"
+                      onKeyDown={e => { if (e.key === 'Enter' && manualEmail.includes('@')) doSendQuote(manualEmail); }}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setQuoteEmailOpen(false)}>Cancel</Button>
+                    <Button
+                      className="flex-1 rounded-xl gap-1.5"
+                      disabled={!manualEmail.includes('@') || sendingQuote}
+                      onClick={() => doSendQuote(manualEmail)}
+                    >
+                      {sendingQuote
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+                        : <><Send className="w-4 h-4" /> Send Quote</>}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               <Dialog open={scheduleNextOpen} onOpenChange={setScheduleNextOpen}>
                 <DialogContent className="max-w-sm">
                   <DialogHeader><DialogTitle>Schedule Next Service?</DialogTitle></DialogHeader>
