@@ -25,7 +25,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
-import { sendQuoteEmail, sendConfirmationEmail } from "@/lib/gmail";
+import { sendQuoteEmail, sendConfirmationEmail, sendCompletionEmail } from "@/lib/gmail";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -157,6 +157,9 @@ export default function JobDetail() {
   const [pendingPlan, setPendingPlan] = useState(null);
   const [showAgreementSign, setShowAgreementSign] = useState(false);
   const [customerExpanded, setCustomerExpanded] = useState(false);
+  const [completionEmailOpen, setCompletionEmailOpen] = useState(false);
+  const [includeChecklist, setIncludeChecklist] = useState(true);
+  const [sendingCompletion, setSendingCompletion] = useState(false);
   useSwipeBack("/jobs");
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
@@ -454,6 +457,28 @@ export default function JobDetail() {
       toast.error(`Failed to send confirmation: ${e.message}`);
     } finally {
       setSendingConfirmation(false);
+    }
+  };
+
+  const doSendCompletionEmail = async () => {
+    if (!customer?.email || !googleToken) return;
+    setSendingCompletion(true);
+    try {
+      await sendCompletionEmail({
+        customer,
+        job,
+        parts,
+        labor,
+        documents,
+        includeChecklist,
+        accessToken: googleToken,
+      });
+      toast.success(`Completion summary sent to ${customer.email}`);
+    } catch (e) {
+      toast.error(`Failed to send completion email: ${e.message}`);
+    } finally {
+      setSendingCompletion(false);
+      setCompletionEmailOpen(false);
     }
   };
 
@@ -851,6 +876,7 @@ export default function JobDetail() {
                           time_on_site_hours: Math.round(hoursOnSite * 4) / 4,
                         });
                         if (hasPendingAgreement) setTimeout(() => setShowAgreementSign(true), 500);
+                        if (customer?.email && googleToken) setTimeout(() => setCompletionEmailOpen(true), 400);
                       }}>
                       <CheckCircle2 className="w-4 h-4" /> Complete Job
                     </Button>
@@ -1006,6 +1032,44 @@ export default function JobDetail() {
                       {sendingQuote
                         ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
                         : <><Send className="w-4 h-4" /> Send Quote</>}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Completion email modal */}
+              <Dialog open={completionEmailOpen} onOpenChange={setCompletionEmailOpen}>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader><DialogTitle>Send Completion Summary</DialogTitle></DialogHeader>
+                  <p className="text-sm text-muted-foreground">
+                    Send a service completion email to <strong>{customer?.email}</strong>?
+                  </p>
+                  {documents.some(d => d.status === 'completed') && (
+                    <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-3 py-3">
+                      <div>
+                        <p className="text-sm font-medium">Include completed checklists</p>
+                        <p className="text-xs text-muted-foreground">
+                          {documents.filter(d => d.status === 'completed').length} checklist{documents.filter(d => d.status === 'completed').length !== 1 ? 's' : ''} completed
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setIncludeChecklist(v => !v)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${includeChecklist ? 'bg-green-600' : 'bg-muted-foreground/30'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${includeChecklist ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-2">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCompletionEmailOpen(false)}>Skip</Button>
+                    <Button
+                      className="flex-1 rounded-xl gap-1.5 bg-green-600 hover:bg-green-700"
+                      disabled={sendingCompletion}
+                      onClick={doSendCompletionEmail}
+                    >
+                      {sendingCompletion
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+                        : <><Send className="w-4 h-4" /> Send Summary</>}
                     </Button>
                   </div>
                 </DialogContent>

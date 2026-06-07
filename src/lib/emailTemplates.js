@@ -304,3 +304,123 @@ export function confirmationEmailHTML({ customer, job, techFirstName }) {
 </body>
 </html>`
 }
+
+export function completionEmailHTML({ customer, job, parts = [], labor = [], documents = [], includeChecklist = true }) {
+  const generatorInfo = [customer.generator_model, customer.generator_serial].filter(Boolean).join(' · ')
+  const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0)
+  const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0)
+  const total = partsTotal + laborTotal
+
+  const laborRows = labor.map((l, i) => `
+    <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;color:#374151;border-bottom:1px solid #f0f0f0;">${l.description}</td>
+      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(l.total_price)}</td>
+    </tr>`).join('')
+
+  const partsRows = parts.filter(p => p.total_price > 0).map((p, i) => `
+    <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
+      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;color:#374151;border-bottom:1px solid #f0f0f0;">${p.name} ×${p.quantity}</td>
+      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(p.total_price)}</td>
+    </tr>`).join('')
+
+  const completedDocs = documents.filter(d => d.status === 'completed')
+  const checklistSection = (includeChecklist && completedDocs.length > 0) ? `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+      <p style="font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 10px;">✓ Service Checklist Completed</p>
+      ${completedDocs.map(d => `
+        <p style="font-family:Arial,sans-serif;font-size:13px;color:#15803d;margin:0 0 4px;">
+          <span style="color:#16a34a;font-weight:700;">✓ </span>${d.template_name || 'Service Document'}
+        </p>`).join('')}
+    </div>` : ''
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:16px;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.1);">
+
+      <tr><td>${header()}</td></tr>
+
+      <tr>
+        <td style="background:#0f1f12;border-bottom:2px solid #2d5a3d;padding:14px 40px;">
+          <div style="font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#4CAF7A;letter-spacing:1px;text-transform:uppercase;">
+            ✓ Service Complete — Your Generator Is Protected
+          </div>
+        </td>
+      </tr>
+
+      <tr><td style="padding:32px 40px 0;">
+        <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${customer.name},</p>
+        <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
+          Your service has been completed. Our technician has finished the work on your generator and everything is running as it should be.
+          Below is a summary of what was done today.
+        </p>
+        ${divider()}
+
+        <div style="border-left:4px solid #4CAF7A;background:#f8f8f8;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:24px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;">Service</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;font-weight:600;">${job.title || ''}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Date</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;">${fmtDate(job.completed_date || new Date().toISOString())}</td>
+            </tr>
+            ${generatorInfo ? `<tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Generator</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;">${generatorInfo}</td>
+            </tr>` : ''}
+            ${customer.address ? `<tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Address</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;">${customer.address}</td>
+            </tr>` : ''}
+          </table>
+        </div>
+
+        ${checklistSection}
+
+        ${(laborRows || partsRows) ? `
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+          <thead>
+            <tr style="background:#0D1014;">
+              <th style="padding:11px 16px;font-size:11px;font-weight:600;color:#A8B4C4;text-align:left;text-transform:uppercase;letter-spacing:1px;">Work Performed</th>
+              <th style="padding:11px 16px;font-size:11px;font-weight:600;color:#A8B4C4;text-align:right;text-transform:uppercase;letter-spacing:1px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${laborRows}
+            ${partsRows}
+          </tbody>
+        </table>` : ''}
+
+        ${total > 0 ? `
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f8f8;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">
+          <tr style="border-top:2px solid #e5e7eb;">
+            <td style="padding:14px 16px;font-size:16px;font-weight:700;color:#0D1014;">Total</td>
+            <td style="padding:14px 16px;font-size:20px;font-weight:700;text-align:right;color:#0D1014;">${fmt(total)}</td>
+          </tr>
+        </table>` : ''}
+
+        <p style="font-size:14px;color:#6b7280;text-align:center;margin:0 0 24px;line-height:1.7;">
+          Thank you for trusting GenShield with your generator.
+          If you have any questions or notice anything unexpected, please reach out.
+        </p>
+        <p style="text-align:center;margin:0 0 8px;">
+          <a href="tel:9737872431" style="font-size:15px;font-weight:700;color:#0D1014;text-decoration:none;">📞 (973) 787-2431</a>
+        </p>
+
+        ${referralBar()}
+      </td></tr>
+
+      <tr><td>${trustBar()}</td></tr>
+      <tr><td>${footer()}</td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`
+}

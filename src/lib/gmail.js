@@ -1,4 +1,4 @@
-import { quoteEmailHTML, confirmationEmailHTML } from '@/lib/emailTemplates'
+import { quoteEmailHTML, confirmationEmailHTML, completionEmailHTML } from '@/lib/emailTemplates'
 
 async function buildRaw(to, subject, html, fromHeader) {
   const lines = [
@@ -65,6 +65,16 @@ export async function sendConfirmationEmail({ customer, job, techFirstName, acce
   return sendRawEmail({
     to: customer.email,
     subject: `Appointment Confirmed — GenShield Generator Service`,
+    html,
+    accessToken,
+  })
+}
+
+export async function sendCompletionEmail({ customer, job, parts, labor, documents, includeChecklist, accessToken }) {
+  const html = completionEmailHTML({ customer, job, parts, labor, documents, includeChecklist })
+  return sendRawEmail({
+    to: customer.email,
+    subject: `Service Complete — GenShield Generator Service`,
     html,
     accessToken,
   })

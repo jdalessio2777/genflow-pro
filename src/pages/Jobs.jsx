@@ -281,6 +281,11 @@ export default function Jobs() {
                               {job.assigned_to_name}
                             </span>
                           )}
+                          {job.calendar_event_id && (
+                            <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600">
+                              <Calendar className="w-3 h-3" /> Synced
+                            </span>
+                          )}
                           {job.total_price > 0 && <span className="text-xs font-semibold text-foreground">{formatCurrency(job.total_price)}</span>}
                         </div>
                       </div>

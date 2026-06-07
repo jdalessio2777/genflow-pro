@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { refreshGoogleToken } from '@/api/refresh-google-token';
 
 const ALLOWED_EMAILS = new Set([
   'jeremy.dalessio@genshieldservice.com',
@@ -122,6 +123,19 @@ export const AuthProvider = ({ children }) => {
       window.location.assign('/login');
     }
   };
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const id = setInterval(async () => {
+      try {
+        const newToken = await refreshGoogleToken();
+        if (newToken) setGoogleToken(newToken);
+      } catch (e) {
+        console.warn('[Auth] Token refresh failed:', e.message);
+      }
+    }, 45 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [isAuthenticated]);
 
   return (
     <AuthContext.Provider
