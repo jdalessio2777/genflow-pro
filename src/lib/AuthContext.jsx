@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { refreshGoogleToken } from '@/api/refresh-google-token';
 
 const ALLOWED_EMAILS = new Set([
   'jeremy.dalessio@genshieldservice.com',
@@ -128,8 +127,17 @@ export const AuthProvider = ({ children }) => {
     if (!isAuthenticated) return;
     const id = setInterval(async () => {
       try {
-        const newToken = await refreshGoogleToken();
-        if (newToken) setGoogleToken(newToken);
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const refreshToken = currentSession?.provider_refresh_token;
+        if (!refreshToken) return;
+        const res = await fetch('/api/refresh-google-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+        const { access_token } = await res.json();
+        if (access_token) setGoogleToken(access_token);
       } catch (e) {
         console.warn('[Auth] Token refresh failed:', e.message);
       }
