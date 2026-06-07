@@ -484,7 +484,7 @@ export default function JobDetail() {
       }
 
       if (!sentViaGmail) {
-        const plainBody = `Service Quote: ${job?.title}\n\nEstimated Total: ${formatCurrency(grandTotal)}\n\nApprove online: ${approvalUrl}\n\nQuestions? Call (973) 787-2431 or reply to approve.`;
+        const plainBody = `Service Quote: ${job?.title}\n\nEstimated Total: ${formatCurrency(grandTotal)}\n\nCall (973) 787-2431 or reply to approve.`;
         window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Service Quote — GenShield Generator Service')}&body=${encodeURIComponent(plainBody)}`, '_blank');
       }
 
