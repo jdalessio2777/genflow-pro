@@ -16,7 +16,10 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
 
   const { data: templates = [] } = useQuery({
     queryKey: ["doc-templates"],
-    queryFn: () => db.DocumentTemplate.filter({ is_active: true }),
+    queryFn: async () => {
+      const all = await db.DocumentTemplate.list();
+      return all.filter(t => t.is_active !== false);
+    },
   });
 
   const deleteMutation = useMutation({
@@ -58,7 +61,10 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
             <DialogHeader><DialogTitle>Attach Document</DialogTitle></DialogHeader>
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {templates.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No templates yet. Create one in Documents.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No templates yet.{" "}
+                  <Link to="/documents" className="text-primary underline underline-offset-2">Create one in Documents.</Link>
+                </p>
               ) : templates.map(t => (
                 <Card
                   key={t.id}

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Wrench, CalendarDays, BookOpen } from "lucide-react";
+import { LayoutDashboard, Users, Wrench, CalendarDays, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -7,7 +7,7 @@ const navItems = [
   { path: "/customers", icon: Users, label: "Customers" },
   { path: "/jobs", icon: Wrench, label: "Jobs" },
   { path: "/schedule", icon: CalendarDays, label: "Schedule" },
-  { path: "/catalog", icon: BookOpen, label: "Catalog" },
+  { path: "/documents", icon: FileText, label: "Documents" },
 ];
 
 export default function MobileNav() {
