@@ -81,10 +81,18 @@ export default function JobForm() {
     }
   }, [preCustomer, customers]);
 
+  const JOB_FIELDS = new Set([
+    'customer_id', 'customer_name', 'title', 'job_type', 'status',
+    'scheduled_date', 'notes', 'generator_notes', 'quote_notes',
+    'requires_document', 'assigned_to_name', 'calendar_event_id', 'last_synced_at',
+  ]);
+  const cleanPayload = (data) =>
+    Object.fromEntries(Object.entries(data).filter(([k]) => JOB_FIELDS.has(k)));
+
   const mutation = useMutation({
     mutationFn: (data) => isEdit
-      ? db.Job.update(id, data)
-      : db.Job.create(data),
+      ? db.Job.update(id, cleanPayload(data))
+      : db.Job.create(cleanPayload(data)),
     onSuccess: async (savedJob) => {
       if (!isEdit) {
         try {
