@@ -117,12 +117,13 @@ export default function JobForm() {
       if (savedJob.scheduled_date && googleToken) {
         const customer = customers.find(c => c.id === savedJob.customer_id);
         try {
-          let eventId;
-          if (savedJob.calendar_event_id) {
-            eventId = await updateCalendarEvent(savedJob.calendar_event_id, savedJob, customer, googleToken);
-          } else {
-            eventId = await createCalendarEvent(savedJob, customer, googleToken);
-          }
+          const calendarPromise = savedJob.calendar_event_id
+            ? updateCalendarEvent(savedJob.calendar_event_id, savedJob, customer, googleToken)
+            : createCalendarEvent(savedJob, customer, googleToken);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Calendar sync timed out')), 5000)
+          );
+          const eventId = await Promise.race([calendarPromise, timeoutPromise]);
           await db.Job.update(savedJob.id, {
             calendar_event_id: eventId,
             last_synced_at: new Date().toISOString(),
@@ -141,6 +142,9 @@ export default function JobForm() {
       queryClient.invalidateQueries({ queryKey: ["job", savedJob.id] });
       toast.success(isEdit ? "Job updated" : "Job created");
       navigate(isEdit ? `/jobs/${id}` : `/jobs/${savedJob.id}`);
+    },
+    onError: (error) => {
+      toast.error('Failed to save job: ' + (error.message || 'Unknown error'));
     },
   });
 
