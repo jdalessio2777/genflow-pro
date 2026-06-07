@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X } from "lucide-react";
+import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
@@ -87,6 +88,7 @@ const TOP_FOLDERS = [
   { key: "labor_rates", label: "Labor Rates", icon: Clock, color: "bg-amber-100 text-amber-700", description: "Hourly billing rates" },
   { key: "flat_rates", label: "Flat Rates", icon: Zap, color: "bg-purple-100 text-purple-700", description: "Fixed-price service jobs" },
   { key: "maintenance", label: "Maintenance", icon: Wrench, color: "bg-green-100 text-green-700", description: "Maintenance packages" },
+  { key: "documents", label: "Document Templates", icon: FileText, color: "bg-rose-100 text-rose-700", description: "Checklists and inspection forms" },
 ];
 
 // ─── PARTS CATEGORY LIST ──────────────────────────────────────────────────────
@@ -494,6 +496,7 @@ function escapeIlikeTerm(s) {
 }
 
 export default function Catalog() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [folder, setFolder] = useState(null);
   const [subFolder, setSubFolder] = useState(null);
@@ -509,6 +512,7 @@ export default function Catalog() {
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const { data: parts = [] } = useQuery({ queryKey: ["parts-catalog"], queryFn: () => db.Part.list("name").then(rows => rows.map(normalizePart)) });
+  const { data: docTemplates = [] } = useQuery({ queryKey: ["doc-templates"], queryFn: () => db.DocumentTemplate.list("-created_date") });
 
   const partsBrowseTrim = partsBrowseSearch.trim();
   const partsSearchEnabled =
@@ -774,6 +778,42 @@ export default function Catalog() {
         {folder === "flat_rates" && !subFolder && <FlatRatesFolderList onSelectFolder={setSubFolder} />}
         {folder === "flat_rates" && subFolder && <FlatRatesItemList folder={subFolder} />}
         {folder === "maintenance" && <MaintenanceList />}
+        {folder === "documents" && (
+          <div className="space-y-3">
+            <button
+              onClick={() => navigate("/catalog/documents/new")}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.99] transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              New Template
+            </button>
+            {docTemplates.length === 0 ? (
+              <Card className="p-8 text-center">
+                <FileText className="w-7 h-7 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm font-medium mb-1">No templates yet</p>
+                <p className="text-xs text-muted-foreground">Create one to get started</p>
+              </Card>
+            ) : (
+              <div className="space-y-1.5">
+                {docTemplates.map(t => (
+                  <button key={t.id} onClick={() => navigate(`/catalog/documents/${t.id}`)} className="w-full text-left">
+                    <Card className="p-3.5 hover:border-primary/30 hover:bg-muted/20 transition-all active:scale-[0.99]">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">{t.name}</p>
+                          <p className="text-xs text-muted-foreground capitalize">
+                            {t.category?.replace(/_/g, " ")} · {t.fields?.length ?? 0} field{t.fields?.length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      </div>
+                    </Card>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

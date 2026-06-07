@@ -55,7 +55,7 @@ export default function DocumentTemplateForm() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success(isEdit ? "Template updated" : "Template created");
-      navigate("/documents");
+      navigate("/catalog");
     },
   });
 

@@ -129,6 +129,8 @@ const AuthenticatedApp = () => {
         <Route path="/documents/:id/edit" element={<DocumentTemplateForm />} />
         <Route path="/documents/fill/:id" element={<DocumentFill />} />
         <Route path="/catalog" element={<Catalog />} />
+        <Route path="/catalog/documents/new" element={<DocumentTemplateForm />} />
+        <Route path="/catalog/documents/:id" element={<DocumentTemplateForm />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/route" element={<RouteMap />} />
         <Route path="/customers/:id/membership" element={<MembershipAgreement />} />
