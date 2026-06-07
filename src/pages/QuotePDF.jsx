@@ -4,21 +4,17 @@ import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2, Download, Mail, ArrowLeft, Link2, CheckCircle2 } from "lucide-react";
+import { Loader2, Download, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 
-function generateToken() {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
-}
 
 export default function QuotePDF() {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [generating, setGenerating] = useState(false);
   const [htmlContent, setHtmlContent] = useState(null);
-  const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -57,24 +53,9 @@ export default function QuotePDF() {
   const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
   const grandTotal = partsTotal + laborTotal;
 
-  const getApprovalToken = async () => {
-    if (job?.quote_approval_token) return job.quote_approval_token;
-    const token = generateToken();
-    await db.Job.update(id, { quote_approval_token: token });
-    await refetchJob();
-    return token;
-  };
-
-  const getApprovalUrl = (token) => {
-    return `${window.location.origin}/approve-quote/${id}/${token}`;
-  };
-
   const generateQuote = async () => {
     setGenerating(true);
     try {
-      const token = await getApprovalToken();
-      const approvalUrl = getApprovalUrl(token);
-
       const lineItemsText = [
         ...labor.map(l => `- ${l.description}: ${l.is_flat_rate ? formatCurrency(l.flat_rate_amount) : `${l.hours}h @ ${formatCurrency(l.rate)}/hr`} = ${formatCurrency(l.total_price)}`),
         ...parts.filter(p => p.total_price > 0).map(p => `- ${p.name} (x${p.quantity}) @ ${formatCurrency(p.price)} = ${formatCurrency(p.total_price)}`),
@@ -97,17 +78,14 @@ Parts Subtotal: ${formatCurrency(partsTotal)}
 Labor Subtotal: ${formatCurrency(laborTotal)}
 TOTAL: ${formatCurrency(grandTotal)}
 
-Approval Link: ${approvalUrl}
-
 Design requirements:
 - Professional, clean layout suitable for printing and viewing on mobile
 - Company name "AJ's Generator Service LLC" at top with a deep blue (#1e3a5f) header
 - Customer info and generator info in a clean info block
 - Line items in a table with Description and Amount columns
 - Totals section with clear grand total
-- A prominent green "Approve This Quote Online" button linking to: ${approvalUrl}
-  Style it like: <a href="${approvalUrl}" style="display:block;background:#16a34a;color:white;text-align:center;padding:14px 24px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none;margin:24px 0;">✓ Approve This Quote Online</a>
-- Below the button, smaller text: "Or reply to this email to discuss any changes"
+- A prominent approval CTA box: "To approve this quote, call (973) 787-2431 or reply to this email"
+  Style it like a green bordered box with the phone number prominent
 - Footer: "This quote is valid for 30 days from ${formatDate(new Date())}"
 - A print signature line: "Customer Acceptance: ___________________ Date: _______"
 - Color scheme: deep blue (#1e3a5f) header, white body, light gray (#f8f9fa) table alternating rows
@@ -143,25 +121,12 @@ Return ONLY the complete HTML document, nothing else.`;
     if (!htmlContent) { toast.error("Generate the quote first"); return; }
     setSending(true);
     try {
-      const token = await getApprovalToken();
-      const approvalUrl = getApprovalUrl(token);
-
-      const emailHtml = htmlContent.replace(
-        "</body>",
-        `<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:12px;padding:20px;margin:24px 0;text-align:center;">
-          <p style="font-size:14px;color:#166534;font-weight:600;margin-bottom:12px;">Ready to proceed? Approve this quote online:</p>
-          <a href="${approvalUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:700;text-decoration:none;">✓ Approve This Quote</a>
-          <p style="font-size:11px;color:#6b7280;margin-top:10px;">One tap — no login required</p>
-        </div></body>`
-      );
-
       await integrationsCore.SendEmail({
         to: customer.email,
         subject: `Service Quote — ${job?.title} · AJ's Generator Service`,
-        html: emailHtml,
+        html: htmlContent,
         from_name: "AJ's Generator Service",
       });
-
       updateJob.mutate({ status: "quote_sent", quote_sent_date: new Date().toISOString() });
       setSent(true);
       toast.success(`Quote sent to ${customer.email}`);
@@ -170,15 +135,6 @@ Return ONLY the complete HTML document, nothing else.`;
     } finally {
       setSending(false);
     }
-  };
-
-  const handleCopyLink = async () => {
-    const token = await getApprovalToken();
-    const url = getApprovalUrl(token);
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success("Approval link copied");
   };
 
   if (!job) return (
@@ -234,22 +190,6 @@ Return ONLY the complete HTML document, nothing else.`;
             <span>Estimated Total</span>
             <span>{formatCurrency(grandTotal)}</span>
           </div>
-        </Card>
-
-        {/* Approval link card */}
-        <Card className="p-4 border-blue-200 bg-blue-50">
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-800 mb-1">Customer Approval Link</p>
-          <p className="text-xs text-blue-700 mb-3">
-            Share this link with {customer?.name || "the customer"} — one tap to approve, no login needed
-          </p>
-          <Button
-            variant="outline"
-            className="w-full rounded-xl h-10 gap-1.5 border-blue-300 bg-white text-blue-700 hover:bg-blue-100 text-sm"
-            onClick={handleCopyLink}
-          >
-            <Link2 className="w-4 h-4" />
-            {copied ? "Link Copied!" : "Copy Approval Link"}
-          </Button>
         </Card>
 
         {/* Action buttons */}

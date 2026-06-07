@@ -413,13 +413,6 @@ export default function JobDetail() {
   const doSendQuote = async (email) => {
     setSendingQuote(true);
     try {
-      let token = job?.quote_approval_token;
-      if (!token) {
-        token = Math.random().toString(36).substring(2) + Date.now().toString(36);
-        await db.Job.update(id, { quote_approval_token: token });
-        queryClient.invalidateQueries({ queryKey: ["job", id] });
-      }
-      const approvalUrl = `${window.location.origin}/approve-quote/${id}/${token}`;
       const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
       const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
       const grandTotal = partsTotal + laborTotal;
@@ -469,12 +462,9 @@ export default function JobDetail() {
         </tr>
       </tfoot>
     </table>
-    <div style="margin:24px 0;text-align:center;">
-      <a href="${approvalUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;">✓ Approve This Quote</a>
-      <p style="font-size:11px;color:#9ca3af;margin:8px 0 0;">One tap — no login required</p>
-    </div>
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
-      <p style="margin:0;font-size:13px;color:#374151;">Questions? Call <strong>(973) 787-2431</strong> or reply to this email to approve or request changes.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:24px;">
+      <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">To approve, call or reply to this email:</p>
+      <p style="margin:6px 0 0;font-size:15px;color:#1e3a5f;font-weight:700;">(973) 787-2431</p>
       <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">This quote is valid for 30 days.</p>
     </div>
   </div>
