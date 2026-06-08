@@ -35,7 +35,7 @@ export default function DocumentTemplateForm() {
 
   const [form, setForm] = useState({
     name: "", description: "", category: "maintenance",
-    fields: [], job_types: [], is_active: true,
+    field_definitions: [],
   });
 
   const { isLoading } = useQuery({
@@ -62,7 +62,7 @@ export default function DocumentTemplateForm() {
   const addField = () => {
     setForm(prev => ({
       ...prev,
-      fields: [...prev.fields, {
+      fields: [...prev.field_definitions, {
         id: `field_${Date.now()}`,
         label: "",
         type: "text",
@@ -73,19 +73,19 @@ export default function DocumentTemplateForm() {
   };
 
   const updateField = (index, key, value) => {
-    const updated = [...form.fields];
+    const updated = [...form.field_definitions];
     updated[index] = { ...updated[index], [key]: value };
     setForm(prev => ({ ...prev, fields: updated }));
   };
 
   const removeField = (index) => {
-    setForm(prev => ({ ...prev, fields: prev.fields.filter((_, i) => i !== index) }));
+    setForm(prev => ({ ...prev, fields: prev.field_definitions.filter((_, i) => i !== index) }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.name.trim()) { toast.error("Name is required"); return; }
-    if (form.fields.length === 0) { toast.error("Add at least one field"); return; }
+    if (form.field_definitions.length === 0) { toast.error("Add at least one field"); return; }
     mutation.mutate(form);
   };
 
@@ -108,14 +108,14 @@ export default function DocumentTemplateForm() {
         </Card>
 
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Fields ({form.fields.length})</h3>
+          <h3 className="text-sm font-semibold">Fields ({form.field_definitions.length})</h3>
           <Button type="button" size="sm" variant="outline" className="rounded-xl gap-1 text-xs" onClick={addField}>
             <Plus className="w-3 h-3" /> Add Field
           </Button>
         </div>
 
         <div className="space-y-3">
-          {form.fields.map((field, i) => (
+          {form.field_definitions.map((field, i) => (
             <Card key={field.id} className="p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -151,7 +151,7 @@ export default function DocumentTemplateForm() {
           ))}
         </div>
 
-        {form.fields.length === 0 && (
+        {form.field_definitions.length === 0 && (
           <Card className="p-6 text-center">
             <p className="text-sm text-muted-foreground">No fields yet. Add fields to build your template.</p>
           </Card>

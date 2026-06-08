@@ -17,8 +17,7 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
   const { data: templates = [] } = useQuery({
     queryKey: ["doc-templates"],
     queryFn: async () => {
-      const all = await db.DocumentTemplate.list();
-      return all.filter(t => t.is_active !== false);
+      return db.DocumentTemplate.list("name");
     },
   });
 
@@ -37,7 +36,7 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
       template_name: template.name,
       customer_id: customerId,
       status: "in_progress",
-      field_definitions: template.fields,
+      field_definitions: template.field_definitions,
       field_values: {},
     }),
     onSuccess: () => {
@@ -73,7 +72,7 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
                 >
                   <p className="text-sm font-medium">{t.name}</p>
                   {t.description && <p className="text-xs text-muted-foreground">{t.description}</p>}
-                  <p className="text-xs text-primary mt-1">{t.fields?.length || 0} fields</p>
+                  <p className="text-xs text-primary mt-1">{t.field_definitions?.length || 0} fields</p>
                 </Card>
               ))}
             </div>

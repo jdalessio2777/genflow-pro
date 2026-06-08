@@ -2,19 +2,67 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 import { integrationsCore } from "@/lib/coreIntegrations";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Loader2, Camera } from "lucide-react";
+import { CheckCircle2, Loader2, Camera, Printer } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { toast } from "sonner";
 import { debounce } from "lodash";
 import { useAuth } from "@/lib/AuthContext";
+
+// ── Style constants ────────────────────────────────────────────────────────────
+
+const S = {
+  label: {
+    display: "block",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: "#888",
+    marginBottom: 4,
+  },
+  input: {
+    background: "#fff",
+    borderColor: "#ddd",
+    color: "#111",
+  },
+  inputPreFilled: {
+    background: "#f0f8ff",
+    borderColor: "#b8d4e8",
+    color: "#111",
+  },
+  sectionHeader: {
+    borderLeft: "3px solid #CC2200",
+    paddingLeft: 10,
+    marginTop: 24,
+    marginBottom: 8,
+    paddingBottom: 6,
+    borderBottom: "1px solid #e5e7eb",
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+    color: "#CC2200",
+  },
+  checkRow: (checked) => ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 14px",
+    cursor: "pointer",
+    borderBottom: "1px solid #f0f0f0",
+    backgroundColor: checked ? "#f0fdf4" : "#fff",
+    transition: "background 0.1s",
+  }),
+};
 
 const getUnit = (fieldId) => {
   if (fieldId.includes("voltage")) return "V";
@@ -22,11 +70,15 @@ const getUnit = (fieldId) => {
   return null;
 };
 
+// ── DocumentFill ──────────────────────────────────────────────────────────────
+
 export default function DocumentFill() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
   const { data: doc, isLoading } = useQuery({
     queryKey: ["job-doc", id],
@@ -35,26 +87,40 @@ export default function DocumentFill() {
 
   const { data: job } = useQuery({
     queryKey: ["doc-job", doc?.job_id],
-    queryFn: async () => {
-      const r = await db.Job.filter({ id: doc.job_id });
-      return r[0];
-    },
+    queryFn: async () => { const r = await db.Job.filter({ id: doc.job_id }); return r[0]; },
     enabled: !!doc?.job_id,
   });
 
   const { data: customer } = useQuery({
     queryKey: ["doc-customer", job?.customer_id],
+    queryFn: async () => { const r = await db.Customer.filter({ id: job.customer_id }); return r[0]; },
+    enabled: !!job?.customer_id,
+  });
+
+  // Look up exercise_datetime from the most recent completed doc for this customer
+  const { data: prevExerciseTime } = useQuery({
+    queryKey: ["prev-exercise", job?.customer_id],
     queryFn: async () => {
-      const r = await db.Customer.filter({ id: job.customer_id });
-      return r[0];
+      const { data } = await supabase
+        .from("job_documents")
+        .select("field_values, completed_date")
+        .eq("customer_id", job.customer_id)
+        .eq("status", "completed")
+        .order("completed_date", { ascending: false })
+        .limit(20);
+      const found = (data || []).find(d => d.field_values?.exercise_datetime);
+      return found?.field_values?.exercise_datetime ?? null;
     },
     enabled: !!job?.customer_id,
   });
 
+  // ── State ──────────────────────────────────────────────────────────────────
+
   const [values, setValues] = useState({});
   const initialized = useRef(false);
+  const preFilledFields = useRef(new Set());
 
-  // Load existing field values once
+  // Load saved field values once on mount
   useEffect(() => {
     if (doc && !initialized.current) {
       setValues(doc.field_values || {});
@@ -62,18 +128,28 @@ export default function DocumentFill() {
     }
   }, [doc]);
 
-  // Auto-fill based on field IDs once job + customer are loaded
+  // Auto-fill from customer/job — non-destructive (never overwrites existing values)
   useEffect(() => {
     if (!initialized.current || !doc || !job || !customer) return;
 
-    const fieldIdMap = {
-      customer_name: customer?.name,
-      service_address: customer?.address,
-      customer_phone: customer?.phone,
-      gen_model: customer?.generator_model,
-      gen_serial: customer?.generator_serial,
-      gen_install_date: customer?.generator_install_date,
-      service_date: job?.scheduled_date
+    const fillMap = {
+      // New template field IDs
+      customer_name:          customer.name,
+      customer_address:       customer.address,
+      customer_phone:         customer.phone,
+      customer_email:         customer.email,
+      generator_brand:        customer.generator_brand,
+      generator_kw:           customer.generator_kw != null ? String(customer.generator_kw) : undefined,
+      generator_model:        customer.generator_model,
+      generator_serial:       customer.generator_serial,
+      generator_install_date: customer.generator_install_date,
+      date_of_service:        new Date().toISOString().split("T")[0],
+      // Legacy field IDs (old templates)
+      service_address:        customer.address,
+      gen_model:              customer.generator_model,
+      gen_serial:             customer.generator_serial,
+      gen_install_date:       customer.generator_install_date,
+      service_date:           job.scheduled_date
         ? job.scheduled_date.split("T")[0]
         : new Date().toISOString().split("T")[0],
     };
@@ -81,24 +157,38 @@ export default function DocumentFill() {
     setValues(prev => {
       const next = { ...prev };
       let changed = false;
-      Object.entries(fieldIdMap).forEach(([fieldId, val]) => {
+      for (const [fieldId, val] of Object.entries(fillMap)) {
         if (!next[fieldId] && val) {
           next[fieldId] = val;
+          preFilledFields.current.add(fieldId);
           changed = true;
         }
-      });
+      }
       return changed ? next : prev;
     });
   }, [job, customer, doc]);
 
-  // Auto-fill technician name
+  // Auto-fill exercise_datetime from previous completed doc
+  useEffect(() => {
+    if (!initialized.current || !prevExerciseTime) return;
+    setValues(prev => {
+      if (prev.exercise_datetime) return prev;
+      preFilledFields.current.add("exercise_datetime");
+      return { ...prev, exercise_datetime: prevExerciseTime };
+    });
+  }, [prevExerciseTime]);
+
+  // Auto-fill tech name
   useEffect(() => {
     if (!user?.full_name) return;
     setValues(prev => {
       if (prev.tech_name) return prev;
+      preFilledFields.current.add("tech_name");
       return { ...prev, tech_name: user.full_name };
     });
   }, [user]);
+
+  // ── Mutations & save ───────────────────────────────────────────────────────
 
   const saveMutation = useMutation({
     mutationFn: (data) => db.JobDocument.update(id, data),
@@ -111,11 +201,37 @@ export default function DocumentFill() {
   );
 
   const updateValue = (fieldId, value) => {
+    preFilledFields.current.delete(fieldId);
     setValues(prev => {
       const next = { ...prev, [fieldId]: value };
       debouncedSave(next);
       return next;
     });
+  };
+
+  // Reverse sync: write generator fields back to the customer record if currently empty
+  const syncToCustomer = (savedValues) => {
+    if (!customer) return;
+    const SYNC_MAP = {
+      generator_brand:        "generator_brand",
+      generator_kw:           "generator_kw",
+      generator_model:        "generator_model",
+      generator_serial:       "generator_serial",
+      generator_install_date: "generator_install_date",
+    };
+    const updates = {};
+    for (const [fieldId, col] of Object.entries(SYNC_MAP)) {
+      const formVal = savedValues[fieldId];
+      if (formVal && !customer[col]) updates[col] = formVal;
+    }
+    if (Object.keys(updates).length > 0) {
+      db.Customer.update(customer.id, updates)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["doc-customer", customer.id] });
+          toast.success("Customer record updated");
+        })
+        .catch(e => console.warn("[DocumentFill] Customer sync failed:", e.message));
+    }
   };
 
   const handlePhotoUpload = async (fieldId, file) => {
@@ -127,6 +243,7 @@ export default function DocumentFill() {
   const handleSave = () => {
     debouncedSave.cancel();
     saveMutation.mutate({ field_values: values });
+    syncToCustomer(values);
     toast.success("Checklist saved");
     if (doc?.job_id) navigate(`/jobs/${doc.job_id}`);
     else navigate(-1);
@@ -141,236 +258,219 @@ export default function DocumentFill() {
     }
     debouncedSave.cancel();
     saveMutation.mutate({ field_values: values, status: "completed", completed_date: new Date().toISOString() });
+    syncToCustomer(values);
     toast.success("Document completed");
     if (doc?.job_id) navigate(`/jobs/${doc.job_id}`);
     else navigate(-1);
   };
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  // ── Early returns ──────────────────────────────────────────────────────────
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center h-40">
+      <Loader2 className="w-6 h-6 animate-spin" />
+    </div>
+  );
   if (!doc) return <div className="p-4 text-center">Document not found</div>;
 
   const fields = doc.field_definitions || [];
+  const isPreFilled = (fieldId) => preFilledFields.current.has(fieldId);
 
-  // --- Helpers ---
+  // ── Render helpers ─────────────────────────────────────────────────────────
+
+  const inputStyle = (fieldId) => ({
+    ...S.input,
+    ...(isPreFilled(fieldId) ? S.inputPreFilled : {}),
+  });
+
   const renderInputField = (field) => {
     const unit = getUnit(field.id);
+
     if (field.type === "textarea") {
       return (
-        <Card key={field.id} className="p-4">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
-            {field.label}
-            {field.required && <span className="text-destructive ml-0.5">*</span>}
-          </Label>
+        <div key={field.id} style={{ marginBottom: 12 }}>
+          <label style={S.label}>
+            {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
+          </label>
           <Textarea
             value={values[field.id] || ""}
             onChange={e => updateValue(field.id, e.target.value)}
-            className="rounded-xl text-sm min-h-[100px] resize-none"
+            className="text-sm min-h-[100px] resize-none rounded-xl"
+            style={inputStyle(field.id)}
             placeholder={field.placeholder || ""}
           />
-        </Card>
+        </div>
       );
     }
+
     if (field.type === "photo") {
       return (
-        <Card key={field.id} className="px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Label className="text-sm text-muted-foreground w-40 shrink-0">
-              {field.label}
-              {field.required && <span className="text-destructive ml-0.5">*</span>}
-            </Label>
-            <div className="flex-1">
-              {values[field.id] ? (
-                <div className="space-y-1">
-                  <img src={values[field.id]} alt="Upload" className="w-full max-h-32 object-cover rounded-xl" />
-                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>
-                </div>
-              ) : (
-                <label className="flex items-center justify-center gap-2 h-16 border-2 border-dashed rounded-xl cursor-pointer hover:bg-muted/50 transition-colors">
-                  <Camera className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Tap to capture</span>
-                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { if (e.target.files[0]) handlePhotoUpload(field.id, e.target.files[0]); }} />
-                </label>
-              )}
+        <div key={field.id} style={{ marginBottom: 12 }}>
+          <label style={S.label}>
+            {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
+          </label>
+          {values[field.id] ? (
+            <div className="space-y-1">
+              <img src={values[field.id]} alt="Upload" className="w-full max-h-32 object-cover rounded-xl" />
+              <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>
             </div>
-          </div>
-        </Card>
+          ) : (
+            <label
+              className="flex items-center justify-center gap-2 h-16 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
+              style={{ borderColor: "#ddd" }}
+            >
+              <Camera className="w-5 h-5 text-gray-400" />
+              <span className="text-sm text-gray-400">Tap to capture</span>
+              <input type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={e => { if (e.target.files[0]) handlePhotoUpload(field.id, e.target.files[0]); }} />
+            </label>
+          )}
+        </div>
       );
     }
+
     if (field.type === "dropdown") {
       return (
-        <Card key={field.id} className="px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Label className="text-sm text-muted-foreground w-40 shrink-0">
-              {field.label}
-              {field.required && <span className="text-destructive ml-0.5">*</span>}
-            </Label>
-            <div className="flex-1">
-              <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)}>
-                <SelectTrigger className="rounded-xl h-10 text-sm"><SelectValue placeholder="Select..." /></SelectTrigger>
-                <SelectContent>
-                  {field.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </Card>
+        <div key={field.id} style={{ marginBottom: 12 }}>
+          <label style={S.label}>
+            {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
+          </label>
+          <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)}>
+            <SelectTrigger className="rounded-xl h-10 text-sm" style={inputStyle(field.id)}>
+              <SelectValue placeholder="Select..." />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       );
     }
+
     // text, date, time, number
     return (
-      <Card key={field.id} className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Label className="text-sm text-muted-foreground w-40 shrink-0">
-            {field.label}
-            {field.required && <span className="text-destructive ml-0.5">*</span>}
-          </Label>
-          <div className="flex-1">
-            {field.type === "number" ? (
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="number"
-                  value={values[field.id] || ""}
-                  onChange={e => updateValue(field.id, e.target.value)}
-                  placeholder={field.placeholder}
-                  className="rounded-xl h-10 text-base flex-1"
-                />
-                {unit && <span className="text-xs text-muted-foreground font-medium shrink-0">{unit}</span>}
-              </div>
-            ) : (
-              <Input
-                type={field.type === "text" ? "text" : field.type}
-                value={values[field.id] || ""}
-                onChange={e => updateValue(field.id, e.target.value)}
-                placeholder={field.placeholder}
-                className="rounded-xl h-10 text-base"
-              />
-            )}
-          </div>
+      <div key={field.id} style={{ marginBottom: 12 }}>
+        <label style={S.label}>
+          {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
+        </label>
+        <div style={unit ? { display: "flex", alignItems: "center", gap: 6 } : {}}>
+          <Input
+            type={field.type === "text" ? "text" : field.type}
+            value={values[field.id] || ""}
+            onChange={e => updateValue(field.id, e.target.value)}
+            placeholder={field.placeholder}
+            className="rounded-xl h-10 text-base flex-1"
+            style={inputStyle(field.id)}
+          />
+          {unit && <span style={{ fontSize: 11, color: "#888", fontWeight: 500, flexShrink: 0 }}>{unit}</span>}
         </div>
-      </Card>
+      </div>
     );
   };
 
   const renderCheckboxRow = (field) => {
     const checked = !!values[field.id];
     return (
-      <div
-        key={field.id}
-        onClick={() => updateValue(field.id, !checked)}
-        className={`flex items-center justify-between px-4 py-3.5 cursor-pointer transition-colors border-b last:border-b-0 ${
-          checked ? "bg-green-50 dark:bg-green-950/30" : "bg-white dark:bg-card hover:bg-muted/40"
-        }`}
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div key={field.id} style={S.checkRow(checked)} onClick={() => updateValue(field.id, !checked)}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           {checked
-            ? <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-            : <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/40 shrink-0" />
+            ? <CheckCircle2 style={{ width: 20, height: 20, color: "#16a34a", flexShrink: 0 }} />
+            : <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #ccc", flexShrink: 0 }} />
           }
-          <span className={`text-sm ${checked ? "text-green-800 dark:text-green-300 font-medium" : "text-foreground"}`}>
+          <span style={{ fontSize: 14, color: checked ? "#15803d" : "#111", fontWeight: checked ? 500 : 400 }}>
             {field.label}
           </span>
-          {field.required && !checked && (
-            <span className="text-destructive text-xs">*</span>
-          )}
+          {field.required && !checked && <span style={{ color: "#CC2200", fontSize: 11 }}>*</span>}
         </div>
-        {checked && (
-          <span className="text-xs font-semibold text-green-600 shrink-0 ml-2">✓ Done</span>
-        )}
+        {checked && <span style={{ fontSize: 12, fontWeight: 600, color: "#16a34a", flexShrink: 0, marginLeft: 8 }}>✓</span>}
       </div>
     );
   };
 
-  // --- Build grouped sections ---
+  // Group part_number_X / part_desc_X pairs into side-by-side columns
+  const renderInputFields = (inputFields) => {
+    const output = [];
+    const usedIds = new Set();
+
+    for (const field of inputFields) {
+      if (usedIds.has(field.id)) continue;
+
+      const numMatch = field.id.match(/^part_number_(\d+)$/);
+      if (numMatch) {
+        const descId = `part_desc_${numMatch[1]}`;
+        const descField = inputFields.find(f => f.id === descId);
+        if (descField) {
+          usedIds.add(field.id);
+          usedIds.add(descId);
+          output.push(
+            <div key={field.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 8, marginBottom: 12 }}>
+              <div>
+                <label style={S.label}>{field.label}</label>
+                <Input type="text" value={values[field.id] || ""}
+                  onChange={e => updateValue(field.id, e.target.value)}
+                  placeholder="Part #" className="rounded-xl h-10 text-sm" style={S.input} />
+              </div>
+              <div>
+                <label style={S.label}>{descField.label}</label>
+                <Input type="text" value={values[descId] || ""}
+                  onChange={e => updateValue(descId, e.target.value)}
+                  placeholder="Description" className="rounded-xl h-10 text-sm" style={S.input} />
+              </div>
+            </div>
+          );
+          continue;
+        }
+      }
+
+      output.push(renderInputField(field));
+    }
+    return output;
+  };
+
+  // ── Section builder ────────────────────────────────────────────────────────
+
+  // date_of_service is shown in the branding header, not in the body
+  const dateFieldValue = values["date_of_service"] || values["service_date"];
+  const bodyFields = fields.filter(f => f.id !== "date_of_service" && f.id !== "service_date");
+
   const renderSections = () => {
     const output = [];
     let i = 0;
 
-    while (i < fields.length) {
-      const field = fields[i];
+    while (i < bodyFields.length) {
+      const field = bodyFields[i];
 
       if (field.type === "section_header") {
-        const isCompletion = field.id === "section_completion";
+        const sectionId = field.id;
         const sectionLabel = field.label;
+        const isCompletion = sectionId === "section_completion";
 
-        // Collect all fields in this section until next section_header
         const sectionFields = [];
         i++;
-        while (i < fields.length && fields[i].type !== "section_header") {
-          sectionFields.push(fields[i]);
+        while (i < bodyFields.length && bodyFields[i].type !== "section_header") {
+          sectionFields.push(bodyFields[i]);
           i++;
         }
 
         const checkboxFields = sectionFields.filter(f => f.type === "checkbox");
         const inputFields = sectionFields.filter(f => f.type !== "checkbox");
-        const isInfoSection = field.id === "section_header" || field.id === "section_gen";
 
-        if (isCompletion) {
-          output.push(
-            <div key={field.id} className="mt-4">
-              <Card className="overflow-hidden border-2 border-primary/20">
-                <div className="bg-primary/5 px-4 py-2.5 border-b border-primary/20">
-                  <p className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Final Steps Before Leaving
-                  </p>
-                </div>
-                <div className="divide-y divide-border">
-                  {checkboxFields.map(f => renderCheckboxRow(f))}
-                </div>
-              </Card>
-              {inputFields.map(f => renderInputField(f))}
+        output.push(
+          <div key={sectionId}>
+            <div style={{ ...S.sectionHeader, ...(isCompletion ? { borderColor: "#16a34a" } : {}) }}>
+              <p style={{ ...S.sectionLabel, ...(isCompletion ? { color: "#16a34a" } : {}) }}>
+                {isCompletion ? "Final Steps Before Leaving" : sectionLabel}
+              </p>
             </div>
-          );
-        } else if (isInfoSection) {
-          output.push(
-            <Card key={field.id} className="overflow-hidden mb-2">
-              <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-4 py-3 border-b">
-                <p className="text-xs font-bold uppercase tracking-widest text-primary">{sectionLabel}</p>
+            {checkboxFields.length > 0 && (
+              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", marginBottom: 8 }}>
+                {checkboxFields.map(f => renderCheckboxRow(f))}
               </div>
-              <div className="divide-y divide-border">
-                {inputFields.map(f => (
-                  <div key={f.id} className="px-4 py-3 flex items-center gap-3">
-                    <Label className="text-sm text-muted-foreground w-40 shrink-0">
-                      {f.label}
-                      {f.required && <span className="text-destructive ml-0.5">*</span>}
-                    </Label>
-                    <div className="flex-1">
-                      <Input
-                        type={f.type === "text" ? "text" : f.type}
-                        value={values[f.id] || ""}
-                        onChange={e => updateValue(f.id, e.target.value)}
-                        placeholder={f.placeholder}
-                        className="rounded-xl h-10 text-base border-0 bg-transparent focus-visible:ring-0 p-0"
-                      />
-                    </div>
-                  </div>
-                ))}
-                {checkboxFields.length > 0 && (
-                  <div className="divide-y divide-border">
-                    {checkboxFields.map(f => renderCheckboxRow(f))}
-                  </div>
-                )}
-              </div>
-            </Card>
-          );
-        } else {
-          // Regular section
-          output.push(
-            <div key={field.id} className="space-y-2">
-              <div className="flex items-center gap-3 mt-6 mb-1">
-                <div className="h-5 w-1 rounded-full bg-primary shrink-0" />
-                <p className="text-xs font-bold uppercase tracking-widest text-primary">{sectionLabel}</p>
-              </div>
-              {checkboxFields.length > 0 && (
-                <Card className="overflow-hidden divide-y divide-border p-0">
-                  {checkboxFields.map(f => renderCheckboxRow(f))}
-                </Card>
-              )}
-              {inputFields.map(f => renderInputField(f))}
-            </div>
-          );
-        }
+            )}
+            {renderInputFields(inputFields)}
+          </div>
+        );
       } else {
-        // Orphan field (no section header)
         output.push(renderInputField(field));
         i++;
       }
@@ -378,73 +478,104 @@ export default function DocumentFill() {
     return output;
   };
 
-  // Progress bar
+  // Progress bar (checkboxes only)
   const checkboxFields = fields.filter(f => f.type === "checkbox");
   const checkedCount = checkboxFields.filter(f => values[f.id]).length;
   const pct = checkboxFields.length > 0 ? (checkedCount / checkboxFields.length) * 100 : 0;
 
-  return (
-    <div className="pb-32">
-      <PageHeader
-        title={doc.template_name}
-        back={doc.job_id ? `/jobs/${doc.job_id}` : -1}
-        actions={<StatusBadge status={doc.status} />}
-      />
+  // ── Render ─────────────────────────────────────────────────────────────────
 
-      {/* Progress bar */}
-      <div className="px-4 pt-3 pb-1">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-muted-foreground">Progress</span>
-          <span className="text-xs font-semibold text-primary">{checkedCount}/{checkboxFields.length} items</span>
-        </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary rounded-full transition-all duration-300"
-            style={{ width: `${pct}%` }}
-          />
+  return (
+    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }} className="pb-32">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: #fff !important; }
+          .pb-32 { padding-bottom: 0 !important; }
+        }
+      `}</style>
+
+      <div className="no-print">
+        <PageHeader
+          title={doc.template_name}
+          back={doc.job_id ? `/jobs/${doc.job_id}` : -1}
+          actions={<StatusBadge status={doc.status} />}
+        />
+      </div>
+
+      {/* GenShield branding header */}
+      <div style={{ backgroundColor: "#0D1014", borderBottom: "3px solid #CC2200", padding: "14px 16px 12px" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.05em", lineHeight: 1 }}>
+                <span style={{ color: "#C8CDD5" }}>Gen</span><span style={{ color: "#E03010" }}>Shield</span>
+              </div>
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: "#68788C", marginTop: 2, marginBottom: 6 }}>
+                Standby Generator Service &amp; Repair
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{doc.template_name}</div>
+            </div>
+            {/* Date of service — top-right of header (Step 6) */}
+            {dateFieldValue && (
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: 9, color: "#68788C", textTransform: "uppercase", letterSpacing: "0.12em" }}>Date of Service</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#C8CDD5", marginTop: 2 }}>{dateFieldValue}</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-2">
+      {/* Progress bar */}
+      {checkboxFields.length > 0 && (
+        <div className="px-4 pt-3 pb-1 no-print">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground">Progress</span>
+            <span className="text-xs font-semibold text-primary">{checkedCount}/{checkboxFields.length}</span>
+          </div>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* Form body */}
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 0" }}>
         {saveMutation.isPending && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+          <div className="flex items-center gap-2 text-xs text-gray-400 py-1 no-print">
             <Loader2 className="w-3 h-3 animate-spin" /> Saving...
           </div>
         )}
-        {renderSections()}
+        <div style={{ backgroundColor: "#fff", borderRadius: 8, padding: "16px 16px 8px", border: "1px solid #e5e7eb" }}>
+          {renderSections()}
+        </div>
       </div>
 
       {/* Sticky footer */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border safe-bottom z-50">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border safe-bottom z-50 no-print">
         {doc.status !== "completed" ? (
           <div className="flex gap-2 max-w-lg mx-auto">
-            <Button
-              type="button"
-              variant="ghost"
-              className="flex-1 rounded-xl h-12"
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
-            >
+            <Button type="button" variant="ghost" className="flex-1 rounded-xl h-12"
+              onClick={handleSave} disabled={saveMutation.isPending}>
               Save & Continue Later
             </Button>
-            <Button
-              type="button"
-              className="flex-1 rounded-xl h-12 bg-green-600 hover:bg-green-700"
-              onClick={handleComplete}
-              disabled={saveMutation.isPending}
-            >
-              <CheckCircle2 className="w-4 h-4" /> Submit & Complete
+            <Button type="button" className="flex-1 rounded-xl h-12 bg-green-600 hover:bg-green-700"
+              onClick={handleComplete} disabled={saveMutation.isPending}>
+              <CheckCircle2 className="w-4 h-4 mr-1" /> Submit & Complete
             </Button>
           </div>
         ) : (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full rounded-xl h-12 max-w-lg mx-auto block"
-            onClick={() => doc.job_id ? navigate(`/jobs/${doc.job_id}`) : navigate(-1)}
-          >
-            Back to Job
-          </Button>
+          <div className="flex gap-2 max-w-lg mx-auto">
+            <Button type="button" variant="outline" className="flex-1 rounded-xl h-12"
+              onClick={() => doc.job_id ? navigate(`/jobs/${doc.job_id}`) : navigate(-1)}>
+              Back to Job
+            </Button>
+            <Button type="button" variant="outline" className="rounded-xl h-12 px-4"
+              onClick={() => window.print()}>
+              <Printer className="w-4 h-4" />
+            </Button>
+          </div>
         )}
       </div>
     </div>

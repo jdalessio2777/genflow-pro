@@ -802,7 +802,7 @@ export default function Catalog() {
                         <div>
                           <p className="text-sm font-semibold">{t.name}</p>
                           <p className="text-xs text-muted-foreground capitalize">
-                            {t.category?.replace(/_/g, " ")} · {t.fields?.length ?? 0} field{t.fields?.length !== 1 ? "s" : ""}
+                            {t.category?.replace(/_/g, " ")} · {t.field_definitions?.length ?? 0} field{t.field_definitions?.length !== 1 ? "s" : ""}
                           </p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />

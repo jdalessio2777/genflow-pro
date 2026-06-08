@@ -67,7 +67,7 @@ export default function Documents() {
                   <Link to={`/documents/${t.id}/edit`} className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{t.name}</p>
                     {t.description && <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>}
-                    <p className="text-xs text-primary mt-1">{t.fields?.length || 0} fields · {t.category || "general"}</p>
+                    <p className="text-xs text-primary mt-1">{t.field_definitions?.length || 0} fields · {t.category || "general"}</p>
                   </Link>
                   <div className="flex items-center gap-1 shrink-0">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateMutation.mutate(t)}>
