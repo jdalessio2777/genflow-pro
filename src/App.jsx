@@ -33,7 +33,7 @@ import Schedule from './pages/Schedule';
 import RouteMap from './pages/RouteMap';
 import MembershipAgreement from './pages/MembershipAgreement';
 import TeamNotes from './pages/TeamNotes';
-import CallList from './pages/CallList';
+import Inbox from './pages/Inbox';
 import Finance from './pages/Finance';
 import InvoicePDF from './pages/InvoicePDF';
 import Settings from './pages/Settings';
@@ -135,7 +135,8 @@ const AuthenticatedApp = () => {
         <Route path="/route" element={<RouteMap />} />
         <Route path="/customers/:id/membership" element={<MembershipAgreement />} />
         <Route path="/notes" element={<TeamNotes />} />
-        <Route path="/call-list" element={<CallList />} />
+        <Route path="/inbox" element={<Inbox />} />
+        <Route path="/call-list" element={<Inbox />} />
         <Route path="/finance" element={<Finance />} />
         <Route path="/settings" element={<Settings />} />
       </Route>

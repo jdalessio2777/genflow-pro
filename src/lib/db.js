@@ -108,6 +108,7 @@ const TABLE_MAP = {
   TeamNote: 'team_notes',
   Expense: 'expenses',
   MileageLog: 'mileage_logs',
+  ServiceRequest: 'service_requests',
 };
 
 export const db = Object.fromEntries(
