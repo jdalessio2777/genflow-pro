@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [appPublicSettings, setAppPublicSettings] = useState(null);
   const [googleToken, setGoogleToken] = useState(null);
+  const [googleTokenExpiry, setGoogleTokenExpiry] = useState(null);
 
   const applySession = useCallback((sess) => {
     const nextUser = mapSupabaseUser(sess?.user ?? null);
@@ -136,8 +137,11 @@ export const AuthProvider = ({ children }) => {
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
         if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
-        const { access_token } = await res.json();
-        if (access_token) setGoogleToken(access_token);
+        const { access_token, expires_in } = await res.json();
+        if (access_token) {
+          setGoogleToken(access_token);
+          setGoogleTokenExpiry(Date.now() + expires_in * 1000);
+        }
       } catch (e) {
         console.warn('[Auth] Token refresh failed:', e.message);
       }
@@ -157,6 +161,7 @@ export const AuthProvider = ({ children }) => {
         authError,
         appPublicSettings,
         googleToken,
+        googleTokenExpiry,
         signInWithGoogle,
         signOut,
         logout: signOut,
