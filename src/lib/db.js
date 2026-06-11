@@ -90,7 +90,7 @@ function createEntityApi(table) {
  * Required (per migration): customers, jobs, job_parts, job_labor, job_photos,
  * job_documents, invoices, parts, labor_rates.
  * The app also expects these companion tables if you use those screens:
- * document_templates, app_settings, vehicles, team_notes, expenses, mileage_logs.
+ * document_templates, app_settings, vehicles, expenses, mileage_logs.
  */
 const TABLE_MAP = {
   Customer: 'customers',
@@ -105,7 +105,6 @@ const TABLE_MAP = {
   DocumentTemplate: 'document_templates',
   AppSettings: 'app_settings',
   Vehicle: 'vehicles',
-  TeamNote: 'team_notes',
   Expense: 'expenses',
   MileageLog: 'mileage_logs',
   ServiceRequest: 'service_requests',

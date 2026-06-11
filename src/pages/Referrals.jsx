@@ -4,12 +4,20 @@ import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Gift, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Gift, Trash2, Plus } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import { toast } from "sonner";
 
 const STATUS_FILTERS = ["all", "pending", "confirmed", "applied"];
+
+const PLAN_OPTIONS = [
+  { value: "guardian", label: "Guardian Plan (Annual — $325/yr)" },
+  { value: "sentinel", label: "Sentinel Plan (Semi-Annual — $575/yr)" },
+];
 
 function StatusPill({ status }) {
   const styles = {
@@ -50,9 +58,230 @@ function ProgressBar({ value, max, colorClass }) {
   );
 }
 
+const EMPTY_FORM = {
+  referrerSearch: "",
+  referrerCustomerId: null,
+  referrerName: "",
+  referrerPhone: "",
+  referrerEmail: "",
+  referredName: "",
+  referredPhone: "",
+  referredEmail: "",
+  planType: "guardian",
+};
+
+function AddReferralModal({ open, onClose, onSuccess }) {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [customerResults, setCustomerResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
+  const handleReferrerSearch = async (value) => {
+    set("referrerSearch", value);
+    set("referrerCustomerId", null);
+    set("referrerName", value);
+    set("referrerPhone", "");
+    set("referrerEmail", "");
+
+    if (value.length < 2) {
+      setCustomerResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const { data } = await supabase
+        .from("customers")
+        .select("id, name, phone, email")
+        .ilike("name", `%${value}%`)
+        .limit(6);
+      setCustomerResults(data ?? []);
+    } catch {
+      setCustomerResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectCustomer = (c) => {
+    setForm(prev => ({
+      ...prev,
+      referrerSearch: c.name,
+      referrerCustomerId: c.id,
+      referrerName: c.name,
+      referrerPhone: c.phone ?? "",
+      referrerEmail: c.email ?? "",
+    }));
+    setCustomerResults([]);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.referrerName.trim()) return toast.error("Referrer name is required");
+    if (!form.referredName.trim()) return toast.error("Referred name is required");
+    if (!form.referredPhone.trim()) return toast.error("Referred phone is required");
+
+    setSubmitting(true);
+    try {
+      await db.ShieldReferral.create({
+        referrer_name: form.referrerName.trim(),
+        referrer_phone: form.referrerPhone.trim() || null,
+        referrer_email: form.referrerEmail.trim() || null,
+        referred_name: form.referredName.trim(),
+        referred_phone: form.referredPhone.trim(),
+        referred_email: form.referredEmail.trim() || null,
+        plan_type: form.planType,
+        source: "phone_call",
+        status: "pending",
+      });
+
+      if (form.referrerCustomerId) {
+        await db.Customer.update(form.referrerCustomerId, { pending_reward: true });
+      }
+
+      toast.success("Referral added");
+      onSuccess();
+    } catch (err) {
+      toast.error("Failed to add referral");
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    setForm(EMPTY_FORM);
+    setCustomerResults([]);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Referral</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+
+          {/* Referrer */}
+          <div className="space-y-2.5">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Referrer</p>
+            <div className="relative">
+              <Label className="text-xs mb-1 block">Name</Label>
+              <Input
+                value={form.referrerSearch}
+                onChange={e => handleReferrerSearch(e.target.value)}
+                placeholder="Search existing customers…"
+                autoComplete="off"
+              />
+              {customerResults.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md overflow-hidden">
+                  {customerResults.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      onClick={() => selectCustomer(c)}
+                    >
+                      <span className="font-medium">{c.name}</span>
+                      {c.phone && <span className="text-muted-foreground ml-2 text-xs">{c.phone}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searching && (
+                <p className="text-xs text-muted-foreground mt-1">Searching…</p>
+              )}
+              {form.referrerCustomerId && (
+                <p className="text-xs text-green-600 mt-1">✓ Matched existing customer</p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Phone</Label>
+              <Input
+                value={form.referrerPhone}
+                onChange={e => set("referrerPhone", e.target.value)}
+                placeholder="(973) 555-0000"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Email</Label>
+              <Input
+                value={form.referrerEmail}
+                onChange={e => set("referrerEmail", e.target.value)}
+                placeholder="optional"
+                type="email"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-border" />
+
+          {/* Referred */}
+          <div className="space-y-2.5">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Referred Person</p>
+            <div>
+              <Label className="text-xs mb-1 block">Name <span className="text-destructive">*</span></Label>
+              <Input
+                value={form.referredName}
+                onChange={e => set("referredName", e.target.value)}
+                placeholder="Full name"
+                required
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Phone <span className="text-destructive">*</span></Label>
+              <Input
+                value={form.referredPhone}
+                onChange={e => set("referredPhone", e.target.value)}
+                placeholder="(973) 555-0000"
+                required
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Email</Label>
+              <Input
+                value={form.referredEmail}
+                onChange={e => set("referredEmail", e.target.value)}
+                placeholder="optional"
+                type="email"
+              />
+            </div>
+          </div>
+
+          {/* Plan */}
+          <div>
+            <Label className="text-xs mb-1 block">Plan Type</Label>
+            <select
+              value={form.planType}
+              onChange={e => set("planType", e.target.value)}
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {PLAN_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="outline" className="flex-1" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1" disabled={submitting}>
+              {submitting ? "Saving…" : "Add Referral"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Referrals() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("all");
+  const [modalOpen, setModalOpen] = useState(false);
 
   const { data: referrals = [], isLoading } = useQuery({
     queryKey: ["shield-referrals"],
@@ -154,7 +383,25 @@ export default function Referrals() {
 
   return (
     <div>
-      <PageHeader title="Referrals" subtitle={`${stats.total} total`} />
+      <PageHeader
+        title="Referrals"
+        subtitle={`${stats.total} total`}
+        actions={
+          <Button size="sm" className="h-8 px-3 text-xs gap-1.5" onClick={() => setModalOpen(true)}>
+            <Plus className="w-3.5 h-3.5" />
+            Add Referral
+          </Button>
+        }
+      />
+
+      <AddReferralModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={() => {
+          setModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["shield-referrals"] });
+        }}
+      />
 
       <div className="px-4 pt-3 pb-4 space-y-4 max-w-lg mx-auto">
 

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, StickyNote, Gift, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, Gift, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
