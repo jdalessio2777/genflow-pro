@@ -1,6 +1,16 @@
 {
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/generate-report?type=weekly",
+      "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/generate-report?type=monthly",
+      "schedule": "0 12 1 * *"
+    }
   ]
 }
 
