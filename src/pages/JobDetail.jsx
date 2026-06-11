@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, Phone, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
+import RewardBadge from "@/components/ui/RewardBadge";
 import JobPartsTab from "@/components/jobs/JobPartsTab";
 import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
@@ -600,7 +601,10 @@ export default function JobDetail() {
                 </span>
               </div>
               <p className="text-white font-bold text-base leading-tight truncate">{job.title}</p>
-              <p className="text-white/75 text-xs">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-white/75 text-xs">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+                <RewardBadge show={customer?.pending_reward} />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -691,7 +695,10 @@ export default function JobDetail() {
                       </span>
                     </div>
                     <div className="text-left min-w-0">
-                      <p className="text-sm font-bold text-foreground">{job.customer_name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-bold text-foreground">{job.customer_name}</p>
+                        <RewardBadge show={customer?.pending_reward} />
+                      </div>
                       {customer?.address && (
                         <p className="text-xs text-muted-foreground truncate">{customer.address}</p>
                       )}
@@ -1284,6 +1291,7 @@ export default function JobDetail() {
                           { key: "smm_boards", icon: "📟", label: "SMM Boards" },
                           { key: "batteries", icon: "🔋", label: "Batteries" },
                           { key: "maintenance", icon: "🔧", label: "Maintenance" },
+                          { key: "discounts", icon: "🏷️", label: "Discounts" },
                           { key: "service_agreements", icon: "📋", label: "Service Agreements" },
                           { key: "other", icon: "📦", label: "Other" },
                         ].filter(f => !workSearch || f.label.toLowerCase().includes(workSearch.toLowerCase())).map(folder => (
@@ -1351,7 +1359,7 @@ export default function JobDetail() {
 
                         {/* Other flat rate folders via JobItemsTab */}
                         {flatFolder !== "service_agreements" && (
-                           <JobItemsTab jobId={id} labor={labor} memberDiscountRate={memberDiscountRate} initialFolder="flat_rates" />
+                           <JobItemsTab jobId={id} labor={labor} memberDiscountRate={memberDiscountRate} initialFolder="flat_rates" customerId={job.customer_id} />
                         )}
                       </>
                     )}

@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Search, Phone, MapPin, Shield, Calendar, Trash2 } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import RewardBadge from "@/components/ui/RewardBadge";
 import { Users } from "lucide-react";
 import { formatPhone, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
@@ -77,7 +78,10 @@ function CustomerCard({ customer }) {
     <div className="relative">
       <Link to={`/customers/${customer.id}`}>
         <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
-          <p className="text-sm font-semibold text-foreground">{customer.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-foreground">{customer.name}</p>
+            <RewardBadge show={customer.pending_reward} />
+          </div>
           <p className={`text-xs mt-0.5 ${customer.generator_model ? "text-muted-foreground" : "text-muted-foreground/50"}`}>
             {customer.generator_model || "Generator not specified"}
           </p>

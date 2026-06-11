@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, Clock, Zap, Wrench, Trash2, Plus } from "lucide-react";
@@ -20,10 +21,11 @@ const FLAT_RATE_FOLDERS = [
   { key: "load_shed", label: "Load Shed", icon: "🔌" },
   { key: "smm_boards", label: "SMM Boards", icon: "📟" },
   { key: "batteries", label: "Batteries", icon: "🔋" },
+  { key: "discounts", label: "Discounts", icon: "🏷️" },
   { key: "other", label: "Other", icon: "📦" },
 ];
 
-export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, initialFolder = null }) {
+export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, initialFolder = null, customerId = null }) {
   const isMember = memberDiscountRate < 1.0;
   const queryClient = useQueryClient();
   const [folder, setFolder] = useState(initialFolder);
@@ -34,13 +36,64 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
     queryFn: () => db.LaborRate.list("name"),
   });
 
+  const triggerRewardApply = async (custId) => {
+    try {
+      const rows = await db.Customer.filter({ id: custId });
+      const cust = rows[0];
+      if (!cust) return;
+
+      const email = cust.email?.trim().toLowerCase();
+      const phone = cust.phone?.trim();
+      if (!email && !phone) return;
+
+      let referralId = null;
+      if (email) {
+        const { data } = await supabase
+          .from("shield_referrals")
+          .select("id")
+          .ilike("referrer_email", email)
+          .eq("status", "confirmed")
+          .eq("reward_applied", false)
+          .order("confirmed_at", { ascending: false })
+          .limit(1);
+        if (data?.length) referralId = data[0].id;
+      }
+      if (!referralId && phone) {
+        const { data } = await supabase
+          .from("shield_referrals")
+          .select("id")
+          .eq("referrer_phone", phone)
+          .eq("status", "confirmed")
+          .eq("reward_applied", false)
+          .order("confirmed_at", { ascending: false })
+          .limit(1);
+        if (data?.length) referralId = data[0].id;
+      }
+      if (!referralId) return;
+
+      await Promise.all([
+        db.ShieldReferral.update(referralId, { reward_applied: true, status: "applied" }),
+        db.Customer.update(custId, { pending_reward: false }),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["shield-referrals"] });
+      toast.success("Referral reward applied — 10% discount recorded");
+    } catch (err) {
+      console.warn("[JobItemsTab] Referral reward auto-trigger failed", err);
+    }
+  };
+
   const createMutation = useMutation({
     mutationFn: (data) => db.JobLabor.create(data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["job-labor", jobId] });
       toast.success("Added to job");
       setSubFolder(null);
       setFolder(null);
+
+      if (variables.description?.split(" (Member")[0] === "Referral Discount" && customerId) {
+        triggerRewardApply(customerId);
+      }
     },
   });
 

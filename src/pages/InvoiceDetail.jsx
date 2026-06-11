@@ -7,6 +7,7 @@ import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyT
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Send, CheckCircle2, Loader2, Trash2 } from "lucide-react";
+import RewardBadge from "@/components/ui/RewardBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -22,6 +23,12 @@ export default function InvoiceDetail() {
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
     queryFn: async () => { const r = await db.Invoice.filter({ id }); return r[0]; },
+  });
+
+  const { data: invoiceCustomer } = useQuery({
+    queryKey: ["invoice-customer", invoice?.customer_id],
+    queryFn: async () => { const r = await db.Customer.filter({ id: invoice.customer_id }); return r[0]; },
+    enabled: !!invoice?.customer_id,
   });
 
   const updateMutation = useMutation({
@@ -74,7 +81,7 @@ export default function InvoiceDetail() {
     <div>
       <PageHeader
         title={invoice.invoice_number || "Invoice"}
-        subtitle={invoice.customer_name}
+        subtitle={<span className="inline-flex items-center gap-1.5">{invoice.customer_name}<RewardBadge show={invoiceCustomer?.pending_reward} /></span>}
         back="/invoices"
         actions={
           <AlertDialog>
@@ -104,7 +111,7 @@ export default function InvoiceDetail() {
             <span className="text-2xl font-bold">{formatCurrency(invoice.total)}</span>
           </div>
           <div className="text-sm space-y-1">
-            <p><span className="text-muted-foreground">Customer:</span> <Link to={`/customers/${invoice.customer_id}`} className="text-primary">{invoice.customer_name}</Link></p>
+            <p className="flex items-center gap-1.5 flex-wrap"><span className="text-muted-foreground">Customer:</span> <Link to={`/customers/${invoice.customer_id}`} className="text-primary">{invoice.customer_name}</Link><RewardBadge show={invoiceCustomer?.pending_reward} /></p>
             <p><span className="text-muted-foreground">Date:</span> {formatDate(invoice.created_date)}</p>
             {invoice.paid_date && <p><span className="text-muted-foreground">Paid:</span> {formatDate(invoice.paid_date)} ({invoice.payment_method})</p>}
           </div>

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Pencil, Phone, Mail, MapPin, Wrench, DollarSign, Loader2, Shield, Trash2, ChevronRight, FileText, Users } from "lucide-react";
+import RewardBadge from "@/components/ui/RewardBadge";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate, formatPhone } from "@/lib/utils/format";
@@ -180,7 +181,7 @@ export default function CustomerDetail() {
   return (
     <div>
       <PageHeader
-        title={customer.name}
+        title={<span className="inline-flex items-center gap-1.5">{customer.name}<RewardBadge show={customer.pending_reward} /></span>}
         subtitle={customer.generator_model || "No generator info"}
         back="/customers"
         actions={

@@ -49,6 +49,7 @@ const FLAT_RATE_FOLDERS = [
   { key: "circuit_breakers", label: "Circuit Breakers", icon: "💥" },
   { key: "relays", label: "Relays & Contactors", icon: "🔗" },
   { key: "batteries", label: "Batteries", icon: "🔋" },
+  { key: "discounts", label: "Discounts", icon: "🏷️" },
   { key: "other", label: "Other", icon: "📦" },
 ];
 

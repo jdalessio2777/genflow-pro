@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Gift, Trash2 } from "lucide-react";
@@ -59,13 +60,45 @@ export default function Referrals() {
   });
 
   const confirmMutation = useMutation({
-    mutationFn: (id) =>
-      db.ShieldReferral.update(id, {
+    mutationFn: async (referral) => {
+      await db.ShieldReferral.update(referral.id, {
         status: "confirmed",
         confirmed_at: new Date().toISOString(),
-      }),
+      });
+
+      const email = referral.referrer_email?.trim().toLowerCase();
+      const phone = referral.referrer_phone?.trim();
+
+      try {
+        let matches = [];
+        if (email) {
+          const { data } = await supabase
+            .from("customers")
+            .select("id")
+            .ilike("email", email)
+            .limit(1);
+          matches = data ?? [];
+        }
+        if (matches.length === 0 && phone) {
+          const { data } = await supabase
+            .from("customers")
+            .select("id")
+            .eq("phone", phone)
+            .limit(1);
+          matches = data ?? [];
+        }
+        if (matches.length > 0) {
+          await db.Customer.update(matches[0].id, { pending_reward: true });
+        } else {
+          console.warn("[Referrals] No customer match for referral", referral.id, { email, phone });
+        }
+      } catch (err) {
+        console.warn("[Referrals] Customer lookup failed for referral", referral.id, err);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shield-referrals"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success("Referral confirmed");
     },
     onError: () => toast.error("Failed to confirm referral"),
@@ -214,7 +247,7 @@ export default function Referrals() {
                         size="sm"
                         variant="outline"
                         className="h-7 px-2.5 text-xs rounded-xl border-green-200 text-green-700 hover:bg-green-50"
-                        onClick={() => confirmMutation.mutate(r.id)}
+                        onClick={() => confirmMutation.mutate(r)}
                         disabled={confirmMutation.isPending}
                       >
                         ✓ Confirm

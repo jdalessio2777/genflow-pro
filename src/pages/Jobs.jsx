@@ -13,6 +13,7 @@ import { Plus, Wrench, Calendar, Search, CheckCircle2, Trash2, ClipboardList } f
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
+import RewardBadge from "@/components/ui/RewardBadge";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 
@@ -209,7 +210,10 @@ export default function Jobs() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <p className="text-xs text-muted-foreground">{job.customer_name}</p>
+                            <RewardBadge show={customerMap[job.customer_id]?.pending_reward} />
+                          </div>
                           <div className="flex items-center gap-2 mt-1.5">
                             <StatusBadge status={job.job_type} />
                             <StatusBadge status={job.status} />
@@ -261,7 +265,10 @@ export default function Jobs() {
                             {job.status === "on_site" && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />}
                             <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <p className="text-xs text-muted-foreground">{job.customer_name}</p>
+                            <RewardBadge show={customerMap[job.customer_id]?.pending_reward} />
+                          </div>
                           {job.scheduled_date && (
                             <p className="text-xs text-muted-foreground mt-0.5">{formatJobDate(job.scheduled_date)}</p>
                           )}
