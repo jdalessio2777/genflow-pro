@@ -456,6 +456,16 @@ async function sendReport(buffer, filename, subject, { revenue, expTotal, netPro
 // ─── handler ──────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
+  if (req.query.debug === 'env') {
+    return res.json({
+      supabase_url: process.env.SUPABASE_URL?.slice(0,30),
+      service_key_start: process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0,20),
+      service_key_length: process.env.SUPABASE_SERVICE_ROLE_KEY?.length,
+      resend_key_start: process.env.RESEND_API_KEY?.slice(0,10),
+      report_secret_set: !!process.env.REPORT_SECRET,
+    });
+  }
+
   // Vercel cron: x-vercel-cron-authorization header is present,
   //              or Authorization: Bearer <CRON_SECRET> (newer Vercel)
   const isVercelCron =
