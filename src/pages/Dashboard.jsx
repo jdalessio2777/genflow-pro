@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, StickyNote, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, StickyNote, Gift, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
@@ -347,12 +347,12 @@ export default function Dashboard() {
                 <p className="text-sm font-semibold text-orange-900">Documents</p>
               </div>
             </Link>
-            <Link to="/notes">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-purple-50 border border-purple-200/60 hover:bg-purple-100/60 transition-colors active:scale-[0.99]">
-                <div className="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
-                  <StickyNote className="w-4 h-4 text-purple-600" />
+            <Link to="/referrals">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-rose-50 border border-rose-200/60 hover:bg-rose-100/60 transition-colors active:scale-[0.99]">
+                <div className="w-8 h-8 bg-rose-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Gift className="w-4 h-4 text-rose-600" />
                 </div>
-                <p className="text-sm font-semibold text-purple-900">Team Notes</p>
+                <p className="text-sm font-semibold text-rose-900">Referrals</p>
               </div>
             </Link>
           </div>

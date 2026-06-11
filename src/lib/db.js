@@ -109,6 +109,7 @@ const TABLE_MAP = {
   Expense: 'expenses',
   MileageLog: 'mileage_logs',
   ServiceRequest: 'service_requests',
+  ShieldReferral: 'shield_referrals',
 };
 
 export const db = Object.fromEntries(

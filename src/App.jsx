@@ -37,6 +37,7 @@ import Inbox from './pages/Inbox';
 import Finance from './pages/Finance';
 import InvoicePDF from './pages/InvoicePDF';
 import Settings from './pages/Settings';
+import Referrals from './pages/Referrals';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import { OfflineProvider } from '@/lib/OfflineContext';
@@ -139,6 +140,7 @@ const AuthenticatedApp = () => {
         <Route path="/call-list" element={<Inbox />} />
         <Route path="/finance" element={<Finance />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/referrals" element={<Referrals />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
