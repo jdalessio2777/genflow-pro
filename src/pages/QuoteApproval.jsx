@@ -12,24 +12,37 @@ export default function QuoteApproval() {
   const [approved, setApproved] = useState(false);
   const [error, setError] = useState(null);
 
+  const { data: tokenCheck, isLoading: checkingToken } = useQuery({
+    queryKey: ["quote-token-check", jobId, token],
+    queryFn: async () => {
+      const res = await fetch(`/api/validate-quote-token?job_id=${encodeURIComponent(jobId)}&token=${encodeURIComponent(token)}`);
+      return res.json();
+    },
+    retry: false,
+    staleTime: Infinity,
+  });
+
+  const tokenValid = tokenCheck?.valid === true;
+
   const { data: job, isLoading: loadingJob } = useQuery({
     queryKey: ["public-job", jobId],
     queryFn: async () => {
       const r = await db.Job.filter({ id: jobId });
       return r[0];
     },
+    enabled: tokenValid,
   });
 
   const { data: parts = [] } = useQuery({
     queryKey: ["public-parts", jobId],
     queryFn: () => db.JobPart.filter({ job_id: jobId }),
-    enabled: !!jobId,
+    enabled: tokenValid,
   });
 
   const { data: labor = [] } = useQuery({
     queryKey: ["public-labor", jobId],
     queryFn: () => db.JobLabor.filter({ job_id: jobId }),
-    enabled: !!jobId,
+    enabled: tokenValid,
   });
 
   const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
@@ -38,11 +51,6 @@ export default function QuoteApproval() {
 
   const handleApprove = async () => {
     if (!job) return;
-
-    if (job.quote_approval_token !== token) {
-      setError("This approval link is invalid or has expired.");
-      return;
-    }
 
     if (job.status === "scheduled" && job.quote_approved_date) {
       setApproved(true);
@@ -79,7 +87,7 @@ export default function QuoteApproval() {
 
   const alreadyApproved = job?.status === "scheduled" && job?.quote_approved_date;
 
-  if (loadingJob) {
+  if (checkingToken || (tokenValid && loadingJob)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -87,7 +95,7 @@ export default function QuoteApproval() {
     );
   }
 
-  if (!job || job.quote_approval_token !== token) {
+  if (!tokenValid) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
         <div className="max-w-sm w-full text-center">
