@@ -16,19 +16,21 @@ import EmptyState from "@/components/ui/EmptyState";
 import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
+import { formatTime } from "@/lib/formatTime";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 
-function formatJobDate(dateStr) {
+function formatJobDate(dateStr, use24h = false) {
   if (!dateStr) return null;
   const d = new Date(dateStr);
   const today = new Date();
   if (d.toDateString() === today.toDateString()) {
-    return "Today, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return "Today, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
   }
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
   if (d.toDateString() === tomorrow.toDateString()) {
-    return "Tomorrow, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return "Tomorrow, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
   }
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
@@ -45,6 +47,7 @@ export default function Jobs() {
   const [search, setSearch] = useState("");
   const [techFilter, setTechFilter] = useState("all");
   const { user } = useAuth();
+  const { use24h } = usePreferences();
 
   const { data: jobs = [], isLoading } = useQuery({
     queryKey: ["jobs"],
@@ -274,7 +277,7 @@ export default function Jobs() {
                             <RewardBadge show={customerMap[job.customer_id]?.pending_reward} />
                           </div>
                           {job.scheduled_date && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{formatJobDate(job.scheduled_date)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{formatJobDate(job.scheduled_date, use24h)}</p>
                           )}
                           {customerMap[job.customer_id]?.property_notes && (
                             <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">

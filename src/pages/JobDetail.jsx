@@ -16,6 +16,8 @@ import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
+import { formatTime } from "@/lib/formatTime";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { debounce } from "lodash";
@@ -135,6 +137,7 @@ export default function JobDetail() {
   const { isOnline } = useOffline();
   const { settings } = useSettings();
   const { user, googleToken } = useAuth();
+  const { confirmDelete, use24h } = usePreferences();
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [quoteEmailOpen, setQuoteEmailOpen] = useState(false);
@@ -335,7 +338,7 @@ export default function JobDetail() {
     if (newStatus === "scheduled" && customer?.email && job.scheduled_date) {
       try {
         const appointmentTime = new Date(job.scheduled_date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-        const appointmentHour = new Date(job.scheduled_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const appointmentHour = formatTime(job.scheduled_date, use24h);
         await integrationsCore.SendEmail({
           to: customer.email,
           from_name: "AJ's Generator Service",
@@ -375,7 +378,7 @@ export default function JobDetail() {
       notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned")])}`, triggeredBy });
     }
     if (newStatus === "on_site") {
-      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned"), buildRow("Arrived", new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))])}`, triggeredBy });
+      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned"), buildRow("Arrived", formatTime(new Date(), use24h))])}`, triggeredBy });
     }
     if (newStatus === "completed") {
       const { partsPrice, laborPrice } = getJobTotals();
@@ -1521,7 +1524,7 @@ export default function JobDetail() {
                               <div className="flex items-center gap-2 shrink-0">
                                 <p className="text-sm font-semibold">{formatCurrency(part.total_price)}</p>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                                  if (window.confirm(`Remove "${part.name}" from this job?`)) {
+                                  if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) {
                                     db.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
                                   }
                                 }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
@@ -1546,7 +1549,7 @@ export default function JobDetail() {
                               <div className="flex items-center gap-2 shrink-0">
                                 <p className="text-sm font-semibold">{formatCurrency(item.total_price)}</p>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                                  if (window.confirm(`Remove "${item.description}" from this job?`)) {
+                                  if (!confirmDelete || window.confirm(`Remove "${item.description}" from this job?`)) {
                                     db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
                                   }
                                 }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
@@ -1567,7 +1570,7 @@ export default function JobDetail() {
                               <img src={photo.url} alt="Job photo" className="w-full h-20 object-cover rounded-xl border border-border" />
                             </a>
                             <button onClick={() => {
-                              if (window.confirm("Remove this photo from the job?")) {
+                              if (!confirmDelete || window.confirm("Remove this photo from the job?")) {
                                 db.JobPhoto.delete(photo.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-photos", id] }));
                               }
                             }} className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center">
@@ -1590,7 +1593,7 @@ export default function JobDetail() {
                                 <p className="text-xs text-muted-foreground capitalize">{doc.status}</p>
                               </div>
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                                if (window.confirm(`Remove "${doc.template_name || "this document"}" from this job?`)) {
+                                if (!confirmDelete || window.confirm(`Remove "${doc.template_name || "this document"}" from this job?`)) {
                                   db.JobDocument.delete(doc.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-docs", id] }));
                                 }
                               }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>

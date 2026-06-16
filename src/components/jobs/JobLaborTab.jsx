@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Clock, Zap, ChevronRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 
 export default function JobLaborTab({ jobId, labor }) {
@@ -15,6 +16,7 @@ export default function JobLaborTab({ jobId, labor }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("catalog"); // "catalog" | "custom"
   const [customType, setCustomType] = useState("hourly");
+  const { confirmDelete } = usePreferences();
   const [form, setForm] = useState({ description: "", hours: 1, rate: 95, cost_rate: 45, flat_price: 0, flat_cost: 0 });
 
   const { data: rates = [] } = useQuery({
@@ -207,7 +209,7 @@ export default function JobLaborTab({ jobId, labor }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold">{formatCurrency(l.total_price)}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Remove "${l.description}" from this job?`)) deleteMutation.mutate(l.id); }}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Remove "${l.description}" from this job?`)) deleteMutation.mutate(l.id); }}>
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
                 </div>

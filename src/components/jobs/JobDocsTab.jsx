@@ -7,12 +7,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, FileCheck, FileText, Trash2 } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDateTime } from "@/lib/utils/format";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
 export default function JobDocsTab({ jobId, documents, customerId }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const { confirmDelete } = usePreferences();
 
   const { data: templates = [] } = useQuery({
     queryKey: ["doc-templates"],
@@ -114,7 +116,7 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (window.confirm("Remove this document from the job?")) {
+                            if (!confirmDelete || window.confirm("Remove this document from the job?")) {
                               deleteMutation.mutate(doc.id);
                             }
                           }}

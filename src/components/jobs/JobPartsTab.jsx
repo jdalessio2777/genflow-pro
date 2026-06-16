@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 
 const PART_CATEGORIES = [
@@ -40,6 +41,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [partsFolder, setPartsFolder] = useState(null);
+  const { confirmDelete } = usePreferences();
   const [editingPriceId, setEditingPriceId] = useState(null);
   const [editingPriceValue, setEditingPriceValue] = useState("");
   const [overriddenPriceIds, setOverriddenPriceIds] = useState(new Set());
@@ -465,7 +467,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                           <Pencil className="w-3 h-3" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Remove "${part.name}" from this job?`)) { deleteMutation.mutate(part.id); } }}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) { deleteMutation.mutate(part.id); } }}>
                         <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </>

@@ -11,6 +11,7 @@ import { Gift, Trash2, Plus } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import AnimatedListItem from "@/components/ui/AnimatedListItem";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 
 const STATUS_FILTERS = ["all", "pending", "confirmed", "applied"];
@@ -283,6 +284,7 @@ export default function Referrals() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
+  const { confirmDelete } = usePreferences();
 
   const { data: referrals = [], isLoading } = useQuery({
     queryKey: ["shield-referrals"],
@@ -494,7 +496,7 @@ export default function Referrals() {
                       variant="ghost"
                       className="h-7 w-7 rounded-xl"
                       onClick={() => {
-                        if (window.confirm("Delete this referral? This cannot be undone.")) {
+                        if (!confirmDelete || window.confirm("Delete this referral? This cannot be undone.")) {
                           deleteMutation.mutate(r.id);
                         }
                       }}

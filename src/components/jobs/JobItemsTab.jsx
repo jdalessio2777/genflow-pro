@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, Clock, Zap, Wrench, Trash2, Plus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 
 const ITEM_FOLDERS = [
@@ -29,6 +30,7 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
   const isMember = memberDiscountRate < 1.0;
   const queryClient = useQueryClient();
   const [folder, setFolder] = useState(initialFolder);
+  const { confirmDelete } = usePreferences();
   const [subFolder, setSubFolder] = useState(null);
 
   const { data: rates = [] } = useQuery({
@@ -351,7 +353,7 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-sm font-semibold">{formatCurrency(l.total_price)}</span>
                     <Button variant="ghost" size="icon" className="h-8 w-8"
-                      onClick={() => { if (window.confirm(`Remove "${l.description}" from this job?`)) deleteMutation.mutate(l.id); }}>
+                      onClick={() => { if (!confirmDelete || window.confirm(`Remove "${l.description}" from this job?`)) deleteMutation.mutate(l.id); }}>
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </Button>
                   </div>

@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Truck, Plus, Trash2, Building2, MapPin, Users, CheckCircle2, Loader2 } from "lucide-react";
+import { Truck, Plus, Trash2, Building2, MapPin, Users, CheckCircle2, Loader2, Monitor } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
+import { usePreferences } from "@/hooks/usePreferences";
 
 // ─── BUSINESS INFO TAB ────────────────────────────────────────────────────────
 function BusinessTab({ settings, setSetting, isSaving }) {
@@ -398,6 +399,97 @@ function TeamTab({ settings, setSetting, isSaving }) {
   );
 }
 
+// ─── DISPLAY & PREFERENCES TAB ───────────────────────────────────────────────
+function ToggleRow({ label, description, checked, onChange }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3.5 border-b border-border/50 last:border-0">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-tight">{label}</p>
+        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+          checked ? "bg-primary" : "bg-muted-foreground/30"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+            checked ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function DisplayPreferencesTab() {
+  const {
+    darkMode, setDarkMode,
+    keepAwake, setKeepAwake,
+    reduceMotion, setReduceMotion,
+    confirmDelete, setConfirmDelete,
+    use24h, setUse24h,
+  } = usePreferences();
+
+  const wakeLockSupported = typeof navigator !== "undefined" && "wakeLock" in navigator;
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Appearance</p>
+        <ToggleRow
+          label="Dark Mode"
+          description="Switch to a dark color scheme"
+          checked={darkMode}
+          onChange={setDarkMode}
+        />
+        <ToggleRow
+          label="Reduce Animations"
+          description="Minimize motion throughout the app"
+          checked={reduceMotion}
+          onChange={setReduceMotion}
+        />
+      </Card>
+
+      <Card className="p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Display</p>
+        <ToggleRow
+          label="24-Hour Time"
+          description="Display times in 24-hour format"
+          checked={use24h}
+          onChange={setUse24h}
+        />
+      </Card>
+
+      <Card className="p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Behavior</p>
+        <ToggleRow
+          label="Confirm Before Delete"
+          description="Show confirmation dialog before deleting any record"
+          checked={confirmDelete}
+          onChange={setConfirmDelete}
+        />
+        {wakeLockSupported ? (
+          <ToggleRow
+            label="Keep Screen Awake"
+            description="Prevent screen from dimming during jobs"
+            checked={keepAwake}
+            onChange={setKeepAwake}
+          />
+        ) : (
+          <div className="py-3.5">
+            <p className="text-sm font-semibold leading-tight">Keep Screen Awake</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Not supported on this device</p>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 // ─── MAIN SETTINGS PAGE ───────────────────────────────────────────────────────
 export default function Settings() {
   const { settings, isLoading, setSetting, isSaving } = useSettings();
@@ -413,18 +505,21 @@ export default function Settings() {
       <PageHeader title="Settings" subtitle="Business configuration" back="/" />
       <div className="px-4 pt-3 pb-4 max-w-lg mx-auto">
         <Tabs defaultValue="business">
-          <TabsList className="w-full grid grid-cols-4 bg-muted/60 rounded-xl p-0.5 mb-4">
+          <TabsList className="w-full grid grid-cols-5 bg-muted/60 rounded-xl p-0.5 mb-4">
             <TabsTrigger value="business" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              <Building2 className="w-3 h-3 mr-1" />Business
+              <Building2 className="w-3 h-3 mr-1" />Biz
             </TabsTrigger>
             <TabsTrigger value="operations" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <MapPin className="w-3 h-3 mr-1" />Ops
             </TabsTrigger>
             <TabsTrigger value="vehicles" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              <Truck className="w-3 h-3 mr-1" />Vehicles
+              <Truck className="w-3 h-3 mr-1" />Fleet
             </TabsTrigger>
             <TabsTrigger value="team" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <Users className="w-3 h-3 mr-1" />Team
+            </TabsTrigger>
+            <TabsTrigger value="display" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <Monitor className="w-3 h-3 mr-1" />Display
             </TabsTrigger>
           </TabsList>
           <TabsContent value="business">
@@ -438,6 +533,9 @@ export default function Settings() {
           </TabsContent>
           <TabsContent value="team">
             <TeamTab settings={settings} setSetting={setSetting} isSaving={isSaving} />
+          </TabsContent>
+          <TabsContent value="display">
+            <DisplayPreferencesTab />
           </TabsContent>
         </Tabs>
       </div>

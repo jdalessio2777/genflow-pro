@@ -13,6 +13,8 @@ import EmptyState from "@/components/ui/EmptyState";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { getRecentCalendarChanges } from "@/lib/googleCalendar";
+import { formatTime } from "@/lib/formatTime";
+import { usePreferences } from "@/hooks/usePreferences";
 
 const STATUS_COLORS = {
   quote: "bg-violet-400",
@@ -35,6 +37,7 @@ export default function Schedule() {
   const queryClient = useQueryClient();
   const calendarSyncedRef = useRef(false);
   const jobsRef = useRef([]);
+  const { use24h } = usePreferences();
 
 
   const { data: jobs = [] } = useQuery({
@@ -321,7 +324,7 @@ export default function Schedule() {
                             <CalendarCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
                           )}
                           <span className="text-xs text-primary font-medium">
-                            {new Date(job.scheduled_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {formatTime(job.scheduled_date, use24h)}
                           </span>
                           <StatusBadge status={job.status} />
                         </div>
@@ -354,6 +357,7 @@ export default function Schedule() {
         const newTime = new Date(change.newStartTime).toLocaleString("en-US", {
           weekday: "short", month: "short", day: "numeric",
           hour: "2-digit", minute: "2-digit",
+          hour12: !use24h,
         });
         return (
           <AlertDialog open>
