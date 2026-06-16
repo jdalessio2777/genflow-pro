@@ -13,6 +13,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -45,7 +46,7 @@ export default function InvoiceDetail() {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       navigate("/invoices", { replace: true });
     },
-    onError: (e) => { toast.error("Failed to delete: " + e.message); },
+    onError: (e) => { haptics.error(); toast.error("Failed to delete: " + e.message); },
   });
 
   const markSent = () => { updateMutation.mutate({ status: "sent" }); toast.success("Invoice marked as sent"); };
@@ -54,6 +55,7 @@ export default function InvoiceDetail() {
       { status: "paid", payment_method: method, paid_date: new Date().toISOString() },
       {
         onSuccess: () => {
+          haptics.success();
           toast.success("Invoice marked as paid");
           notifyTeam({
             subject: `Invoice Paid — ${invoice.customer_name} · $${(invoice.total || 0).toFixed(2)}`,

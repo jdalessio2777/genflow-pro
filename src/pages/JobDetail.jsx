@@ -19,6 +19,7 @@ import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
 import { formatTime } from "@/lib/formatTime";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { debounce } from "lodash";
 import { useOfflineMutation } from "@/lib/useOfflineMutation";
@@ -402,7 +403,7 @@ export default function JobDetail() {
     if (isClosed) return;
     if (newStatus === "completed" && job?.requires_document) {
       const hasCompleted = documents.some(d => d.status === "completed");
-      if (!hasCompleted) { toast.error("Complete at least one document before finishing this job"); return; }
+      if (!hasCompleted) { haptics.error(); toast.error("Complete at least one document before finishing this job"); return; }
     }
     const { partsCost, partsPrice, laborCost, laborPrice } = getJobTotals();
     updateJobOffline.mutate({
@@ -473,6 +474,7 @@ export default function JobDetail() {
     if (newStatus === "canceled") {
       notifyTeam({ subject: `Job Canceled — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Job Canceled", "red")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Reason", cancelReason || "No reason given")])}`, triggeredBy });
     }
+    haptics.medium();
     toast.success(`Job marked as ${newStatus.replace("_", " ")}`);
   };
 
@@ -516,16 +518,19 @@ export default function JobDetail() {
           approvalToken,
         });
         updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
+        haptics.light();
         toast.success(`Quote sent to ${email}`);
       } else {
         const approveUrl = `https://genshieldservice.com/approve?job=${id}&token=${approvalToken}`;
         const plainBody = `Service Quote: ${job?.title}\n\nEstimated Total: $${total.toFixed(2)}\n\nApprove online: ${approveUrl}\n\nOr call (973) 787-2431 or reply to approve.`;
         window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Service Quote — GenShield Generator Service')}&body=${encodeURIComponent(plainBody)}`, '_blank');
         updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
+        haptics.light();
         toast.success(`Email drafted — send it and the status has been updated`);
       }
       setQuoteEmailOpen(false);
     } catch (e) {
+      haptics.error();
       toast.error(`Failed to send quote: ${e.message}`);
     } finally {
       setSendingQuote(false);
@@ -548,6 +553,7 @@ export default function JobDetail() {
       toast.success(`Confirmation sent to ${customer.email}`);
       setConfirmSkipOpen(false);
     } catch (e) {
+      haptics.error();
       toast.error(`Failed to send confirmation: ${e.message}`);
     } finally {
       setSendingConfirmation(false);
@@ -569,6 +575,7 @@ export default function JobDetail() {
       });
       toast.success(`Completion summary sent to ${customer.email}`);
     } catch (e) {
+      haptics.error();
       toast.error(`Failed to send completion email: ${e.message}`);
     } finally {
       setSendingCompletion(false);
@@ -1571,7 +1578,7 @@ export default function JobDetail() {
                         <DialogContent className="max-w-sm">
                           <DialogHeader><DialogTitle>Customer Signature</DialogTitle></DialogHeader>
                           <p className="text-sm text-muted-foreground text-center italic">Please sign below to confirm work was completed satisfactorily</p>
-                          <SignatureCanvas onSave={sig => { updateJob.mutate({ customer_signature: sig }); setSigOpen(false); toast.success("Signature saved"); }} />
+                          <SignatureCanvas onSave={sig => { haptics.success(); updateJob.mutate({ customer_signature: sig }); setSigOpen(false); toast.success("Signature saved"); }} />
                         </DialogContent>
                       </Dialog>
                     )}
@@ -1610,6 +1617,7 @@ export default function JobDetail() {
                                 <p className="text-sm font-semibold">{formatCurrency(part.total_price)}</p>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                                   if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) {
+                                    haptics.medium();
                                     db.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
                                   }
                                 }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
@@ -1635,6 +1643,7 @@ export default function JobDetail() {
                                 <p className="text-sm font-semibold">{formatCurrency(item.total_price)}</p>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                                   if (!confirmDelete || window.confirm(`Remove "${item.description}" from this job?`)) {
+                                    haptics.medium();
                                     db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
                                   }
                                 }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
@@ -1656,6 +1665,7 @@ export default function JobDetail() {
                             </a>
                             <button onClick={() => {
                               if (!confirmDelete || window.confirm("Remove this photo from the job?")) {
+                                haptics.medium();
                                 db.JobPhoto.delete(photo.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-photos", id] }));
                               }
                             }} className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center">
@@ -1679,6 +1689,7 @@ export default function JobDetail() {
                               </div>
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                                 if (!confirmDelete || window.confirm(`Remove "${doc.template_name || "this document"}" from this job?`)) {
+                                  haptics.medium();
                                   db.JobDocument.delete(doc.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-docs", id] }));
                                 }
                               }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
