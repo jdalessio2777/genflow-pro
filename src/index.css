@@ -114,10 +114,9 @@
   }
 }
 
-button, a[role="button"] {
-  transition: opacity 0.1s ease, transform 0.1s ease;
-}
-button:active, a[role="button"]:active {
-  opacity: 0.85;
-  transform: scale(0.98);
+@media (prefers-reduced-motion: reduce) {
+  .card-lift, .tab-fade {
+    animation: none !important;
+    transition: none !important;
+  }
 }

@@ -13,6 +13,7 @@ import { Plus, Wrench, Calendar, Search, CheckCircle2, Trash2, ClipboardList } f
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
+import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
@@ -202,9 +203,10 @@ export default function Jobs() {
           )
         ) : (
           <div className="space-y-2">
-            {techFiltered.map(job => (
+            {techFiltered.map((job, idx) => (
               filter === "completed" ? (
-                <div key={job.id} className="relative">
+                <AnimatedListItem key={job.id} index={idx}>
+                <div className="relative">
                   <Link to={`/jobs/${job.id}`}>
                     <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
                       <div className="flex items-start justify-between gap-2">
@@ -255,8 +257,10 @@ export default function Jobs() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
+                </AnimatedListItem>
               ) : (
-                <div key={job.id} className="relative">
+                <AnimatedListItem key={job.id} index={idx}>
+                <div className="relative">
                   <Link to={`/jobs/${job.id}`}>
                     <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
                       <div className="flex items-start justify-between gap-2">
@@ -321,6 +325,7 @@ export default function Jobs() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
+                </AnimatedListItem>
               )
             ))}
           </div>

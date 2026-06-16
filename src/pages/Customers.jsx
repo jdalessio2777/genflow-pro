@@ -10,6 +10,7 @@ import { Plus, Search, Phone, MapPin, Shield, Calendar, Trash2 } from "lucide-re
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import RewardBadge from "@/components/ui/RewardBadge";
+import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import { Users } from "lucide-react";
 import { formatPhone, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
@@ -278,8 +279,10 @@ export default function Customers() {
                 />
               ) : (
                 <div className="space-y-2">
-                  {filtered.map(customer => (
-                    <CustomerCard key={customer.id} customer={customer} />
+                  {filtered.map((customer, idx) => (
+                    <AnimatedListItem key={customer.id} index={idx}>
+                      <CustomerCard customer={customer} />
+                    </AnimatedListItem>
                   ))}
                 </div>
               )}

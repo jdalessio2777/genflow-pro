@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Gift, Trash2, Plus } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import { toast } from "sonner";
 
 const STATUS_FILTERS = ["all", "pending", "confirmed", "applied"];
@@ -435,8 +436,9 @@ export default function Referrals() {
           />
         ) : (
           <div className="space-y-2">
-            {filtered.map(r => (
-              <Card key={r.id} className="p-3.5 space-y-2.5">
+            {filtered.map((r, idx) => (
+              <AnimatedListItem key={r.id} index={idx}>
+              <Card className="p-3.5 space-y-2.5">
                 {/* Referrer */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -503,6 +505,7 @@ export default function Referrals() {
                   </div>
                 </div>
               </Card>
+              </AnimatedListItem>
             ))}
           </div>
         )}

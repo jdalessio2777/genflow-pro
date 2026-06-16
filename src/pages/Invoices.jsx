@@ -7,6 +7,7 @@ import { FileText } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
+import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { useState } from "react";
 
@@ -44,8 +45,9 @@ export default function Invoices() {
           <EmptyState icon={FileText} title="No invoices" description="Invoices are created from completed jobs" />
         ) : (
           <div className="space-y-2">
-            {filtered.map(inv => (
-              <Link key={inv.id} to={`/invoices/${inv.id}`}>
+            {filtered.map((inv, idx) => (
+              <AnimatedListItem key={inv.id} index={idx}>
+              <Link to={`/invoices/${inv.id}`}>
                 <div className="bg-card border border-border rounded-2xl p-3.5 hover:border-primary/20 hover:shadow-sm transition-all duration-150 active:scale-[0.99]">
                   <div className="flex items-center justify-between">
                     <div className="min-w-0">
@@ -59,6 +61,7 @@ export default function Invoices() {
                   </div>
                 </div>
                 </Link>
+              </AnimatedListItem>
             ))}
           </div>
         )}

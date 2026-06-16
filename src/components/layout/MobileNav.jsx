@@ -1,8 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
+import { motion } from 'framer-motion';
 import { LayoutDashboard, Users, Wrench, CalendarDays, BookOpen, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+
+const MotionLink = motion(Link);
 
 const navItems = [
   { path: "/", icon: LayoutDashboard, label: "Home" },
@@ -40,13 +43,19 @@ export default function MobileNav() {
             const isActive = path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
             const showBadge = path === "/inbox" && newLeadsCount > 0;
             return (
-              <Link
+              <MotionLink
                 key={path}
                 to={path}
-                className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all duration-200 touch-target relative active:scale-95"
+                className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl touch-target relative"
+                whileTap={{ scale: 0.92 }}
+                transition={{ duration: 0.1 }}
               >
                 {isActive && (
-                  <span className="absolute inset-0 bg-primary/10 rounded-xl" />
+                  <motion.span
+                    layoutId="nav-active"
+                    className="absolute inset-0 bg-primary/10 rounded-xl"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
                 )}
                 <span className="relative z-10">
                   <Icon
@@ -67,7 +76,7 @@ export default function MobileNav() {
                 )}>
                   {label}
                 </span>
-              </Link>
+              </MotionLink>
             );
           })}
         </div>
