@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText } from "lucide-react";
+import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
@@ -49,7 +49,6 @@ const FLAT_RATE_FOLDERS = [
   { key: "circuit_breakers", label: "Circuit Breakers", icon: "💥" },
   { key: "relays", label: "Relays & Contactors", icon: "🔗" },
   { key: "batteries", label: "Batteries", icon: "🔋" },
-  { key: "discounts", label: "Discounts", icon: "🏷️" },
   { key: "other", label: "Other", icon: "📦" },
 ];
 
@@ -89,6 +88,7 @@ const TOP_FOLDERS = [
   { key: "labor_rates", label: "Labor Rates", icon: Clock, color: "bg-amber-100 text-amber-700", description: "Hourly billing rates" },
   { key: "flat_rates", label: "Flat Rates", icon: Zap, color: "bg-purple-100 text-purple-700", description: "Fixed-price service jobs" },
   { key: "maintenance", label: "Maintenance", icon: Wrench, color: "bg-green-100 text-green-700", description: "Maintenance packages" },
+  { key: "discounts", label: "Discounts", icon: BadgePercent, color: "bg-orange-100 text-orange-700", description: "Referral, review & loyalty discounts" },
   { key: "documents", label: "Document Templates", icon: FileText, color: "bg-rose-100 text-rose-700", description: "Checklists and inspection forms" },
 ];
 
@@ -303,7 +303,7 @@ function LaborRatesList() {
 function FlatRatesFolderList({ onSelectFolder }) {
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const flatRates = rates.filter(r => r.type === "flat_rate");
-  const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance"];
+  const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
 
   const countForFolder = (key) => {
     if (key === "other") return flatRates.filter(r => !knownKeys.includes(r.category)).length;
@@ -339,7 +339,7 @@ function FlatRatesItemList({ folder }) {
   const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
-  const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance"];
+  const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
   const items = folder.key === "other"
     ? rates.filter(r => r.type === "flat_rate" && !knownKeys.includes(r.category))
     : rates.filter(r => r.type === "flat_rate" && r.category === folder.key);
@@ -779,6 +779,7 @@ export default function Catalog() {
         {folder === "flat_rates" && !subFolder && <FlatRatesFolderList onSelectFolder={setSubFolder} />}
         {folder === "flat_rates" && subFolder && <FlatRatesItemList folder={subFolder} />}
         {folder === "maintenance" && <MaintenanceList />}
+        {folder === "discounts" && <FlatRatesItemList folder={{ key: "discounts", label: "Discounts", icon: "🏷️" }} />}
         {folder === "documents" && (
           <div className="space-y-3">
             <button

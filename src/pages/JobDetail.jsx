@@ -1296,7 +1296,6 @@ export default function JobDetail() {
                           { key: "smm_boards", icon: "📟", label: "SMM Boards" },
                           { key: "batteries", icon: "🔋", label: "Batteries" },
                           { key: "maintenance", icon: "🔧", label: "Maintenance" },
-                          { key: "discounts", icon: "🏷️", label: "Discounts" },
                           { key: "service_agreements", icon: "📋", label: "Service Agreements" },
                           { key: "other", icon: "📦", label: "Other" },
                         ].filter(f => !workSearch || f.label.toLowerCase().includes(workSearch.toLowerCase())).map(folder => (
