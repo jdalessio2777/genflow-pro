@@ -285,7 +285,7 @@ export default function CustomerDetail() {
                     {customer.membership_plan === "semi_annual" ? "Semi-Annual" : "Annual"} Member
                   </p>
                   <p className={`text-xs ${customer.membership_plan === "semi_annual" ? "text-emerald-700" : "text-blue-700"}`}>
-                    10% off all services · Expires {formatDate(customer.membership_expiry)}
+                    {customer.membership_plan === "semi_annual" ? "15%" : "10%"} off all services · Expires {formatDate(customer.membership_expiry)}
                   </p>
                 </div>
               </div>

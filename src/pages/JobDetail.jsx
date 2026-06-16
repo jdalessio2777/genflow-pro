@@ -419,7 +419,23 @@ export default function JobDetail() {
       },
     });
     if (newStatus === "completed" && ["maintenance", "battery_replacement"].includes(job.job_type)) {
-      db.Customer.update(job.customer_id, { last_service_date: new Date().toISOString() });
+      const customerUpdate = { last_service_date: new Date().toISOString() };
+
+      if (customer?.membership_plan === "semi_annual" && customer?.membership_signed) {
+        const currentVisits = customer.membership_visits_used ?? 0;
+        const newVisits = Math.min(currentVisits + 1, 2);
+        customerUpdate.membership_visits_used = newVisits;
+
+        if (newVisits === 1 && customer.membership_expiry) {
+          const daysLeft = Math.ceil((new Date(customer.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24));
+          if (daysLeft > 60) {
+            const expiryStr = new Date(customer.membership_expiry).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            setTimeout(() => toast.info(`Semi-annual member — 1 of 2 visits used. Second visit due before ${expiryStr}.`), 800);
+          }
+        }
+      }
+
+      db.Customer.update(job.customer_id, customerUpdate);
     }
     if (newStatus === "scheduled" && customer?.email && job.scheduled_date) {
       try {
@@ -633,7 +649,7 @@ export default function JobDetail() {
   };
 
   const addServiceAgreement = async (type) => {
-    const AGREEMENT_DETAILS = {
+    const FALLBACK = {
       annual_air_cooled: {
         description: "Annual Service Agreement — Air-Cooled Generator · 1 maintenance visit/yr · 10% off parts, labor & repairs",
         flat_rate_amount: 340,
@@ -643,10 +659,19 @@ export default function JobDetail() {
         flat_rate_amount: 595,
       },
     };
-    const details = AGREEMENT_DETAILS[type] ?? {
-      description: `Service Agreement — ${type.replace(/_/g, " ")}`,
-      flat_rate_amount: 0,
-    };
+    let details = FALLBACK[type] ?? { description: `Service Agreement — ${type.replace(/_/g, " ")}`, flat_rate_amount: 0 };
+    try {
+      const rates = await db.LaborRate.filter({ category: "service_agreements" });
+      const isSemi = type.startsWith("semi");
+      const match = rates.find(r =>
+        isSemi ? r.name.toLowerCase().includes("semi") : (!r.name.toLowerCase().includes("semi") && r.name.toLowerCase().includes("annual"))
+      );
+      if (match && match.flat_price > 0) {
+        details = { ...details, flat_rate_amount: Number(match.flat_price) };
+      }
+    } catch {
+      // catalog fetch failed — fall back to hardcoded prices above
+    }
     await db.JobLabor.create({
       job_id: id,
       description: details.description,

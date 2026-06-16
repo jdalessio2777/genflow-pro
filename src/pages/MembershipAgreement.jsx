@@ -207,12 +207,31 @@ export default function MembershipAgreement() {
     const expiry = new Date(start);
     expiry.setFullYear(expiry.getFullYear() + 1);
 
+    // Log prior agreement to history before overwriting (skip on first-time signup)
+    if (customer.membership_expiry) {
+      try {
+        await db.MembershipRenewal.create({
+          customer_id: customer.id,
+          plan: customer.membership_plan,
+          start_date: customer.membership_start,
+          expiry_date: customer.membership_expiry,
+          renewed_by: user?.email ?? null,
+        });
+      } catch {
+        // non-fatal — history log failure should not block signing
+      }
+    }
+
     await updateCustomer.mutateAsync({
       membership_plan: selectedPlan,
       membership_start: start.toISOString(),
       membership_expiry: expiry.toISOString(),
       membership_signed: true,
       membership_signature: dataUrl,
+      membership_visits_used: 0,
+      renewal_reminder_30_sent_at: null,
+      renewal_reminder_7_sent_at: null,
+      renewal_expired_reminder_sent_at: null,
     });
 
     if (customer?.email) {

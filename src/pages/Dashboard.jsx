@@ -12,6 +12,30 @@ import { usePreferences } from "@/hooks/usePreferences";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 
+function ExpiredMembershipCard({ c }) {
+  const daysAgo = Math.abs(Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24)));
+  const expiryStr = new Date(c.membership_expiry).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return (
+    <Card className="p-3 border-red-200 bg-red-50/50">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <Link to={`/customers/${c.id}`}>
+            <p className="text-sm font-semibold truncate">{c.name}</p>
+          </Link>
+          <p className="text-xs text-muted-foreground">
+            Expired {daysAgo}d ago · {c.membership_plan === "semi_annual" ? "Semi-Annual" : "Annual"} · {expiryStr}
+          </p>
+        </div>
+        <Link to={`/customers/${c.id}/membership`} className="shrink-0">
+          <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-red-300 text-xs font-semibold text-red-700 bg-white hover:bg-red-50 transition-colors">
+            <Shield className="w-3 h-3" /> Renew
+          </button>
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
 function MembershipReminderCard({ c }) {
   const days = Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24));
   const [sending, setSending] = useState(false);
@@ -123,6 +147,12 @@ export default function Dashboard() {
     if (!c.membership_plan || !c.membership_signed || !c.membership_expiry) return false;
     const daysUntilExpiry = Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24));
     return daysUntilExpiry >= 0 && daysUntilExpiry <= 30;
+  });
+
+  const expiredMemberships = allCustomers.filter(c => {
+    if (!c.membership_plan || !c.membership_signed || !c.membership_expiry) return false;
+    const daysUntilExpiry = Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24));
+    return daysUntilExpiry < 0 && daysUntilExpiry >= -60;
   });
 
   const serviceDueCustomers = allCustomers
@@ -362,7 +392,7 @@ export default function Dashboard() {
         </div>
 
         {/* Collapsible Alerts */}
-        {(lowStockParts.length > 0 || expiringMemberships.length > 0 || unpaidInvoices.length > 0 || referralSummary.length >= 2) && (
+        {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || referralSummary.length >= 2) && (
           <div>
             <button
               onClick={() => setAlertsOpen(v => !v)}
@@ -370,9 +400,9 @@ export default function Dashboard() {
             >
               <div className="flex items-center gap-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alerts & Insights</p>
-                {(lowStockParts.length > 0 || expiringMemberships.length > 0 || unpaidInvoices.length > 0) && (
+                {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0) && (
                   <span className="text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-                    {lowStockParts.length + expiringMemberships.length + unpaidInvoices.length}
+                    {lowStockParts.length + expiringMemberships.length + expiredMemberships.length + unpaidInvoices.length}
                   </span>
                 )}
               </div>
@@ -429,6 +459,20 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {expiringMemberships.map(c => (
                         <MembershipReminderCard key={c.id} c={c} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {expiredMemberships.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-red-500" />
+                      Recently Expired
+                    </p>
+                    <div className="space-y-2">
+                      {expiredMemberships.map(c => (
+                        <ExpiredMembershipCard key={c.id} c={c} />
                       ))}
                     </div>
                   </div>
