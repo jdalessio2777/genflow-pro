@@ -5,7 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, Plus, CheckCircle2, ChevronDown, ChevronUp, UserPlus, PhoneCall, X } from "lucide-react";
+import { Plus, CheckCircle2, ChevronDown, ChevronUp, UserPlus, PhoneCall, X } from "lucide-react";
+import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
@@ -149,13 +150,7 @@ export default function Inbox() {
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {customer.phone && (
-              <a href={`tel:${customer.phone}`}>
-                <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl">
-                  <Phone className="w-4 h-4" />
-                </Button>
-              </a>
-            )}
+            <CallButtons phone={customer.phone} />
             <Link to={`/jobs/new?customer=${customer.id}`}>
               <Button size="icon" className="h-9 w-9 rounded-xl">
                 <Plus className="w-4 h-4" />

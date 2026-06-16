@@ -5,7 +5,8 @@ import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Pencil, Phone, Mail, MapPin, Wrench, DollarSign, Loader2, Shield, Trash2, ChevronRight, FileText, Users } from "lucide-react";
+import { Pencil, Mail, MapPin, Wrench, DollarSign, Loader2, Shield, Trash2, ChevronRight, FileText, Users } from "lucide-react";
+import CallButtons from "@/components/ui/CallButtons";
 import RewardBadge from "@/components/ui/RewardBadge";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -247,12 +248,12 @@ export default function CustomerDetail() {
         {/* Contact quick actions */}
         <div className="flex gap-2">
           {customer.phone && (
-            <a href={`tel:${customer.phone}`} className="flex-1">
+            <div className="flex-1">
               <Card className="p-3 text-center hover:bg-muted/50 transition-colors">
-                <Phone className="w-5 h-5 mx-auto text-primary mb-1" />
-                <p className="text-xs font-medium">{formatPhone(customer.phone)}</p>
+                <p className="text-xs font-medium mb-2">{formatPhone(customer.phone)}</p>
+                <CallButtons phone={customer.phone} />
               </Card>
-            </a>
+            </div>
           )}
           {customer.email && (
             <a href={`mailto:${customer.email}`} className="flex-1">

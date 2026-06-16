@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Search, Phone, MapPin, Shield, Calendar, Trash2, Briefcase } from "lucide-react";
+import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import RewardBadge from "@/components/ui/RewardBadge";
@@ -195,14 +196,7 @@ function CallListCard({ customer, category }) {
         <div className="flex flex-col items-end gap-2 shrink-0">
           <span className={`text-xs font-bold px-2 py-1 rounded-lg ${labelStyle}`}>{dueLabel}</span>
           <div className="flex items-center gap-1.5">
-            {customer.phone && (
-              <a
-                href={`tel:${customer.phone}`}
-                className="flex items-center gap-1 text-xs font-semibold text-white bg-primary rounded-lg px-2.5 py-1.5 hover:bg-primary/90 active:scale-95 transition-all"
-              >
-                <Phone className="w-3.5 h-3.5" /> Call
-              </a>
-            )}
+            <CallButtons phone={customer.phone} />
             <Link
               to={`/jobs/new?customer=${customer.id}`}
               className="flex items-center gap-1 text-xs font-semibold text-primary border border-primary rounded-lg px-2.5 py-1.5 hover:bg-primary/5 active:scale-95 transition-all bg-white"

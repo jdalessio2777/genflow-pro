@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, Phone, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package } from "lucide-react";
+import { Pencil, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package } from "lucide-react";
+import CallButtons from "@/components/ui/CallButtons";
 import StatusBadge from "@/components/ui/StatusBadge";
 import RewardBadge from "@/components/ui/RewardBadge";
 import JobPartsTab from "@/components/jobs/JobPartsTab";
@@ -884,11 +885,7 @@ export default function JobDetail() {
                     )}
                     <div className="flex gap-2 pt-0.5">
                       {customer?.phone && (
-                        <a href={`tel:${customer.phone}`} className="flex-1">
-                          <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700">
-                            <Phone className="w-3.5 h-3.5" /> Call
-                          </button>
-                        </a>
+                        <CallButtons phone={customer.phone} />
                       )}
                       {customer?.address && (
                         <a href={`https://maps.google.com/?q=${encodeURIComponent(customer.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1">

@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MapPin, Navigation, Clock, ExternalLink, Phone } from "lucide-react";
+import { MapPin, Navigation, Clock, ExternalLink } from "lucide-react";
+import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
 import { formatTime } from "@/lib/formatTime";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -144,13 +145,7 @@ export default function RouteMap() {
                     <Link to={`/jobs/${job.id}`} className="flex-1">
                       <Button variant="outline" size="sm" className="w-full rounded-xl h-8 text-xs">Open Job</Button>
                     </Link>
-                    {cust?.phone && (
-                      <a href={`tel:${cust.phone}`} className="flex-1">
-                        <Button variant="outline" size="sm" className="w-full rounded-xl h-8 text-xs gap-1.5">
-                          <Phone className="w-3 h-3" /> Call
-                        </Button>
-                      </a>
-                    )}
+                    <CallButtons phone={cust?.phone} />
                   </div>
                 </Card>
               );
