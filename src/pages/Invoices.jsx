@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, DollarSign, Send } from "lucide-react";
+import { FileText, DollarSign, Send, X } from "lucide-react";
+import { haptics } from "@/lib/haptics";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -14,6 +15,7 @@ import { toast } from "sonner";
 
 export default function Invoices() {
   const [filter, setFilter] = useState("all");
+  const [payingInvoice, setPayingInvoice] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: invoices = [], isLoading } = useQuery({
@@ -29,11 +31,12 @@ export default function Invoices() {
     onError: (e) => toast.error("Failed to update: " + e.message),
   });
 
-  const markPaid = (inv) => {
+  const markPaid = (inv, method) => {
     updateMutation.mutate(
-      { id: inv.id, data: { status: "paid", paid_date: new Date().toISOString() } },
-      { onSuccess: () => toast.success("Invoice marked as paid") }
+      { id: inv.id, data: { status: "paid", payment_method: method, paid_date: new Date().toISOString() } },
+      { onSuccess: () => { haptics.success(); toast.success("Invoice marked as paid"); } }
     );
+    setPayingInvoice(null);
   };
 
   const markSent = (inv) => {
@@ -77,7 +80,7 @@ export default function Invoices() {
                     label: "Paid",
                     icon: <DollarSign size={18} className="text-white" />,
                     color: "bg-green-500",
-                    onAction: () => markPaid(inv),
+                    onAction: () => setPayingInvoice(inv),
                   }] : []),
                   ...(inv.status === "draft" ? [{
                     label: "Send",
@@ -107,6 +110,38 @@ export default function Invoices() {
           </div>
         )}
       </div>
+
+      {payingInvoice && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          onClick={() => setPayingInvoice(null)}
+        >
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative w-full max-w-lg mx-auto bg-card rounded-t-2xl p-5 pb-8 shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold">How was this paid?</p>
+              <button onClick={() => setPayingInvoice(null)} className="p-1 rounded-full hover:bg-muted">
+                <X size={16} className="text-muted-foreground" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4 truncate">{payingInvoice.customer_name} · {payingInvoice.invoice_number}</p>
+            <div className="grid grid-cols-3 gap-2">
+              {["cash", "card", "check", "zelle", "venmo", "other"].map(method => (
+                <button
+                  key={method}
+                  onClick={() => markPaid(payingInvoice, method)}
+                  className="py-3 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground text-sm font-medium capitalize transition-colors"
+                >
+                  {method}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,9 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Moon } from 'lucide-react';
 import MobileNav from "./MobileNav";
 import PageTransition from "./PageTransition";
-import OfflineBanner from "../ui/OfflineBanner";
-// NOTE: usePreferences is created by Agent 1 at src/hooks/usePreferences.js
-// This import will resolve once that file is in place.
 import { usePreferences } from "../../hooks/usePreferences";
 
 export default function AppLayout() {
@@ -64,7 +61,6 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen" style={{ background: "hsl(var(--background))" }}>
-      <OfflineBanner />
       {wakeLockActive && (
         <div
           style={{
