@@ -31,9 +31,20 @@ import { sendQuoteEmail, sendConfirmationEmail, sendCompletionEmail } from "@/li
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
   const isDrawing = useRef(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [slideClass, setSlideClass] = useState("translate-y-full");
+  const isPortrait = typeof window !== "undefined" && window.innerWidth < window.innerHeight;
 
+  // Slide-up animation on mount
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const t = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSlideClass("translate-y-0"));
+    });
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  const initCanvas = (canvas) => {
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -41,7 +52,32 @@ function SignatureCanvas({ onSave }) {
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-  }, []);
+    // Draw baseline guide at 75% height
+    const baseY = Math.round(canvas.height * 0.75);
+    ctx.save();
+    ctx.strokeStyle = "#d1d5db";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(20, baseY);
+    ctx.lineTo(canvas.width - 20, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "14px sans-serif";
+    ctx.fillText("Sign here →", 22, baseY - 6);
+    ctx.restore();
+    // Reset stroke style for drawing
+    ctx.strokeStyle = "#1a1a1a";
+    ctx.lineWidth = 2.5;
+  };
+
+  const canvasCallbackRef = (canvas) => {
+    if (canvas && canvas !== canvasRef.current) {
+      canvasRef.current = canvas;
+      initCanvas(canvas);
+    }
+  };
 
   const getPos = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -55,19 +91,68 @@ function SignatureCanvas({ onSave }) {
   const startDraw = (e) => { e.preventDefault(); isDrawing.current = true; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); };
   const draw = (e) => { e.preventDefault(); if (!isDrawing.current) return; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.lineTo(pos.x, pos.y); ctx.stroke(); };
   const stopDraw = (e) => { e.preventDefault(); isDrawing.current = false; };
-  const clear = () => { const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); };
-  const save = () => { onSave(canvasRef.current.toDataURL("image/png")); };
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    initCanvas(canvas);
+  };
+
+  const handleDone = () => {
+    const dataUrl = canvasRef.current.toDataURL("image/png");
+    setSlideClass("translate-y-full");
+    setTimeout(() => {
+      setDismissed(true);
+      onSave(dataUrl);
+    }, 300);
+  };
+
+  if (dismissed) return null;
+
+  const cw = typeof window !== "undefined" ? Math.round(window.innerWidth * 0.85) : 560;
+  const ch = typeof window !== "undefined" ? Math.round(window.innerHeight * 0.50) : 280;
 
   return (
-    <div className="space-y-3">
-      <div className="border-2 border-dashed border-border rounded-xl overflow-hidden bg-white">
-        <canvas ref={canvasRef} width={560} height={200} className="w-full touch-none"
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
+    >
+      <div
+        style={{ transition: "transform 0.3s ease-out" }}
+        className={`transform ${slideClass} flex flex-col items-center gap-4 w-full px-4`}
+      >
+        {/* Label */}
+        <p style={{ color: "#ffffff", fontSize: "1rem", fontWeight: 600, letterSpacing: "0.02em" }}>Customer Signature</p>
+
+        {/* Canvas */}
+        <canvas
+          ref={canvasCallbackRef}
+          width={cw}
+          height={ch}
+          style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
           onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
-      </div>
-      <div className="flex gap-2">
-        <Button variant="outline" className="flex-1 rounded-xl" onClick={clear}>Clear</Button>
-        <Button className="flex-1 rounded-xl bg-green-600 hover:bg-green-700" onClick={save}>Save Signature</Button>
+          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+        />
+
+        {/* Portrait hint */}
+        {isPortrait && (
+          <p style={{ color: "#9ca3af", fontSize: "0.75rem" }}>Rotate device for more space</p>
+        )}
+
+        {/* Bottom action bar */}
+        <div style={{ display: "flex", gap: "12px", width: "100%", maxWidth: `${cw}px` }}>
+          <button
+            onClick={clear}
+            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#374151", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
+          >
+            Clear
+          </button>
+          <button
+            onClick={handleDone}
+            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#D32C2C", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
+          >
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
