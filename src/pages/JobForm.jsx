@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import PageHeader from "@/components/layout/PageHeader";
 import { Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { createCalendarEvent, updateCalendarEvent } from "@/lib/googleCalendar";
 
@@ -148,10 +149,12 @@ export default function JobForm() {
 
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["job", savedJob.id] });
+      if (!isEdit) haptics.light();
       toast.success(isEdit ? "Job updated" : "Job created");
       navigate(isEdit ? `/jobs/${id}` : `/jobs/${savedJob.id}`);
     },
     onError: (error) => {
+      haptics.error();
       toast.error('Failed to save job: ' + (error.message || 'Unknown error'));
     },
   });
@@ -165,8 +168,8 @@ export default function JobForm() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.customer_id) { toast.error("Select a customer"); return; }
-    if (!form.title.trim()) { toast.error("Title is required"); return; }
+    if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
+    if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
     mutation.mutate(form);
   };
 

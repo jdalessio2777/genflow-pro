@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeft, CheckCircle2, Loader2, Shield } from "lucide-react";
 import { formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -122,6 +123,7 @@ export default function MembershipAgreement() {
   });
 
   const handleSign = async (dataUrl) => {
+    haptics.success();
     const start = new Date();
     const expiry = new Date(start);
     expiry.setFullYear(expiry.getFullYear() + 1);
