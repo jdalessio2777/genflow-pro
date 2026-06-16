@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Search, Phone, MapPin, Shield, Calendar, Trash2 } from "lucide-react";
+import { Plus, Search, Phone, MapPin, Shield, Calendar, Trash2, Briefcase } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import RewardBadge from "@/components/ui/RewardBadge";
 import AnimatedListItem from "@/components/ui/AnimatedListItem";
+import SwipeableListItem from "@/components/ui/SwipeableListItem";
 import { Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { formatPhone, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 
@@ -39,6 +41,7 @@ function getCallListCategory(customer) {
 
 function CustomerCard({ customer }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const deleteMutation = useMutation({
     mutationFn: async (customerId) => {
       const jobs = await db.Job.filter({ customer_id: customerId });
@@ -76,6 +79,22 @@ function CustomerCard({ customer }) {
   }
 
   return (
+    <SwipeableListItem
+      rightActions={[
+        ...(customer.phone ? [{
+          label: "Call",
+          icon: <Phone size={18} className="text-white" />,
+          color: "bg-green-500",
+          onAction: () => window.open("tel:" + customer.phone),
+        }] : []),
+        {
+          label: "Jobs",
+          icon: <Briefcase size={18} className="text-white" />,
+          color: "bg-blue-500",
+          onAction: () => navigate("/jobs?customer=" + customer.id),
+        },
+      ]}
+    >
     <div className="relative">
       <Link to={`/customers/${customer.id}`}>
         <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
@@ -132,6 +151,7 @@ function CustomerCard({ customer }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </SwipeableListItem>
   );
 }
 

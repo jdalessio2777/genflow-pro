@@ -1,23 +1,47 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
-import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText } from "lucide-react";
+import { FileText, DollarSign, Send } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 import AnimatedListItem from "@/components/ui/AnimatedListItem";
+import SwipeableListItem from "@/components/ui/SwipeableListItem";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export default function Invoices() {
   const [filter, setFilter] = useState("all");
+  const queryClient = useQueryClient();
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["invoices"],
     queryFn: () => db.Invoice.list("-created_date"),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => db.Invoice.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    },
+    onError: (e) => toast.error("Failed to update: " + e.message),
+  });
+
+  const markPaid = (inv) => {
+    updateMutation.mutate(
+      { id: inv.id, data: { status: "paid", paid_date: new Date().toISOString() } },
+      { onSuccess: () => toast.success("Invoice marked as paid") }
+    );
+  };
+
+  const markSent = (inv) => {
+    updateMutation.mutate(
+      { id: inv.id, data: { status: "sent" } },
+      { onSuccess: () => toast.success("Invoice marked as sent") }
+    );
+  };
 
   const filtered = invoices.filter(i => {
     if (filter === "all") return true;
@@ -47,6 +71,22 @@ export default function Invoices() {
           <div className="space-y-2">
             {filtered.map((inv, idx) => (
               <AnimatedListItem key={inv.id} index={idx}>
+              <SwipeableListItem
+                rightActions={[
+                  ...((inv.status === "sent" || inv.status === "draft") ? [{
+                    label: "Paid",
+                    icon: <DollarSign size={18} className="text-white" />,
+                    color: "bg-green-500",
+                    onAction: () => markPaid(inv),
+                  }] : []),
+                  ...(inv.status === "draft" ? [{
+                    label: "Send",
+                    icon: <Send size={18} className="text-white" />,
+                    color: "bg-blue-500",
+                    onAction: () => markSent(inv),
+                  }] : []),
+                ]}
+              >
               <Link to={`/invoices/${inv.id}`}>
                 <div className="bg-card border border-border rounded-2xl p-3.5 hover:border-primary/20 hover:shadow-sm transition-all duration-150 active:scale-[0.99]">
                   <div className="flex items-center justify-between">
@@ -61,6 +101,7 @@ export default function Invoices() {
                   </div>
                 </div>
                 </Link>
+              </SwipeableListItem>
               </AnimatedListItem>
             ))}
           </div>
