@@ -16,7 +16,7 @@ function ExpiredMembershipCard({ c }) {
   const daysAgo = Math.abs(Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24)));
   const expiryStr = new Date(c.membership_expiry).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   return (
-    <Card className="p-3 border-red-200 bg-red-50/50">
+    <Card className="p-3 border-red-200 bg-red-50/50 dark:border-red-700 dark:bg-red-900/20">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <Link to={`/customers/${c.id}`}>
@@ -27,7 +27,7 @@ function ExpiredMembershipCard({ c }) {
           </p>
         </div>
         <Link to={`/customers/${c.id}/membership`} className="shrink-0">
-          <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-red-300 text-xs font-semibold text-red-700 bg-white hover:bg-red-50 transition-colors">
+          <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-red-300 text-xs font-semibold text-red-700 bg-white hover:bg-red-50 transition-colors dark:border-red-600 dark:text-red-300 dark:bg-gray-800 dark:hover:bg-red-900/30">
             <Shield className="w-3 h-3" /> Renew
           </button>
         </Link>
@@ -62,7 +62,7 @@ function MembershipReminderCard({ c }) {
   };
 
   return (
-    <Card className={`p-3 ${days <= 0 ? "border-red-200 bg-red-50/50" : days <= 14 ? "border-amber-200 bg-amber-50/50" : "border-blue-200 bg-blue-50/50"}`}>
+    <Card className={`p-3 ${days <= 0 ? "border-red-200 bg-red-50/50 dark:border-red-700 dark:bg-red-900/20" : days <= 14 ? "border-amber-200 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-900/20" : "border-blue-200 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-900/20"}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <Link to={`/customers/${c.id}`}>
@@ -286,13 +286,13 @@ export default function Dashboard() {
                 const isOverdue = daysUntilDue < 0;
                 return (
                   <Link key={c.id} to={`/customers/${c.id}`}>
-                    <div className={`rounded-2xl border p-3.5 hover:opacity-80 transition-all active:scale-[0.99] ${isOverdue ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+                    <div className={`rounded-2xl border p-3.5 hover:opacity-80 transition-all active:scale-[0.99] ${isOverdue ? "border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20" : "border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20"}`}>
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">{c.name}</p>
                           <p className="text-xs text-muted-foreground">{c.generator_model || "Generator"}</p>
                         </div>
-                        <span className={`text-xs font-bold px-2 py-1 rounded-lg shrink-0 ml-2 ${isOverdue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg shrink-0 ml-2 ${isOverdue ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200" : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200"}`}>
                           {isOverdue ? `${Math.abs(daysUntilDue)}d overdue` : daysUntilDue === 0 ? "Due today" : `Due in ${daysUntilDue}d`}
                         </span>
                       </div>
@@ -341,51 +341,51 @@ export default function Dashboard() {
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Quick Actions</p>
           <div className="grid grid-cols-2 gap-2.5">
             <Link to="/customers/new">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/60 hover:bg-emerald-100/60 transition-colors active:scale-[0.99]">
-                <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
-                  <Users className="w-4 h-4 text-emerald-600" />
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/60 hover:bg-emerald-100/60 transition-colors active:scale-[0.99] dark:bg-emerald-900/20 dark:border-emerald-700/60 dark:hover:bg-emerald-900/30">
+                <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-emerald-900">
+                  <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
                 </div>
-                <p className="text-sm font-semibold text-emerald-900">New Customer</p>
+                <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">New Customer</p>
               </div>
             </Link>
             <Link to="/route">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-amber-50 border border-amber-200/60 hover:bg-amber-100/60 transition-colors active:scale-[0.99]">
-                <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
-                  <Navigation className="w-4 h-4 text-amber-600" />
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-amber-50 border border-amber-200/60 hover:bg-amber-100/60 transition-colors active:scale-[0.99] dark:bg-amber-900/20 dark:border-amber-700/60 dark:hover:bg-amber-900/30">
+                <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-amber-900">
+                  <Navigation className="w-4 h-4 text-amber-600 dark:text-amber-300" />
                 </div>
-                <p className="text-sm font-semibold text-amber-900">Today's Route</p>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Today's Route</p>
               </div>
             </Link>
             <Link to="/invoices">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 hover:bg-slate-100/60 transition-colors active:scale-[0.99]">
-                <div className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4 text-slate-600" />
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 hover:bg-slate-100/60 transition-colors active:scale-[0.99] dark:bg-slate-800 dark:border-slate-700/60 dark:hover:bg-slate-700/60">
+                <div className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-slate-700">
+                  <FileText className="w-4 h-4 text-slate-600 dark:text-slate-300" />
                 </div>
-                <p className="text-sm font-semibold text-slate-800">Invoices</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Invoices</p>
               </div>
             </Link>
             <Link to="/finance">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-green-50 border border-green-200/60 hover:bg-green-100/60 transition-colors active:scale-[0.99]">
-                <div className="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
-                  <DollarSign className="w-4 h-4 text-green-600" />
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-green-50 border border-green-200/60 hover:bg-green-100/60 transition-colors active:scale-[0.99] dark:bg-green-900/20 dark:border-green-700/60 dark:hover:bg-green-900/30">
+                <div className="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-green-900">
+                  <DollarSign className="w-4 h-4 text-green-600 dark:text-green-300" />
                 </div>
-                <p className="text-sm font-semibold text-green-900">Finance</p>
+                <p className="text-sm font-semibold text-green-900 dark:text-green-200">Finance</p>
               </div>
             </Link>
             <Link to="/documents">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-orange-50 border border-orange-200/60 hover:bg-orange-100/60 transition-colors active:scale-[0.99]">
-                <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4 text-orange-600" />
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-orange-50 border border-orange-200/60 hover:bg-orange-100/60 transition-colors active:scale-[0.99] dark:bg-orange-900/20 dark:border-orange-700/60 dark:hover:bg-orange-900/30">
+                <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-orange-900">
+                  <FileText className="w-4 h-4 text-orange-600 dark:text-orange-300" />
                 </div>
-                <p className="text-sm font-semibold text-orange-900">Documents</p>
+                <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">Documents</p>
               </div>
             </Link>
             <Link to="/referrals">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-rose-50 border border-rose-200/60 hover:bg-rose-100/60 transition-colors active:scale-[0.99]">
-                <div className="w-8 h-8 bg-rose-100 rounded-xl flex items-center justify-center shrink-0">
-                  <Gift className="w-4 h-4 text-rose-600" />
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-rose-50 border border-rose-200/60 hover:bg-rose-100/60 transition-colors active:scale-[0.99] dark:bg-rose-900/20 dark:border-rose-700/60 dark:hover:bg-rose-900/30">
+                <div className="w-8 h-8 bg-rose-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-rose-900">
+                  <Gift className="w-4 h-4 text-rose-600 dark:text-rose-300" />
                 </div>
-                <p className="text-sm font-semibold text-rose-900">Referrals</p>
+                <p className="text-sm font-semibold text-rose-900 dark:text-rose-200">Referrals</p>
               </div>
             </Link>
           </div>
@@ -415,14 +415,14 @@ export default function Dashboard() {
               <div className="space-y-3 tab-fade">
                 {unpaidInvoices.length > 0 && (
                   <Link to="/invoices">
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 hover:opacity-80 transition-all">
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 hover:opacity-80 transition-all dark:border-amber-700 dark:bg-amber-900/20">
                       <div className="flex items-center gap-2 mb-1">
-                        <AlertTriangle className="w-4 h-4 text-amber-600" />
-                        <span className="text-sm font-semibold text-amber-800">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                        <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
                           {unpaidInvoices.length} Unpaid Invoice{unpaidInvoices.length > 1 ? "s" : ""}
                         </span>
                       </div>
-                      <p className="text-xs text-amber-700">
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
                         {formatCurrency(unpaidInvoices.reduce((s, i) => s + (i.total || 0), 0))} outstanding
                       </p>
                     </div>
@@ -431,16 +431,16 @@ export default function Dashboard() {
 
                 {lowStockParts.length > 0 && (
                   <Link to="/catalog">
-                    <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3.5 hover:opacity-80 transition-all">
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3.5 hover:opacity-80 transition-all dark:border-orange-700 dark:bg-orange-900/20">
                       <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-orange-600 shrink-0" />
+                        <Package className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-orange-800">
+                          <p className="text-sm font-semibold text-orange-800 dark:text-orange-200">
                             {lowStockParts.filter(p => p.in_stock <= 0).length > 0
                               ? `${lowStockParts.filter(p => p.in_stock <= 0).length} part${lowStockParts.filter(p => p.in_stock <= 0).length > 1 ? "s" : ""} out of stock`
                               : `${lowStockParts.length} part${lowStockParts.length > 1 ? "s" : ""} running low`}
                           </p>
-                          <p className="text-xs text-orange-700 truncate">
+                          <p className="text-xs text-orange-700 dark:text-orange-300 truncate">
                             {lowStockParts.slice(0, 2).map(p => p.name).join(", ")}
                             {lowStockParts.length > 2 ? ` +${lowStockParts.length - 2} more` : ""}
                           </p>

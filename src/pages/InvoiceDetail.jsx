@@ -154,14 +154,14 @@ export default function InvoiceDetail() {
         )}
 
         {(invoice.status === "draft" || invoice.status === "sent") && (
-          <Card className="p-4 border-green-200 bg-green-50">
-            <p className="text-xs font-semibold text-green-800 mb-3 uppercase tracking-wider">Record Payment</p>
+          <Card className="p-4 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
+            <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-3 uppercase tracking-wider">Record Payment</p>
             <div className="grid grid-cols-3 gap-2">
               {["cash", "card", "check", "zelle", "venmo", "other"].map(method => (
                 <Button
                   key={method}
                   variant="outline"
-                  className="rounded-xl capitalize h-11 border-green-300 bg-white hover:bg-green-100"
+                  className="rounded-xl capitalize h-11 border-green-300 dark:border-green-700 bg-white dark:bg-gray-800 hover:bg-green-100 dark:hover:bg-green-900/30"
                   onClick={() => markPaid(method)}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-1 text-green-600" /> {method}
@@ -174,7 +174,7 @@ export default function InvoiceDetail() {
         {invoice.customer_signature && (
           <Card className="p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Customer Signature</p>
-            <div className="border rounded-xl overflow-hidden bg-white p-2">
+            <div className="border rounded-xl overflow-hidden bg-white dark:bg-gray-800 p-2">
               <img src={invoice.customer_signature} alt="Customer signature" className="w-full max-h-24 object-contain" />
             </div>
             {invoice.paid_date && (

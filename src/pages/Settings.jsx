@@ -194,10 +194,10 @@ function VehiclesTab() {
 
   const TECH_OPTIONS = ["Jeremy", "Alex", "Derek", "Shared"];
   const TECH_COLORS = {
-    Jeremy: "bg-blue-100 text-blue-700 border-blue-200",
-    Alex: "bg-green-100 text-green-700 border-green-200",
-    Derek: "bg-red-100 text-red-700 border-red-200",
-    Shared: "bg-gray-100 text-gray-700 border-gray-200",
+    Jeremy: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700",
+    Alex: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700",
+    Derek: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700",
+    Shared: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600",
   };
 
   const activeVehicles = vehicles.filter(v => v.is_active !== false);
@@ -323,9 +323,9 @@ function VehiclesTab() {
         </div>
       )}
 
-      <Card className="p-3.5 border-amber-200 bg-amber-50">
-        <p className="text-xs font-bold text-amber-800 mb-1">📋 IRS Note</p>
-        <p className="text-xs text-amber-700 leading-relaxed">Mileage deductions must be reported per vehicle on Form 4562. Your accountant will need total business miles per vehicle for the year.</p>
+      <Card className="p-3.5 border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20">
+        <p className="text-xs font-bold text-amber-800 dark:text-amber-200 mb-1">📋 IRS Note</p>
+        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">Mileage deductions must be reported per vehicle on Form 4562. Your accountant will need total business miles per vehicle for the year.</p>
       </Card>
     </div>
   );

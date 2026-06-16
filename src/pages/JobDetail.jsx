@@ -194,15 +194,15 @@ function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNote
           <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrency(total)}</p>
         </div>
       </div>
-      <div className="mt-2 pt-2 border-t border-blue-100/40">
-        <p className="text-xs text-blue-700 font-medium mb-1 flex items-center gap-1.5">
+      <div className="mt-2 pt-2 border-t border-blue-100/40 dark:border-blue-800/40">
+        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-1 flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
           Generator Notes (tech only)
         </p>
         <Textarea
           value={generatorNotes || ""}
           onChange={e => onGeneratorNotesChange?.(e.target.value)}
-          className="text-sm rounded-xl resize-none border-blue-200 bg-blue-50/30 min-h-[56px]"
+          className="text-sm rounded-xl resize-none border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/20 dark:text-gray-100 min-h-[56px]"
           rows={2}
           placeholder="Fault codes, battery voltage, oil condition..."
         />
@@ -751,7 +751,7 @@ export default function JobDetail() {
       </div>
 
       {/* ── HORIZONTAL TAB BAR ── */}
-      <div className="bg-white border-b border-border shrink-0 shadow-sm">
+      <div className="bg-white dark:bg-gray-900 border-b border-border shrink-0 shadow-sm">
       <div className="flex overflow-x-auto max-w-lg mx-auto" style={{ scrollbarWidth: "none" }}>
       {[
         { key: "overview", label: "Overview", icon: "⚡" },
@@ -798,9 +798,9 @@ export default function JobDetail() {
                   )}
                 </div>
                 {(job.quote_notes || job.notes) && (
-                  <div className="mx-3.5 mb-3.5 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5">
-                    <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider mb-1">Summary</p>
-                    <p className="text-xs text-sky-800 leading-relaxed">
+                  <div className="mx-3.5 mb-3.5 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5 dark:bg-sky-900/20 dark:border-sky-700">
+                    <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider mb-1">Summary</p>
+                    <p className="text-xs text-sky-800 dark:text-sky-200 leading-relaxed">
                       {job.quote_notes || job.notes}
                     </p>
                   </div>
@@ -842,41 +842,41 @@ export default function JobDetail() {
                 {customerExpanded && (
                   <div className="border-t border-border px-3.5 pb-3.5 pt-3 space-y-2.5">
                     {(customer?.generator_model || customer?.generator_serial) && (
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-                        <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">Generator</p>
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 dark:bg-blue-900/20 dark:border-blue-700">
+                        <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider mb-1">Generator</p>
                         {customer.generator_model && (
-                          <p className="text-xs font-semibold text-blue-900">{customer.generator_model}</p>
+                          <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">{customer.generator_model}</p>
                         )}
                         {customer.generator_serial && (
-                          <p className="text-xs text-blue-600">S/N {customer.generator_serial}</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400">S/N {customer.generator_serial}</p>
                         )}
                       </div>
                     )}
                     {customer?.repeat_note && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 dark:bg-amber-900/20 dark:border-amber-700">
                         <div className="flex items-start gap-2">
                           <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center shrink-0 mt-0.5">
                             <span className="text-white text-[9px] font-bold">!</span>
                           </div>
                           <div>
-                            <p className="text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-0.5">Always Remember</p>
-                            <p className="text-xs text-amber-800 leading-relaxed">{customer.repeat_note}</p>
+                            <p className="text-[10px] font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider mb-0.5">Always Remember</p>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{customer.repeat_note}</p>
                           </div>
                         </div>
                       </div>
                     )}
                     {customer?.property_notes && (
-                      <p className="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 border border-amber-200">
+                      <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2 border border-amber-200 dark:border-amber-700">
                         ⚠ {customer.property_notes}
                       </p>
                     )}
                     {isMember && (
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5">
-                        <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1">Membership</p>
-                        <p className="text-xs font-semibold text-emerald-800">
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 dark:bg-emerald-900/20 dark:border-emerald-700">
+                        <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider mb-1">Membership</p>
+                        <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
                           {customer.membership_plan === "semi_annual" ? "Semi-Annual" : "Annual"} Protection Plan
                         </p>
-                        <p className="text-xs text-emerald-600">
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
                           10% off all parts & labor
                           {customer.membership_expiry ? ` · Expires ${new Date(customer.membership_expiry).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : ""}
                         </p>
@@ -885,20 +885,20 @@ export default function JobDetail() {
                     <div className="flex gap-2 pt-0.5">
                       {customer?.phone && (
                         <a href={`tel:${customer.phone}`} className="flex-1">
-                          <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700">
+                          <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300">
                             <Phone className="w-3.5 h-3.5" /> Call
                           </button>
                         </a>
                       )}
                       {customer?.address && (
                         <a href={`https://maps.google.com/?q=${encodeURIComponent(customer.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1">
-                          <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700">
+                          <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300">
                             <MapPin className="w-3.5 h-3.5" /> Directions
                           </button>
                         </a>
                       )}
                       <Link to={`/customers/${job.customer_id}`} className="flex-1">
-                        <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700">
+                        <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300">
                           <User className="w-3.5 h-3.5" /> Profile
                         </button>
                       </Link>
@@ -909,12 +909,12 @@ export default function JobDetail() {
 
               {/* ── On site timer ── */}
               {job.status === "on_site" && (
-                <Card className="p-4 bg-amber-50 border-amber-200">
+                <Card className="p-4 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider">On Site — Clock Running</p>
-                      <p className="text-3xl font-bold font-mono text-amber-700 mt-1">{formatElapsed(elapsedSeconds)}</p>
-                      <p className="text-xs text-amber-600 mt-0.5">{(elapsedSeconds / 3600).toFixed(2)} hours on site</p>
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 uppercase tracking-wider">On Site — Clock Running</p>
+                      <p className="text-3xl font-bold font-mono text-amber-700 dark:text-amber-300 mt-1">{formatElapsed(elapsedSeconds)}</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">{(elapsedSeconds / 3600).toFixed(2)} hours on site</p>
                     </div>
                     <div className="w-12 h-12 rounded-full border-4 border-amber-300 flex items-center justify-center">
                       <div className="w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
@@ -950,20 +950,20 @@ export default function JobDetail() {
               {/* Service Agreement status card */}
               {hasPendingAgreement && (
                 customer?.membership_signed ? (
-                  <Card className="p-3.5 border-green-200 bg-green-50">
-                    <p className="text-xs font-bold text-green-900 flex items-center gap-1.5">
+                  <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
+                    <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
                       ✅ SERVICE AGREEMENT ACTIVE
                     </p>
-                    <p className="text-xs text-green-800 mt-0.5">Annual Service Agreement — Air-Cooled</p>
-                    <p className="text-xs text-green-600 mt-0.5">Signed · Discounts applied automatically</p>
+                    <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">Annual Service Agreement — Air-Cooled</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed · Discounts applied automatically</p>
                   </Card>
                 ) : (
-                  <Card className="p-3.5 border-indigo-200 bg-indigo-50">
+                  <Card className="p-3.5 border-indigo-200 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">📋 SERVICE AGREEMENT PENDING</p>
-                        <p className="text-xs text-indigo-800 mt-0.5">Annual Service Agreement — Air-Cooled Generator</p>
-                        <p className="text-xs text-indigo-600 mt-0.5">$340/yr · Customer signature required</p>
+                        <p className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">📋 SERVICE AGREEMENT PENDING</p>
+                        <p className="text-xs text-indigo-800 dark:text-indigo-300 mt-0.5">Annual Service Agreement — Air-Cooled Generator</p>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">$340/yr · Customer signature required</p>
                       </div>
                       <Button size="sm" className="rounded-xl h-8 text-xs bg-indigo-600 hover:bg-indigo-700 shrink-0 ml-2"
                         onClick={() => navigate(`/customers/${job.customer_id}/membership?from_job=${id}`)}>
@@ -985,7 +985,7 @@ export default function JobDetail() {
                   )}
                   {job.status === "dispatched" && (
                     <>
-                      <div className="flex items-center gap-2 text-xs text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-xl px-3 py-2.5">
+                      <div className="flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-xl px-3 py-2.5">
                         <Navigation className="w-3.5 h-3.5 shrink-0" />
                         <span>En route — tap when you arrive to start the clock</span>
                       </div>
@@ -1022,8 +1022,8 @@ export default function JobDetail() {
                         </Button>
                       )}
                       {existingInvoice?.status === "paid" ? (
-                        <Card className="p-3 bg-green-50 border-green-200">
-                          <p className="text-sm font-semibold text-green-800 flex items-center gap-1.5">
+                        <Card className="p-3 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
+                          <p className="text-sm font-semibold text-green-800 dark:text-green-200 flex items-center gap-1.5">
                             <CheckCircle2 className="w-4 h-4" /> Paid — {formatCurrency(existingInvoice.total)}
                           </p>
                         </Card>
@@ -1058,9 +1058,9 @@ export default function JobDetail() {
 
               {/* Quote section */}
               {["quote", "quote_sent"].includes(job.status) && (
-                <Card className="p-4 border-sky-200 bg-sky-50">
+                <Card className="p-4 border-sky-200 bg-sky-50 dark:border-sky-700 dark:bg-sky-900/20">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-semibold text-sky-900">Quote</p>
+                    <p className="text-sm font-semibold text-sky-900 dark:text-sky-200">Quote</p>
                     <Link to={`/jobs/${id}/quote`}>
                       <Button size="sm" variant="outline" className="rounded-xl text-xs h-8 gap-1">
                         <FileText className="w-3 h-3" /> View
@@ -1069,11 +1069,11 @@ export default function JobDetail() {
                   </div>
                   {job.status === "quote_sent" && (
                     <>
-                      <p className="text-xs text-sky-700 bg-sky-100 rounded-lg px-2.5 py-1.5 border border-sky-200">
+                      <p className="text-xs text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/30 rounded-lg px-2.5 py-1.5 border border-sky-200 dark:border-sky-700">
                         ✓ Sent to customer — awaiting approval
                       </p>
                       <Button size="sm" variant="outline"
-                        className="w-full rounded-xl gap-1.5 mt-2 border-amber-300 text-amber-800 hover:bg-amber-50"
+                        className="w-full rounded-xl gap-1.5 mt-2 border-amber-300 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30"
                         onClick={() => handleStatusChange("scheduled", { quote_approved_date: new Date().toISOString() })}>
                         <CheckCircle2 className="w-3.5 h-3.5" /> Proceed Without Approval
                       </Button>
@@ -1349,10 +1349,10 @@ export default function JobDetail() {
                       { name: "Sat after 3:30pm / Sun", sub: "Weekend rate", price: 330 },
                       { name: "Holiday Rate", sub: "Federal holidays", price: 330 },
                     ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between border-orange-200 bg-orange-50/40">
+                      <Card key={i} className="p-3 flex items-center justify-between border-orange-200 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-900/20">
                         <div>
                           <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-orange-600">{r.sub}{isMember ? ` · ${Math.round((1-memberDiscountRate)*100)}% off` : ""}</p>
+                          <p className="text-xs text-orange-600 dark:text-orange-400">{r.sub}{isMember ? ` · ${Math.round((1-memberDiscountRate)*100)}% off` : ""}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <p className="text-sm font-bold text-orange-700">${isMember ? Math.round(r.price * memberDiscountRate) : r.price}/hr</p>
@@ -1376,10 +1376,10 @@ export default function JobDetail() {
                       { name: "Emergency Dispatch Fee", sub: "Same-day emergency response", price: 75, type: "flat" },
                       { name: "Emergency Hourly", sub: "Emergency rate · per hour", price: 245, type: "hourly" },
                     ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between border-red-200 bg-red-50/40">
+                      <Card key={i} className="p-3 flex items-center justify-between border-red-200 bg-red-50/40 dark:border-red-700 dark:bg-red-900/20">
                         <div>
                           <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-red-500">{r.sub}</p>
+                          <p className="text-xs text-red-500 dark:text-red-400">{r.sub}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <p className="text-sm font-bold text-red-700">${r.price}{r.type === "hourly" ? "/hr" : ""}</p>
@@ -1439,15 +1439,15 @@ export default function JobDetail() {
                          {flatFolder === "service_agreements" && (
                            <div className="space-y-2">
                              {/* Air-Cooled — enabled */}
-                             <Card className="p-3.5 border-indigo-200 bg-indigo-50/40">
+                             <Card className="p-3.5 border-indigo-200 bg-indigo-50/40 dark:border-indigo-700 dark:bg-indigo-900/20">
                                <div className="flex items-start justify-between gap-2">
                                  <div className="min-w-0 flex-1">
                                    <div className="flex items-center gap-2 flex-wrap mb-1">
                                      <p className="text-sm font-semibold">Service Agreement (Air-Cooled)</p>
-                                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Agreement Required</span>
+                                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">Agreement Required</span>
                                    </div>
                                    <p className="text-xs text-muted-foreground">1 maintenance visit/yr · 10% off parts, labor & repairs</p>
-                                   <p className="text-[10px] text-amber-700 mt-1 font-medium">Price is fixed — not subject to member discount</p>
+                                   <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 font-medium">Price is fixed — not subject to member discount</p>
                                  </div>
                                  <div className="flex items-center gap-2 shrink-0 mt-1">
                                    <p className="text-sm font-bold">$340</p>
@@ -1474,9 +1474,9 @@ export default function JobDetail() {
                                  </div>
                                </div>
                              </Card>
-                             <Card className="p-3 border-amber-200 bg-amber-50/60">
-                               <p className="text-xs font-bold text-amber-800">📋 How it works</p>
-                               <p className="text-xs text-amber-700 mt-1 leading-relaxed">Adding an agreement charges the customer on this invoice. The signing step appears when you complete the job — customer reviews terms and signs before you leave.</p>
+                             <Card className="p-3 border-amber-200 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20">
+                               <p className="text-xs font-bold text-amber-800 dark:text-amber-200">📋 How it works</p>
+                               <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">Adding an agreement charges the customer on this invoice. The signing step appears when you complete the job — customer reviews terms and signs before you leave.</p>
                              </Card>
                            </div>
                          )}
@@ -1535,7 +1535,7 @@ export default function JobDetail() {
                       </div>
                     </div>
                     {prevJob.generator_notes && (
-                      <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-2.5 py-1.5 border border-blue-100 leading-relaxed">{prevJob.generator_notes}</p>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2.5 py-1.5 border border-blue-100 dark:border-blue-700 leading-relaxed">{prevJob.generator_notes}</p>
                     )}
                     {prevJob.invoice_notes && !prevJob.generator_notes && (
                       <p className="text-xs text-muted-foreground leading-relaxed">{prevJob.invoice_notes}</p>
@@ -1551,23 +1551,23 @@ export default function JobDetail() {
             <div className="p-4 space-y-3 pb-8">
               {/* Generator notes */}
               {(job.generator_notes || !isClosed) && (
-                <Card className="p-3.5 border-blue-200 bg-blue-50/40">
+                <Card className="p-3.5 border-blue-200 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-900/20">
                   <div className="flex items-start gap-2.5">
                     <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-0.5">
                       <span className="text-white text-[10px] font-bold">G</span>
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-bold text-blue-900 uppercase tracking-wider mb-1.5">Generator Notes (tech only)</p>
+                      <p className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider mb-1.5">Generator Notes (tech only)</p>
                       {!isClosed ? (
                         <Textarea
                           value={generatorNotes}
                           onChange={e => handleGeneratorNotesUpdate(e.target.value)}
-                          className="text-sm rounded-xl resize-none border-blue-200 bg-white/60 min-h-[70px]"
+                          className="text-sm rounded-xl resize-none border-blue-200 dark:border-blue-700 bg-white/60 dark:bg-gray-800/60 dark:text-gray-100 min-h-[70px]"
                           rows={3}
                           placeholder="Fault codes, battery voltage, oil condition, anything for next tech..."
                         />
                       ) : (
-                        generatorNotes ? <p className="text-sm text-blue-800 leading-relaxed">{generatorNotes}</p> : null
+                        generatorNotes ? <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">{generatorNotes}</p> : null
                       )}
                     </div>
                   </div>

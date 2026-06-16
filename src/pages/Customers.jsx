@@ -73,9 +73,9 @@ function CustomerCard({ customer }) {
   let svcBadge = null;
   if (svc) {
     const { daysUntilDue, dueDate } = svc;
-    if (daysUntilDue < 0) svcBadge = { label: `${Math.abs(daysUntilDue)}d overdue`, style: "text-red-700 bg-red-50 border-red-200" };
-    else if (daysUntilDue <= 30) svcBadge = { label: `Due in ${daysUntilDue}d`, style: "text-amber-700 bg-amber-50 border-amber-200" };
-    else if (daysUntilDue <= 90) svcBadge = { label: `Due ${dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, style: "text-blue-700 bg-blue-50 border-blue-200" };
+    if (daysUntilDue < 0) svcBadge = { label: `${Math.abs(daysUntilDue)}d overdue`, style: "text-red-700 bg-red-50 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700" };
+    else if (daysUntilDue <= 30) svcBadge = { label: `Due in ${daysUntilDue}d`, style: "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700" };
+    else if (daysUntilDue <= 90) svcBadge = { label: `Due ${dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, style: "text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700" };
   }
 
   return (
@@ -110,7 +110,7 @@ function CustomerCard({ customer }) {
               {customer.last_service_date ? `Last service: ${formatDate(customer.last_service_date)}` : "Never serviced"}
             </p>
             {customer.membership_plan && customer.membership_signed && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200/60 shrink-0">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200/60 shrink-0 dark:bg-green-900 dark:text-green-200 dark:border-green-700/60">
                 <Shield className="w-2.5 h-2.5" /> Member
               </span>
             )}
@@ -160,15 +160,15 @@ function CallListCard({ customer, category }) {
   const { daysUntilDue, dueDate } = svc;
 
   const categoryStyle = {
-    overdue: "border-red-200 bg-red-50/60",
-    due_soon: "border-amber-200 bg-amber-50/60",
-    upcoming: "border-blue-100 bg-blue-50/40",
+    overdue: "border-red-200 bg-red-50/60 dark:border-red-700 dark:bg-red-900/20",
+    due_soon: "border-amber-200 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20",
+    upcoming: "border-blue-100 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-900/20",
   }[category];
 
   const labelStyle = {
-    overdue: "text-red-700 bg-red-100",
-    due_soon: "text-amber-700 bg-amber-100",
-    upcoming: "text-blue-700 bg-blue-100",
+    overdue: "text-red-700 bg-red-100 dark:text-red-200 dark:bg-red-900",
+    due_soon: "text-amber-700 bg-amber-100 dark:text-amber-200 dark:bg-amber-900",
+    upcoming: "text-blue-700 bg-blue-100 dark:text-blue-200 dark:bg-blue-900",
   }[category];
 
   const dueLabel = daysUntilDue < 0
@@ -205,7 +205,7 @@ function CallListCard({ customer, category }) {
             )}
             <Link
               to={`/jobs/new?customer=${customer.id}`}
-              className="flex items-center gap-1 text-xs font-semibold text-primary border border-primary rounded-lg px-2.5 py-1.5 hover:bg-primary/5 active:scale-95 transition-all bg-white"
+              className="flex items-center gap-1 text-xs font-semibold text-primary border border-primary rounded-lg px-2.5 py-1.5 hover:bg-primary/5 active:scale-95 transition-all bg-white dark:bg-gray-800"
             >
               <Calendar className="w-3.5 h-3.5" /> Schedule
             </Link>

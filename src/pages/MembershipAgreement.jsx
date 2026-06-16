@@ -319,17 +319,17 @@ export default function MembershipAgreement() {
           </div>
         </div>
         <div className="p-4 space-y-4 max-w-lg mx-auto">
-          <Card className="p-5 border-emerald-200 bg-emerald-50">
+          <Card className="p-5 border-emerald-200 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/20">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
                 <Shield className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-900">Active Member</p>
-                <p className="text-xs text-emerald-700">{PLANS[customer.membership_plan]?.name}</p>
+                <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Active Member</p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">{PLANS[customer.membership_plan]?.name}</p>
               </div>
             </div>
-            <div className="text-sm space-y-1 text-emerald-800">
+            <div className="text-sm space-y-1 text-emerald-800 dark:text-emerald-200">
               <p><span className="font-medium">Started:</span> {formatDate(customer.membership_start)}</p>
               <p><span className="font-medium">Expires:</span> {formatDate(customer.membership_expiry)}</p>
             </div>
@@ -377,7 +377,7 @@ export default function MembershipAgreement() {
 
             {Object.entries(PLANS).map(([key, p]) => (
               <button key={key} onClick={() => setSelectedPlan(key)} className="w-full text-left">
-                <Card className={`p-4 border-2 transition-all ${selectedPlan === key ? (key === "annual" ? "border-blue-500 bg-blue-50" : "border-emerald-500 bg-emerald-50") : "border-border"}`}>
+                <Card className={`p-4 border-2 transition-all ${selectedPlan === key ? (key === "annual" ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20") : "border-border"}`}>
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="text-sm font-bold">{p.name}</p>
@@ -501,8 +501,8 @@ export default function MembershipAgreement() {
         {/* DONE */}
         {step === "done" && (
           <div className="text-center py-8 space-y-4">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-              <Shield className="w-10 h-10 text-green-600" />
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto dark:bg-green-900">
+              <Shield className="w-10 h-10 text-green-600 dark:text-green-300" />
             </div>
             <div>
               <h2 className="text-xl font-bold">Membership Active!</h2>
