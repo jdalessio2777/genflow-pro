@@ -316,7 +316,7 @@ export default function DocumentFill() {
             </div>
           ) : (
             <label
-              className="flex items-center justify-center gap-2 h-16 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center gap-2 h-16 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               style={{ borderColor: "#ddd" }}
             >
               <Camera className="w-5 h-5 text-gray-400" />
@@ -543,7 +543,7 @@ export default function DocumentFill() {
       {/* Form body */}
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 0" }}>
         {saveMutation.isPending && (
-          <div className="flex items-center gap-2 text-xs text-gray-400 py-1 no-print">
+          <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 py-1 no-print">
             <Loader2 className="w-3 h-3 animate-spin" /> Saving...
           </div>
         )}

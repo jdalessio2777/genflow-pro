@@ -1,28 +1,28 @@
 import { cn } from "@/lib/utils";
 
 const statusStyles = {
-  quote:       "bg-violet-100 text-violet-700 border border-violet-200/60",
-  quote_sent:  "bg-sky-100 text-sky-700 border border-sky-200/60",
-  scheduled:   "bg-blue-100 text-blue-700 border border-blue-200/60",
-  in_progress: "bg-amber-100 text-amber-700 border border-amber-200/60",
-  completed:   "bg-green-100 text-green-700 border border-green-200/60",
-  invoiced:    "bg-emerald-100 text-emerald-700 border border-emerald-200/60",
-  dispatched:  "bg-cyan-100 text-cyan-700 border border-cyan-200/60",
-  on_site:     "bg-amber-100 text-amber-700 border border-amber-200/60",
-  canceled:    "bg-red-100 text-red-600 border border-red-200/60",
-  draft:       "bg-gray-100 text-gray-600 border border-gray-200/60",
-  sent:        "bg-blue-100 text-blue-700 border border-blue-200/60",
-  paid:        "bg-green-100 text-green-700 border border-green-200/60",
-  overdue:     "bg-red-100 text-red-700 border border-red-200/60",
-  active:      "bg-green-100 text-green-700 border border-green-200/60",
-  inactive:    "bg-gray-100 text-gray-500 border border-gray-200/60",
-  maintenance:          "bg-blue-100 text-blue-700 border border-blue-200/60",
-  diagnostic_repair:   "bg-orange-100 text-orange-700 border border-orange-200/60",
-  emergency:           "bg-red-100 text-red-700 border border-red-200/60",
-  battery_replacement: "bg-amber-100 text-amber-700 border border-amber-200/60",
-  warranty:            "bg-violet-100 text-violet-700 border border-violet-200/60",
-  inspection:          "bg-purple-100 text-purple-700 border border-purple-200/60",
-  other:               "bg-gray-100 text-gray-600 border border-gray-200/60",
+  quote:       "bg-violet-100 text-violet-700 border border-violet-200/60 dark:bg-violet-900 dark:text-violet-200 dark:border-violet-700/60",
+  quote_sent:  "bg-sky-100 text-sky-700 border border-sky-200/60 dark:bg-sky-900 dark:text-sky-200 dark:border-sky-700/60",
+  scheduled:   "bg-blue-100 text-blue-700 border border-blue-200/60 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700/60",
+  in_progress: "bg-amber-100 text-amber-700 border border-amber-200/60 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-700/60",
+  completed:   "bg-green-100 text-green-700 border border-green-200/60 dark:bg-green-900 dark:text-green-200 dark:border-green-700/60",
+  invoiced:    "bg-emerald-100 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-900 dark:text-emerald-200 dark:border-emerald-700/60",
+  dispatched:  "bg-cyan-100 text-cyan-700 border border-cyan-200/60 dark:bg-cyan-900 dark:text-cyan-200 dark:border-cyan-700/60",
+  on_site:     "bg-amber-100 text-amber-700 border border-amber-200/60 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-700/60",
+  canceled:    "bg-red-100 text-red-600 border border-red-200/60 dark:bg-red-900 dark:text-red-200 dark:border-red-700/60",
+  draft:       "bg-gray-100 text-gray-600 border border-gray-200/60 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600/60",
+  sent:        "bg-blue-100 text-blue-700 border border-blue-200/60 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700/60",
+  paid:        "bg-green-100 text-green-700 border border-green-200/60 dark:bg-green-900 dark:text-green-200 dark:border-green-700/60",
+  overdue:     "bg-red-100 text-red-700 border border-red-200/60 dark:bg-red-900 dark:text-red-200 dark:border-red-700/60",
+  active:      "bg-green-100 text-green-700 border border-green-200/60 dark:bg-green-900 dark:text-green-200 dark:border-green-700/60",
+  inactive:    "bg-gray-100 text-gray-500 border border-gray-200/60 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600/60",
+  maintenance:          "bg-blue-100 text-blue-700 border border-blue-200/60 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700/60",
+  diagnostic_repair:   "bg-orange-100 text-orange-700 border border-orange-200/60 dark:bg-orange-900 dark:text-orange-200 dark:border-orange-700/60",
+  emergency:           "bg-red-100 text-red-700 border border-red-200/60 dark:bg-red-900 dark:text-red-200 dark:border-red-700/60",
+  battery_replacement: "bg-amber-100 text-amber-700 border border-amber-200/60 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-700/60",
+  warranty:            "bg-violet-100 text-violet-700 border border-violet-200/60 dark:bg-violet-900 dark:text-violet-200 dark:border-violet-700/60",
+  inspection:          "bg-purple-100 text-purple-700 border border-purple-200/60 dark:bg-purple-900 dark:text-purple-200 dark:border-purple-700/60",
+  other:               "bg-gray-100 text-gray-600 border border-gray-200/60 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600/60",
 };
 
 const labels = {
@@ -54,7 +54,7 @@ export default function StatusBadge({ status, className }) {
   return (
     <span className={cn(
       "inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-semibold capitalize whitespace-nowrap",
-      statusStyles[status] || "bg-gray-100 text-gray-600 border border-gray-200/60",
+      statusStyles[status] || "bg-gray-100 text-gray-600 border border-gray-200/60 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600/60",
       className
     )}>
       {labels[status] || status}

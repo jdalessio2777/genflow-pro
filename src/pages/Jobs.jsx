@@ -314,7 +314,7 @@ export default function Jobs() {
                             <p className="text-xs text-muted-foreground mt-0.5">{formatJobDate(job.scheduled_date, use24h)}</p>
                           )}
                           {customerMap[job.customer_id]?.property_notes && (
-                            <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
+                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-center gap-1">
                               <span>⚠</span>
                               <span className="truncate">{customerMap[job.customer_id].property_notes}</span>
                             </p>

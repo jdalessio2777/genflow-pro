@@ -324,19 +324,19 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   </div>
                 </div>
                 <button type="button" onClick={() => setForm(f => ({...f, charge_for_part: !f.charge_for_part}))}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${form.charge_for_part ? "border-green-500 bg-green-50 text-green-700" : "border-border bg-muted/30 text-muted-foreground"}`}>
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${form.charge_for_part ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-300" : "border-border bg-muted/30 text-muted-foreground"}`}>
                   <span className="text-sm font-medium">Charge customer for this part</span>
                   <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 ${form.charge_for_part ? "bg-green-500" : "bg-muted-foreground/30"}`}>
                     <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.charge_for_part ? "translate-x-5" : "translate-x-0"}`} />
                   </div>
                 </button>
                 {isMember && form.charge_for_part && form.price > 0 && (
-                  <p className="text-xs text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-lg px-3 py-2">
                     🛡️ Member price: ${(Math.round(form.price * memberDiscountRate * 100) / 100).toFixed(2)} ({Math.round((1-memberDiscountRate)*100)}% off ${form.price.toFixed(2)})
                   </p>
                 )}
                 <button type="button" onClick={() => setForm(f => ({...f, save_to_catalog: !f.save_to_catalog}))}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${form.save_to_catalog ? "border-blue-400 bg-blue-50 text-blue-700" : "border-border bg-muted/30 text-muted-foreground"}`}>
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${form.save_to_catalog ? "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-300" : "border-border bg-muted/30 text-muted-foreground"}`}>
                   <div className="text-left">
                     <p className="text-sm font-medium">Save to parts catalog</p>
                     <p className="text-xs opacity-75">Available for future jobs</p>
@@ -373,7 +373,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({...f, price: parseFloat(e.target.value) || 0}))} className="mt-1" disabled={!form.charge_for_part} /></div>
                 </div>
                 <button type="button" onClick={() => setForm(f => ({...f, charge_for_part: !f.charge_for_part}))}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${form.charge_for_part ? "border-green-500 bg-green-50 text-green-700" : "border-border bg-muted/30 text-muted-foreground"}`}>
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${form.charge_for_part ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-300" : "border-border bg-muted/30 text-muted-foreground"}`}>
                   <span className="text-sm font-medium">Charge for part</span>
                   <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 ${form.charge_for_part ? "bg-green-500" : "bg-muted-foreground/30"}`}>
                     <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.charge_for_part ? "translate-x-5" : "translate-x-0"}`} />
@@ -403,7 +403,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium">{part.name}</p>
                     {part.charge_for_part ? (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">Charged</span>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">Charged</span>
                     ) : (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">No Charge</span>
                     )}

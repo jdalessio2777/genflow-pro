@@ -29,8 +29,8 @@ const SOURCE_LABELS = {
 };
 
 const SOURCE_COLORS = {
-  website_form: "bg-blue-100 text-blue-700",
-  nextiva_voicemail: "bg-purple-100 text-purple-700",
+  website_form: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
+  nextiva_voicemail: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200",
 };
 
 export default function Inbox() {
@@ -131,13 +131,13 @@ export default function Inbox() {
     const isOverdue = daysUntilDue < 0;
     const hasActiveJob = activeJobCustomerIds.has(customer.id);
     return (
-      <Card className={`p-3.5 ${isOverdue ? "border-red-200" : "border-amber-200"}`}>
+      <Card className={`p-3.5 ${isOverdue ? "border-red-200 dark:border-red-700" : "border-amber-200 dark:border-amber-700"}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-semibold">{customer.name}</p>
               {hasActiveJob && (
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 flex items-center gap-0.5">
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 flex items-center gap-0.5">
                   <CheckCircle2 className="w-2.5 h-2.5" /> Scheduled
                 </span>
               )}
@@ -187,7 +187,7 @@ export default function Inbox() {
                 {SOURCE_LABELS[lead.source] || lead.source}
               </span>
               {isNew && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-red-100 text-red-700">NEW</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200">NEW</span>
               )}
             </div>
             {lead.phone && <p className="text-xs text-muted-foreground">{lead.phone}</p>}

@@ -82,29 +82,29 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Card className="p-3.5 border-green-200 bg-green-50">
+        <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp className="w-4 h-4 text-green-600" />
-            <p className="text-xs font-semibold text-green-800">Revenue</p>
+            <p className="text-xs font-semibold text-green-800 dark:text-green-200">Revenue</p>
           </div>
-          <p className="text-2xl font-bold text-green-700">{formatCurrency(revenue)}</p>
-          <p className="text-xs text-green-600 mt-0.5">{paidInvoices.length} paid invoice{paidInvoices.length !== 1 ? "s" : ""}</p>
+          <p className="text-2xl font-bold text-green-700 dark:text-green-300">{formatCurrency(revenue)}</p>
+          <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">{paidInvoices.length} paid invoice{paidInvoices.length !== 1 ? "s" : ""}</p>
         </Card>
 
-        <Card className="p-3.5 border-red-200 bg-red-50">
+        <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
           <div className="flex items-center gap-2 mb-1">
             <TrendingDown className="w-4 h-4 text-red-600" />
-            <p className="text-xs font-semibold text-red-800">Expenses</p>
+            <p className="text-xs font-semibold text-red-800 dark:text-red-200">Expenses</p>
           </div>
-          <p className="text-2xl font-bold text-red-700">{formatCurrency(expenseTotal)}</p>
-          <p className="text-xs text-red-600 mt-0.5">{periodExpenses.length} expense{periodExpenses.length !== 1 ? "s" : ""}</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-red-300">{formatCurrency(expenseTotal)}</p>
+          <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{periodExpenses.length} expense{periodExpenses.length !== 1 ? "s" : ""}</p>
         </Card>
 
-        <Card className={`p-3.5 col-span-2 ${netProfit >= 0 ? "border-blue-200 bg-blue-50" : "border-red-200 bg-red-50"}`}>
+        <Card className={`p-3.5 col-span-2 ${netProfit >= 0 ? "border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20" : "border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20"}`}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-muted-foreground">Net Profit</p>
-              <p className={`text-3xl font-bold ${netProfit >= 0 ? "text-blue-700" : "text-red-700"}`}>{formatCurrency(netProfit)}</p>
+              <p className={`text-3xl font-bold ${netProfit >= 0 ? "text-blue-700 dark:text-blue-300" : "text-red-700 dark:text-red-300"}`}>{formatCurrency(netProfit)}</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-muted-foreground">Mileage deduction</p>
@@ -116,16 +116,16 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
       </div>
 
       {outstanding > 0 && (
-        <Card className="p-3.5 border-amber-200 bg-amber-50">
+        <Card className="p-3.5 border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-amber-600" />
+              <Receipt className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <div>
-                <p className="text-sm font-bold text-amber-900">Outstanding</p>
-                <p className="text-xs text-amber-700">{outstandingInvoices.length} sent invoice{outstandingInvoices.length !== 1 ? "s" : ""} unpaid</p>
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-200">Outstanding</p>
+                <p className="text-xs text-amber-700 dark:text-amber-300">{outstandingInvoices.length} sent invoice{outstandingInvoices.length !== 1 ? "s" : ""} unpaid</p>
               </div>
             </div>
-            <p className="text-lg font-bold text-amber-700">{formatCurrency(outstanding)}</p>
+            <p className="text-lg font-bold text-amber-700 dark:text-amber-300">{formatCurrency(outstanding)}</p>
           </div>
         </Card>
       )}
@@ -137,25 +137,25 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
         const aged7 = outstandingInvoices.filter(i => { const d = (now - new Date(i.updated_date || i.created_date)) / 86400000; return d >= 7 && d < 14; });
         if (aged7.length === 0 && aged14.length === 0 && aged30.length === 0) return null;
         return (
-          <Card className="p-3.5 border-amber-200 bg-amber-50/50">
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-2.5">Invoice Aging</p>
+          <Card className="p-3.5 border-amber-200 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-900/20">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200 mb-2.5">Invoice Aging</p>
             <div className="space-y-2">
               {aged30.length > 0 && (
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500 shrink-0" /><p className="text-xs font-semibold text-red-700">30+ days unpaid</p></div>
-                  <div className="text-right"><p className="text-xs font-bold text-red-700">{aged30.length} invoice{aged30.length !== 1 ? "s" : ""}</p><p className="text-xs text-red-600">{formatCurrency(aged30.reduce((s, i) => s + (i.total || 0), 0))}</p></div>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500 shrink-0" /><p className="text-xs font-semibold text-red-700 dark:text-red-300">30+ days unpaid</p></div>
+                  <div className="text-right"><p className="text-xs font-bold text-red-700 dark:text-red-300">{aged30.length} invoice{aged30.length !== 1 ? "s" : ""}</p><p className="text-xs text-red-600 dark:text-red-400">{formatCurrency(aged30.reduce((s, i) => s + (i.total || 0), 0))}</p></div>
                 </div>
               )}
               {aged14.length > 0 && (
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" /><p className="text-xs font-semibold text-amber-800">14–29 days unpaid</p></div>
-                  <div className="text-right"><p className="text-xs font-bold text-amber-800">{aged14.length} invoice{aged14.length !== 1 ? "s" : ""}</p><p className="text-xs text-amber-700">{formatCurrency(aged14.reduce((s, i) => s + (i.total || 0), 0))}</p></div>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" /><p className="text-xs font-semibold text-amber-800 dark:text-amber-300">14–29 days unpaid</p></div>
+                  <div className="text-right"><p className="text-xs font-bold text-amber-800 dark:text-amber-300">{aged14.length} invoice{aged14.length !== 1 ? "s" : ""}</p><p className="text-xs text-amber-700 dark:text-amber-400">{formatCurrency(aged14.reduce((s, i) => s + (i.total || 0), 0))}</p></div>
                 </div>
               )}
               {aged7.length > 0 && (
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" /><p className="text-xs font-semibold text-yellow-800">7–13 days unpaid</p></div>
-                  <div className="text-right"><p className="text-xs font-bold text-yellow-800">{aged7.length} invoice{aged7.length !== 1 ? "s" : ""}</p><p className="text-xs text-yellow-700">{formatCurrency(aged7.reduce((s, i) => s + (i.total || 0), 0))}</p></div>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" /><p className="text-xs font-semibold text-yellow-800 dark:text-yellow-300">7–13 days unpaid</p></div>
+                  <div className="text-right"><p className="text-xs font-bold text-yellow-800 dark:text-yellow-300">{aged7.length} invoice{aged7.length !== 1 ? "s" : ""}</p><p className="text-xs text-yellow-700 dark:text-yellow-400">{formatCurrency(aged7.reduce((s, i) => s + (i.total || 0), 0))}</p></div>
                 </div>
               )}
             </div>
@@ -601,10 +601,10 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Card className="p-3.5 border-purple-200 bg-purple-50">
-          <p className="text-xs font-semibold text-purple-700 mb-0.5">This Year</p>
-          <p className="text-xl font-bold text-purple-800">{yearMiles.toFixed(1)} mi</p>
-          <p className="text-xs text-purple-600 font-medium">{formatCurrency(yearMiles * IRS_RATE)} deduction</p>
+        <Card className="p-3.5 border-purple-200 bg-purple-50 dark:border-purple-700 dark:bg-purple-900/20">
+          <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-0.5">This Year</p>
+          <p className="text-xl font-bold text-purple-800 dark:text-purple-200">{yearMiles.toFixed(1)} mi</p>
+          <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">{formatCurrency(yearMiles * IRS_RATE)} deduction</p>
         </Card>
         <Card className="p-3.5">
           <p className="text-xs font-semibold text-muted-foreground mb-0.5">
@@ -690,18 +690,18 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
                 </Button>
               )}
               {distanceError && (
-                <Card className="p-3 border-red-200 bg-red-50">
-                  <p className="text-xs text-red-700">{distanceError}</p>
-                  <button className="text-xs text-red-600 underline mt-1" onClick={() => setDistanceError(null)}>Try again</button>
+                <Card className="p-3 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
+                  <p className="text-xs text-red-700 dark:text-red-300">{distanceError}</p>
+                  <button className="text-xs text-red-600 dark:text-red-400 underline mt-1" onClick={() => setDistanceError(null)}>Try again</button>
                 </Card>
               )}
               {estimatedMiles !== null && (
-                <Card className="p-3.5 border-purple-200 bg-purple-50">
+                <Card className="p-3.5 border-purple-200 bg-purple-50 dark:border-purple-700 dark:bg-purple-900/20">
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <p className="text-xs font-semibold text-purple-700">Driving Distance</p>
-                      <p className="text-2xl font-bold text-purple-800">{estimatedMiles} miles</p>
-                      <p className="text-xs text-purple-600">{formatCurrency(estimatedMiles * IRS_RATE)} deduction</p>
+                      <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">Driving Distance</p>
+                      <p className="text-2xl font-bold text-purple-800 dark:text-purple-200">{estimatedMiles} miles</p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">{formatCurrency(estimatedMiles * IRS_RATE)} deduction</p>
                     </div>
                     <button onClick={() => { setEstimatedMiles(null); setDistanceError(null); }} className="text-xs text-muted-foreground underline self-start">Recalculate</button>
                   </div>
@@ -892,15 +892,15 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
 
   return (
     <div className="space-y-4">
-      <Card className="p-4 border-blue-200 bg-blue-50">
-        <p className="text-xs font-bold uppercase tracking-wider text-blue-800 mb-3">{year} Year-to-Date Summary</p>
+      <Card className="p-4 border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20">
+        <p className="text-xs font-bold uppercase tracking-wider text-blue-800 dark:text-blue-200 mb-3">{year} Year-to-Date Summary</p>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-semibold text-green-600">{formatCurrency(yearRevenue)}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Business Expenses</span><span className="font-semibold text-red-600">− {formatCurrency(yearExpenses)}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Mileage Deduction ({yearMiles.toLocaleString()} mi)</span><span className="font-semibold text-red-600">− {formatCurrency(yearMileageDeduction)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(yearRevenue)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Business Expenses</span><span className="font-semibold text-red-600 dark:text-red-400">− {formatCurrency(yearExpenses)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Mileage Deduction ({yearMiles.toLocaleString()} mi)</span><span className="font-semibold text-red-600 dark:text-red-400">− {formatCurrency(yearMileageDeduction)}</span></div>
           <div className="border-t pt-2 flex justify-between font-bold text-base">
             <span>Est. Net Profit</span>
-            <span className={yearNetProfit >= 0 ? "text-blue-700" : "text-red-700"}>{formatCurrency(yearNetProfit)}</span>
+            <span className={yearNetProfit >= 0 ? "text-blue-700 dark:text-blue-300" : "text-red-700 dark:text-red-300"}>{formatCurrency(yearNetProfit)}</span>
           </div>
         </div>
       </Card>
@@ -925,9 +925,9 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
         );
       })}
 
-      <Card className="p-3.5 border-amber-200 bg-amber-50">
-        <p className="text-xs font-bold text-amber-800 mb-1">⚠ Important Note</p>
-        <p className="text-xs text-amber-700 leading-relaxed">
+      <Card className="p-3.5 border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20">
+        <p className="text-xs font-bold text-amber-800 dark:text-amber-200 mb-1">⚠ Important Note</p>
+        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
           These figures are estimates for planning purposes only. Self-employment tax (~15.3%), deductible business expenses, and other factors will affect your actual tax liability. Share these numbers with your accountant for accurate quarterly estimated tax payments.
         </p>
       </Card>
