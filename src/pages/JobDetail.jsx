@@ -413,6 +413,9 @@ export default function JobDetail() {
         })),
       ];
 
+      const approvalToken = crypto.randomUUID();
+      await db.Job.update(id, { quote_approval_token: approvalToken });
+
       if (googleToken && customer) {
         await sendQuoteEmail({
           customer,
@@ -422,11 +425,13 @@ export default function JobDetail() {
           discount: 0,
           total,
           accessToken: googleToken,
+          approvalToken,
         });
         updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
         toast.success(`Quote sent to ${email}`);
       } else {
-        const plainBody = `Service Quote: ${job?.title}\n\nEstimated Total: $${total.toFixed(2)}\n\nCall (973) 787-2431 or reply to approve.`;
+        const approveUrl = `https://genshieldservice.com/approve?job=${id}&token=${approvalToken}`;
+        const plainBody = `Service Quote: ${job?.title}\n\nEstimated Total: $${total.toFixed(2)}\n\nApprove online: ${approveUrl}\n\nOr call (973) 787-2431 or reply to approve.`;
         window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Service Quote — GenShield Generator Service')}&body=${encodeURIComponent(plainBody)}`, '_blank');
         updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
         toast.success(`Email drafted — send it and the status has been updated`);

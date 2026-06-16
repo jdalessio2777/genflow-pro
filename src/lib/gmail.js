@@ -49,8 +49,8 @@ export async function sendRawEmail({ to, subject, html, accessToken }) {
   }
 }
 
-export async function sendQuoteEmail({ customer, job, lineItems, subtotal, discount, total, accessToken }) {
-  const approveUrl = `https://genshieldservice.com/approve?job=${job.id}`
+export async function sendQuoteEmail({ customer, job, lineItems, subtotal, discount, total, accessToken, approvalToken }) {
+  const approveUrl = `https://genshieldservice.com/approve?job=${job.id}&token=${approvalToken}`
   const html = quoteEmailHTML({ customer, job, lineItems, subtotal, discount, total, approveUrl })
   return sendRawEmail({
     to: customer.email,
