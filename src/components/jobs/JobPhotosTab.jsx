@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
+import { compressImage } from "@/lib/compressImage";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -30,7 +31,8 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await integrationsCore.UploadFile({ file });
+      const compressed = await compressImage(file);
+      const { file_url } = await integrationsCore.UploadFile({ file: compressed });
       await db.JobPhoto.create({
         job_id: jobId,
         url: file_url,
