@@ -7,6 +7,8 @@ import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText,
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
+import { formatTime } from "@/lib/formatTime";
+import { usePreferences } from "@/hooks/usePreferences";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 
@@ -76,6 +78,7 @@ function StatCard({ icon: Icon, label, value, sub, color }) {
 }
 
 export default function Dashboard() {
+  const { use24h } = usePreferences();
   const { data: jobs = [] } = useQuery({
     queryKey: ["jobs"],
     queryFn: () => db.Job.list("-created_date", 100),
@@ -225,7 +228,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-medium text-primary">
-                          {new Date(job.scheduled_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {formatTime(job.scheduled_date, use24h)}
                         </span>
                         <StatusBadge status={job.status} />
                       </div>

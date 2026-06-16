@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { usePreferences } from "@/hooks/usePreferences";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -155,6 +156,7 @@ function PartsItemList({ category, parts }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", part_number: "", cost: 0, default_price: 0, in_stock: 0 });
+  const { confirmDelete } = usePreferences();
 
   const knownKeys = ALL_CATALOG_PART_KEYS;
   const items = category.key === "other"
@@ -225,7 +227,7 @@ function PartsItemList({ category, parts }) {
                       </div>
                       <button onClick={() => updateMutation.mutate({ id: part.id, data: { in_stock: (part.in_stock || 0) + 1 } })} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">+</button>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </Button>
                   </div>
@@ -244,6 +246,7 @@ function LaborRatesList() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", rate: 115, cost_rate: 0, notes: "" });
+  const { confirmDelete } = usePreferences();
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const hourly = rates.filter(r => r.type === "hourly");
@@ -286,7 +289,7 @@ function LaborRatesList() {
                 <div><p className="text-sm font-medium">{r.name}</p>{r.notes && <p className="text-xs text-muted-foreground italic">{r.notes}</p>}</div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold">{formatCurrency(r.rate)}/hr</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
                 </div>
@@ -337,6 +340,7 @@ function FlatRatesItemList({ folder }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
+  const { confirmDelete } = usePreferences();
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
@@ -386,7 +390,7 @@ function FlatRatesItemList({ folder }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-sm font-semibold">{formatCurrency(r.flat_price)}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
                 </div>
@@ -404,6 +408,7 @@ function MaintenanceList() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
+  const { confirmDelete } = usePreferences();
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const items = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
@@ -477,7 +482,7 @@ function MaintenanceList() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-sm font-semibold text-green-600">{formatCurrency(r.flat_price)}</span>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </Button>
                   </div>

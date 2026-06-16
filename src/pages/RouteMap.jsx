@@ -6,10 +6,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MapPin, Navigation, Clock, ExternalLink, Phone } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
+import { formatTime } from "@/lib/formatTime";
+import { usePreferences } from "@/hooks/usePreferences";
 
 export default function RouteMap() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [techView, setTechView] = useState("all");
+  const { use24h } = usePreferences();
 
   const { data: jobs = [] } = useQuery({
     queryKey: ["jobs"],
@@ -115,7 +118,7 @@ export default function RouteMap() {
                           <p className="text-xs text-primary font-medium">{job.customer_name}</p>
                         </div>
                         <span className="text-xs text-muted-foreground shrink-0 font-medium">
-                          {new Date(job.scheduled_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {formatTime(job.scheduled_date, use24h)}
                         </span>
                       </div>
                       {cust?.address && (

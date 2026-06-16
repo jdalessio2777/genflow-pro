@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Camera, Trash2, ImagePlus } from "lucide-react";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 
 const PHOTO_TYPES = ["before", "after", "issue", "general"];
@@ -14,6 +15,7 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [photoType, setPhotoType] = useState("before");
+  const { confirmDelete } = usePreferences();
 
   const deleteMutation = useMutation({
     mutationFn: (id) => db.JobPhoto.delete(id),
@@ -108,7 +110,7 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
                       {!isClosed && (
                         <button
                           onClick={() => {
-                            if (window.confirm("Remove this photo?")) deleteMutation.mutate(photo.id);
+                            if (!confirmDelete || window.confirm("Remove this photo?")) deleteMutation.mutate(photo.id);
                           }}
                           className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity"
                         >

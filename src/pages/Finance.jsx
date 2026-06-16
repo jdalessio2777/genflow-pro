@@ -16,6 +16,7 @@ import { DollarSign, TrendingUp, TrendingDown, Receipt, Car, Plus, Trash2, FileT
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { useSettings } from "@/lib/useSettings";
 
@@ -235,6 +236,7 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
 function ExpensesTab({ expenses }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { confirmDelete } = usePreferences();
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState(null);
@@ -432,7 +434,7 @@ function ExpensesTab({ expenses }) {
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-sm font-bold text-red-600">{formatCurrency(exp.amount)}</span>
                   <Button variant="ghost" size="icon" className="h-8 w-8"
-                    onClick={() => { if (window.confirm("Delete this expense?")) deleteMutation.mutate(exp.id); }}>
+                    onClick={() => { if (!confirmDelete || window.confirm("Delete this expense?")) deleteMutation.mutate(exp.id); }}>
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
                 </div>
@@ -449,6 +451,7 @@ function ExpensesTab({ expenses }) {
 function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { confirmDelete } = usePreferences();
 
   const [smartOpen, setSmartOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -828,7 +831,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
                               <p className="text-xs text-purple-600">{formatCurrency(entry.miles * IRS_RATE)}</p>
                             </div>
                             <Button variant="ghost" size="icon" className="h-8 w-8"
-                              onClick={() => { if (window.confirm("Delete this trip?")) deleteMutation.mutate(entry.id); }}>
+                              onClick={() => { if (!confirmDelete || window.confirm("Delete this trip?")) deleteMutation.mutate(entry.id); }}>
                               <Trash2 className="w-3.5 h-3.5 text-destructive" />
                             </Button>
                           </div>
