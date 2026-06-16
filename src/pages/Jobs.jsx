@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Wrench, Calendar, Search, CheckCircle2, Trash2, ClipboardList } from "lucide-react";
+import { Plus, Wrench, Calendar, Search, CheckCircle2, Trash2, ClipboardList, Phone, MapPin } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import RewardBadge from "@/components/ui/RewardBadge";
+import SwipeableListItem from "@/components/ui/SwipeableListItem";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 
@@ -206,6 +207,22 @@ export default function Jobs() {
             {techFiltered.map((job, idx) => (
               filter === "completed" ? (
                 <AnimatedListItem key={job.id} index={idx}>
+                <SwipeableListItem
+                  rightActions={[
+                    ...(customerMap[job.customer_id]?.phone ? [{
+                      label: "Call",
+                      icon: <Phone size={18} className="text-white" />,
+                      color: "bg-green-500",
+                      onAction: () => window.open("tel:" + customerMap[job.customer_id].phone),
+                    }] : []),
+                    ...(customerMap[job.customer_id]?.address ? [{
+                      label: "Nav",
+                      icon: <MapPin size={18} className="text-white" />,
+                      color: "bg-blue-500",
+                      onAction: () => window.open("https://maps.apple.com/?address=" + encodeURIComponent(customerMap[job.customer_id].address)),
+                    }] : []),
+                  ]}
+                >
                 <div className="relative">
                   <Link to={`/jobs/${job.id}`}>
                     <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
@@ -257,9 +274,26 @@ export default function Jobs() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
+                </SwipeableListItem>
                 </AnimatedListItem>
               ) : (
                 <AnimatedListItem key={job.id} index={idx}>
+                <SwipeableListItem
+                  rightActions={[
+                    ...(customerMap[job.customer_id]?.phone ? [{
+                      label: "Call",
+                      icon: <Phone size={18} className="text-white" />,
+                      color: "bg-green-500",
+                      onAction: () => window.open("tel:" + customerMap[job.customer_id].phone),
+                    }] : []),
+                    ...(customerMap[job.customer_id]?.address ? [{
+                      label: "Nav",
+                      icon: <MapPin size={18} className="text-white" />,
+                      color: "bg-blue-500",
+                      onAction: () => window.open("https://maps.apple.com/?address=" + encodeURIComponent(customerMap[job.customer_id].address)),
+                    }] : []),
+                  ]}
+                >
                 <div className="relative">
                   <Link to={`/jobs/${job.id}`}>
                     <div className="bg-card border border-border rounded-2xl p-3.5 card-lift hover:border-primary/20 pr-10">
@@ -325,6 +359,7 @@ export default function Jobs() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
+                </SwipeableListItem>
                 </AnimatedListItem>
               )
             ))}
