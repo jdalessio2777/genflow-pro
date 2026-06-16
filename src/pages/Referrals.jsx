@@ -333,19 +333,6 @@ export default function Referrals() {
     onError: () => toast.error("Failed to confirm referral"),
   });
 
-  const applyMutation = useMutation({
-    mutationFn: (id) =>
-      db.ShieldReferral.update(id, {
-        status: "applied",
-        reward_applied: true,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shield-referrals"] });
-      toast.success("Reward marked as applied");
-    },
-    onError: () => toast.error("Failed to update referral"),
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (id) => db.ShieldReferral.delete(id),
     onSuccess: () => {
@@ -498,17 +485,6 @@ export default function Referrals() {
                         disabled={confirmMutation.isPending}
                       >
                         ✓ Confirm
-                      </Button>
-                    )}
-                    {r.status === "confirmed" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2.5 text-xs rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50"
-                        onClick={() => applyMutation.mutate(r.id)}
-                        disabled={applyMutation.isPending}
-                      >
-                        Mark Applied
                       </Button>
                     )}
                     <Button
