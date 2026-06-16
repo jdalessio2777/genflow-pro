@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
@@ -498,10 +498,16 @@ function escapeIlikeTerm(s) {
 
 export default function Catalog() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const [folder, setFolder] = useState(null);
-  const [subFolder, setSubFolder] = useState(null);
-  const [partsCategory, setPartsCategory] = useState(null);
+  const section = searchParams.get("section");
+  const subKey = searchParams.get("sub");
+  const subFolder = section === "flat_rates" && subKey
+    ? FLAT_RATE_FOLDERS.find(f => f.key === subKey) ?? { key: subKey, label: subKey.replace(/_/g, " "), icon: "📦" }
+    : null;
+  const partsCategory = section === "parts" && subKey
+    ? CATALOG_PART_BROWSE_ROWS.find(c => c.key === subKey) ?? { key: subKey, label: subKey.replace(/_/g, " "), icon: "📦" }
+    : null;
   const [search, setSearch] = useState("");
   const [partsBrowseSearch, setPartsBrowseSearch] = useState("");
   const [debouncedPartsBrowse, setDebouncedPartsBrowse] = useState("");
@@ -517,7 +523,7 @@ export default function Catalog() {
 
   const partsBrowseTrim = partsBrowseSearch.trim();
   const partsSearchEnabled =
-    folder === "parts" && !partsCategory && debouncedPartsBrowse.length > 0;
+    section === "parts" && !subKey && debouncedPartsBrowse.length > 0;
 
   const {
     data: partsSearchResults = [],
@@ -562,29 +568,18 @@ export default function Catalog() {
     }
   }, [rates.length]);
 
-  const goBack = () => {
-    if (subFolder) { setSubFolder(null); return; }
-    if (partsCategory) { setPartsCategory(null); return; }
-    if (folder) {
-      setPartsBrowseSearch("");
-      setDebouncedPartsBrowse("");
-      setFolder(null);
-      return;
-    }
-  };
-
   const getTitle = () => {
     if (subFolder) return subFolder.label;
     if (partsCategory) return partsCategory.label;
-    if (folder) return TOP_FOLDERS.find(f => f.key === folder)?.label || "Catalog";
+    if (section) return TOP_FOLDERS.find(f => f.key === section)?.label || "Catalog";
     return "Catalog";
   };
 
   const getSubtitle = () => {
     if (subFolder) return "Flat Rates › " + subFolder.label;
     if (partsCategory) return "Catalog › Parts › " + partsCategory.label;
-    if (folder === "flat_rates") return "Catalog › Flat Rates";
-    if (folder) return "Catalog › " + TOP_FOLDERS.find(f => f.key === folder)?.label;
+    if (section === "flat_rates") return "Catalog › Flat Rates";
+    if (section) return "Catalog › " + TOP_FOLDERS.find(f => f.key === section)?.label;
     return "Tap a folder to browse";
   };
 
@@ -593,12 +588,12 @@ export default function Catalog() {
       <PageHeader
         title={getTitle()}
         subtitle={getSubtitle()}
-        back={folder || subFolder || partsCategory ? goBack : undefined}
+        back={section ? () => navigate(-1) : undefined}
       />
       <div className="px-4 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
 
         {/* Top-level folder list */}
-        {!folder && (
+        {!section && (
           <div className="space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -675,7 +670,7 @@ export default function Catalog() {
                 {TOP_FOLDERS.map(f => {
                   const Icon = f.icon;
                   return (
-                    <button key={f.key} onClick={() => setFolder(f.key)} className="w-full text-left">
+                    <button key={f.key} onClick={() => navigate('/catalog?section=' + f.key)} className="w-full text-left">
                       <Card className="p-4 hover:border-primary/30 hover:bg-muted/20 transition-all active:scale-[0.99]">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3.5">
@@ -698,7 +693,7 @@ export default function Catalog() {
           </div>
         )}
 
-        {folder === "parts" && !partsCategory && (
+        {section === "parts" && !subKey && (
           <div className="space-y-3">
             <div className="flex gap-2 items-center">
               <div className="relative flex-1">
@@ -727,7 +722,7 @@ export default function Catalog() {
             </div>
 
             {!partsBrowseTrim ? (
-              <PartsCategoryList parts={parts} onSelectCategory={setPartsCategory} />
+              <PartsCategoryList parts={parts} onSelectCategory={(cat) => navigate('/catalog?section=parts&sub=' + cat.key)} />
             ) : partsSearchPending ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -774,13 +769,13 @@ export default function Catalog() {
             )}
           </div>
         )}
-        {folder === "parts" && partsCategory && <PartsItemList category={partsCategory} parts={parts} />}
-        {folder === "labor_rates" && <LaborRatesList />}
-        {folder === "flat_rates" && !subFolder && <FlatRatesFolderList onSelectFolder={setSubFolder} />}
-        {folder === "flat_rates" && subFolder && <FlatRatesItemList folder={subFolder} />}
-        {folder === "maintenance" && <MaintenanceList />}
-        {folder === "discounts" && <FlatRatesItemList folder={{ key: "discounts", label: "Discounts", icon: "🏷️" }} />}
-        {folder === "documents" && (
+        {section === "parts" && partsCategory && <PartsItemList category={partsCategory} parts={parts} />}
+        {section === "labor_rates" && <LaborRatesList />}
+        {section === "flat_rates" && !subFolder && <FlatRatesFolderList onSelectFolder={(f) => navigate('/catalog?section=flat_rates&sub=' + f.key)} />}
+        {section === "flat_rates" && subFolder && <FlatRatesItemList folder={subFolder} />}
+        {section === "maintenance" && <MaintenanceList />}
+        {section === "discounts" && <FlatRatesItemList folder={{ key: "discounts", label: "Discounts", icon: "🏷️" }} />}
+        {section === "documents" && (
           <div className="space-y-3">
             <button
               onClick={() => navigate("/catalog/documents/new")}
