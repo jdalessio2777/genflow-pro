@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
@@ -6,7 +7,7 @@ import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Send, CheckCircle2, Loader2, Trash2 } from "lucide-react";
+import { Send, CheckCircle2, Loader2, Trash2, CreditCard } from "lucide-react";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -14,12 +15,14 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
+import StripePaymentModal from "@/components/payments/StripePaymentModal";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [showStripeModal, setShowStripeModal] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
@@ -72,6 +75,40 @@ export default function InvoiceDetail() {
             triggeredBy: getUserDisplayName(user),
           });
         }
+      }
+    );
+  };
+
+  const markStripePaid = async ({ surchargeAmount, paymentIntentId }) => {
+    await updateMutation.mutateAsync(
+      {
+        status: "paid",
+        payment_method: "stripe",
+        paid_date: new Date().toISOString(),
+        surcharge_amount: surchargeAmount,
+        stripe_payment_intent_id: paymentIntentId,
+      },
+      {
+        onSuccess: () => {
+          haptics.success();
+          toast.success("Payment successful");
+          notifyTeam({
+            subject: `Invoice Paid (Stripe) — ${invoice.customer_name} · $${((invoice.total || 0) + surchargeAmount).toFixed(2)}`,
+            body: `
+              <p style="font-size:14px;margin:0 0 4px 0;">${buildEventBadge("Payment Received", "green")}</p>
+              ${buildTable([
+                buildRow("Customer", invoice.customer_name),
+                buildRow("Invoice", invoice.invoice_number),
+                buildRow("Amount", `$${(invoice.total || 0).toFixed(2)}`),
+                surchargeAmount > 0 ? buildRow("Surcharge (3%)", `$${surchargeAmount.toFixed(2)}`) : "",
+                buildRow("Total Charged", `$${((invoice.total || 0) + surchargeAmount).toFixed(2)}`),
+                buildRow("Method", "Stripe (credit/debit card)"),
+                buildRow("Date", new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
+              ].filter(Boolean))}
+            `,
+            triggeredBy: getUserDisplayName(user),
+          });
+        },
       }
     );
   };
@@ -168,6 +205,15 @@ export default function InvoiceDetail() {
                 </Button>
               ))}
             </div>
+            <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-700">
+              <Button
+                variant="outline"
+                className="w-full rounded-xl h-11 gap-2 border-blue-300 dark:border-blue-700 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                onClick={() => setShowStripeModal(true)}
+              >
+                <CreditCard className="w-4 h-4" /> Charge Card (Online)
+              </Button>
+            </div>
           </Card>
         )}
 
@@ -183,6 +229,15 @@ export default function InvoiceDetail() {
           </Card>
         )}
       </div>
+
+      {invoice && (
+        <StripePaymentModal
+          invoice={invoice}
+          open={showStripeModal}
+          onClose={() => setShowStripeModal(false)}
+          onPaid={markStripePaid}
+        />
+      )}
     </div>
   );
 }
