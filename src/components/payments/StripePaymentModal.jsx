@@ -384,7 +384,13 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
           </div>
         )}
 
-        {clientSecret && !loading && (
+        {!stripePromise && !loading && (
+          <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+            Stripe not configured. Contact support.
+          </div>
+        )}
+
+        {clientSecret && !loading && stripePromise && (
           <Elements
             stripe={stripePromise}
             options={{ clientSecret, appearance, paymentMethodCreation: 'manual' }}
