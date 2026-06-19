@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       metadata: { surcharge_amount: String(appliedSurcharge) },
     });
 
-    return res.status(200).json({ ok: true, total: invoice.total + appliedSurcharge });
+    return res.status(200).json({ ok: true, surcharge: appliedSurcharge, total: invoice.total + appliedSurcharge });
   } catch (err) {
     console.error('[update-payment-intent]', err.message);
     return res.status(500).json({ error: err.message });

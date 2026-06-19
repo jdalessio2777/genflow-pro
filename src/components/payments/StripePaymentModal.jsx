@@ -4,7 +4,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useTheme } from 'next-themes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, CreditCard } from 'lucide-react';
+import { Loader2, CreditCard, ShieldCheck } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
@@ -14,37 +14,63 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 const SURCHARGE_RATE = 0.03;
 
 // ─── Inner form (must be inside <Elements>) ───────────────────────────────────
+//
+// Phase machine:
+//   'entry'      — customer filling in card details
+//   'locking'    — POST /api/update-payment-intent in flight
+//   'confirming' — server returned locked {surcharge, total}; credit card only
+//   'submitting' — stripe.confirmPayment in flight
 
 function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClose }) {
   const stripe = useStripe();
   const elements = useElements();
 
-  const [paymentType, setPaymentType] = useState(null); // 'card' | 'apple_pay' | etc.
-  const [funding, setFunding] = useState(null);         // 'credit' | 'debit' | 'prepaid' | 'unknown'
-  const [storedPm, setStoredPm] = useState(null);       // PaymentMethod from createPaymentMethod
+  const [phase, setPhase] = useState('entry');
+  const [paymentType, setPaymentType] = useState(null);
+  const [funding, setFunding] = useState(null);
+  const [storedPm, setStoredPm] = useState(null);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lockedSurcharge, setLockedSurcharge] = useState(null);
+  const [lockedTotal, setLockedTotal] = useState(null);
+  const [lockError, setLockError] = useState(null);
 
   const baseAmount = invoice.total || 0;
-  const surchargeAmount = funding === 'credit'
+
+  // Preview values shown during card entry — never sent to Stripe directly
+  const previewSurcharge = funding === 'credit'
     ? Math.round(baseAmount * SURCHARGE_RATE * 100) / 100
     : 0;
-  const totalAmount = baseAmount + surchargeAmount;
+  const previewTotal = baseAmount + previewSurcharge;
+
+  // Confirmed values are only set after server responds; UI switches to them at that point
+  const isConfirming = phase === 'confirming';
+  const displaySurcharge = isConfirming ? lockedSurcharge : previewSurcharge;
+  const displayTotal     = isConfirming ? lockedTotal     : previewTotal;
+
+  const isLocking    = phase === 'locking';
+  const isSubmitting = phase === 'submitting';
+  const isBusy       = isLocking || isSubmitting;
+  const isEstimate   = phase === 'entry' && funding === 'credit';
+
+  // ── onChange: detect funding type as card is filled in ───────────────────────
 
   const handleChange = useCallback(async (event) => {
     const type = event.value?.type ?? null;
     setPaymentType(type);
     setIsComplete(event.complete);
 
-    // When the card entry becomes incomplete (user edits it), clear stored PM
+    // Card edited back to incomplete: reset everything so the full flow reruns
     if (!event.complete) {
       setStoredPm(null);
       setFunding(null);
+      setPhase('entry');
+      setLockedSurcharge(null);
+      setLockedTotal(null);
+      setLockError(null);
       return;
     }
 
-    // Auto-detect funding type as soon as a full card number is entered
     if (event.complete && type === 'card' && stripe && elements && !storedPm) {
       setIsDetecting(true);
       try {
@@ -54,59 +80,86 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
           setFunding(paymentMethod.card?.funding ?? 'unknown');
         }
       } catch {
-        // Detection failed — user can still pay; surcharge defaults to 0
+        // Detection failed — surcharge preview stays at 0; flow continues normally
       } finally {
         setIsDetecting(false);
       }
     }
   }, [stripe, elements, storedPm]);
 
-  const handleSubmit = async () => {
-    if (!stripe || !elements || !isComplete || isSubmitting) return;
-    setIsSubmitting(true);
+  // ── Pass 1: lock the amount server-side ──────────────────────────────────────
+
+  const handlePay = async () => {
+    if (!stripe || !elements || !isComplete || phase !== 'entry') return;
+    setPhase('locking');
+    setLockError(null);
 
     try {
+      // Ensure we have a payment method (should already exist from auto-detect)
+      let pm = storedPm;
+      if (!pm) {
+        const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({ elements });
+        if (pmErr) throw new Error(pmErr.message);
+        pm = paymentMethod;
+        setStoredPm(pm);
+        setFunding(pm.card?.funding ?? 'unknown');
+      }
+
+      const cardFunding = pm.card?.funding;
+      const clientSurcharge = cardFunding === 'credit'
+        ? Math.round(baseAmount * SURCHARGE_RATE * 100) / 100
+        : 0;
+
+      // Always POST even when surcharge is 0 — this resets the PI amount if the user
+      // previously attempted a credit card and is now retrying with a debit card.
+      const resp = await fetch('/api/update-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_intent_id: paymentIntentId,
+          invoice_id: invoice.id,
+          surcharge_amount: clientSurcharge,
+        }),
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not verify payment amount. Please try again.');
+      }
+
+      // Server is the single source of truth for both values displayed to the customer
+      const { surcharge, total } = await resp.json();
+      setLockedSurcharge(surcharge);
+      setLockedTotal(total);
+
+      if (surcharge > 0) {
+        // Credit card: show the server-confirmed breakdown before charging
+        setPhase('confirming');
+      } else {
+        // Debit / no surcharge: preview already showed $0, so amounts match —
+        // skip the redundant confirm step and charge in one smooth motion
+        await performConfirm(pm, surcharge);
+      }
+    } catch (err) {
+      setLockError(err.message);
+      setPhase('entry');
+    }
+  };
+
+  // ── Pass 2: charge the locked amount ─────────────────────────────────────────
+
+  const performConfirm = async (pm, surcharge) => {
+    setPhase('submitting');
+    try {
       if (paymentType === 'card') {
-        // Card path: we may already have a PM from the auto-detect step
-        let pm = storedPm;
-        if (!pm) {
-          const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({ elements });
-          if (pmErr) throw new Error(pmErr.message);
-          pm = paymentMethod;
-        }
-
-        const cardFunding = pm.card?.funding;
-        const appliedSurcharge = cardFunding === 'credit'
-          ? Math.round(baseAmount * SURCHARGE_RATE * 100) / 100
-          : 0;
-
-        if (appliedSurcharge > 0) {
-          const resp = await fetch('/api/update-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              payment_intent_id: paymentIntentId,
-              invoice_id: invoice.id,
-              surcharge_amount: appliedSurcharge,
-            }),
-          });
-          if (!resp.ok) {
-            const { error: e } = await resp.json().catch(() => ({}));
-            throw new Error(e || 'Failed to apply surcharge');
-          }
-        }
-
-        // Confirm using the already-created PM (does not re-prompt the user)
         const { error: confirmErr } = await stripe.confirmPayment({
           clientSecret,
           confirmParams: { payment_method: pm.id },
           redirect: 'if_required',
         });
         if (confirmErr) throw new Error(confirmErr.message);
-
-        await onSuccess({ surchargeAmount: appliedSurcharge, paymentIntentId });
       } else {
-        // Digital wallet (Apple Pay / Google Pay) — no surcharge, elements handle the native sheet
+        // Digital wallet — no surcharge; native sheet handles PM creation
         const { error: confirmErr } = await stripe.confirmPayment({
           elements,
           clientSecret,
@@ -114,16 +167,28 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
           redirect: 'if_required',
         });
         if (confirmErr) throw new Error(confirmErr.message);
-
-        await onSuccess({ surchargeAmount: 0, paymentIntentId });
       }
+
+      await onSuccess({ surchargeAmount: surcharge, paymentIntentId });
     } catch (err) {
       toast.error(err.message || 'Payment failed. Please try again.');
       haptics.error?.();
-    } finally {
-      setIsSubmitting(false);
+      // Reset to entry so the customer can retry with a different card;
+      // the next handlePay call will re-lock the PI amount correctly.
+      setPhase('entry');
+      setStoredPm(null);
+      setFunding(null);
+      setLockedSurcharge(null);
+      setLockedTotal(null);
     }
   };
+
+  const handleConfirm = () => {
+    if (phase !== 'confirming' || !storedPm || lockedSurcharge === null) return;
+    performConfirm(storedPm, lockedSurcharge);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   const showSurcharge = paymentType === 'card';
   const fundingLabel = funding === 'credit'
@@ -136,9 +201,12 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
 
   return (
     <div className="space-y-4">
-      <PaymentElement onChange={handleChange} />
+      {/* Payment element — visually locked while confirming/submitting to prevent accidental edits */}
+      <div className={isBusy || isConfirming ? 'pointer-events-none opacity-60' : ''}>
+        <PaymentElement onChange={handleChange} />
+      </div>
 
-      {/* Transparent breakdown — always shown once element is visible */}
+      {/* Breakdown */}
       <div className="rounded-xl bg-muted/40 border p-3 space-y-1.5 text-sm">
         {isDetecting && (
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
@@ -146,7 +214,9 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
           </p>
         )}
         {fundingLabel && !isDetecting && (
-          <p className="text-xs text-muted-foreground mb-1">{fundingLabel}</p>
+          <p className={`text-xs mb-1 ${isConfirming ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+            {fundingLabel}
+          </p>
         )}
 
         <div className="flex justify-between">
@@ -155,39 +225,80 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
         </div>
 
         {showSurcharge && (
-          <div className="flex justify-between">
+          <div className={`flex justify-between transition-opacity ${isEstimate ? 'opacity-50' : ''}`}>
             <span className="text-muted-foreground">
-              Card surcharge (3%){funding === null ? ' — detecting…' : ''}
+              Card surcharge (3%)
+              {isEstimate && <span className="ml-1 text-xs">(est.)</span>}
             </span>
-            <span>{funding === 'credit' ? formatCurrency(surchargeAmount) : '$0.00'}</span>
+            <span>{funding === 'credit' ? formatCurrency(displaySurcharge) : '$0.00'}</span>
           </div>
         )}
 
-        <div className="flex justify-between font-semibold border-t pt-1.5 mt-0.5">
-          <span>Total</span>
-          <span>{formatCurrency(totalAmount)}</span>
+        <div className={`flex justify-between font-semibold border-t pt-1.5 mt-0.5 transition-opacity ${isEstimate ? 'opacity-50' : ''}`}>
+          <span>
+            Total{isEstimate && <span className="ml-1 text-xs font-normal text-muted-foreground">(est.)</span>}
+          </span>
+          <span>{formatCurrency(displayTotal)}</span>
         </div>
+
+        {isConfirming && (
+          <div className="flex items-center gap-1.5 pt-0.5 text-xs text-green-600 dark:text-green-400">
+            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+            Amount verified by server — tap Confirm to charge
+          </div>
+        )}
       </div>
 
+      {lockError && (
+        <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+          {lockError}
+        </div>
+      )}
+
       <div className="flex gap-2">
-        <Button
-          variant="outline"
-          className="flex-1 rounded-xl h-11"
-          onClick={onClose}
-          disabled={isSubmitting}
-        >
-          Cancel
-        </Button>
-        <Button
-          className="flex-1 rounded-xl h-11 gap-2"
-          onClick={handleSubmit}
-          disabled={!isComplete || isSubmitting || isDetecting}
-        >
-          {isSubmitting
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <CreditCard className="w-4 h-4" />}
-          {isSubmitting ? 'Processing…' : `Pay ${formatCurrency(totalAmount)}`}
-        </Button>
+        {isConfirming ? (
+          <Button
+            variant="outline"
+            className="rounded-xl h-11 px-4"
+            onClick={() => {
+              setPhase('entry');
+              setLockedSurcharge(null);
+              setLockedTotal(null);
+            }}
+          >
+            ← Change
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            className="flex-1 rounded-xl h-11"
+            onClick={onClose}
+            disabled={isBusy}
+          >
+            Cancel
+          </Button>
+        )}
+
+        {isConfirming ? (
+          <Button
+            className="flex-1 rounded-xl h-11 gap-2 bg-green-600 hover:bg-green-700 text-white dark:bg-green-600 dark:hover:bg-green-700"
+            onClick={handleConfirm}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            {`Confirm ${formatCurrency(lockedTotal)}`}
+          </Button>
+        ) : (
+          <Button
+            className="flex-1 rounded-xl h-11 gap-2"
+            onClick={handlePay}
+            disabled={!isComplete || isBusy || isDetecting}
+          >
+            {isBusy
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <CreditCard className="w-4 h-4" />}
+            {isLocking ? 'Verifying…' : `Pay ${formatCurrency(previewTotal)}`}
+          </Button>
+        )}
       </div>
     </div>
   );
