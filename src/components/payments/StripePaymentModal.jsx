@@ -9,7 +9,8 @@ import { formatCurrency } from '@/lib/utils/format';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
 const SURCHARGE_RATE = 0.03;
 
@@ -316,9 +317,10 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
   // Initialize a PaymentIntent when the modal opens
   useEffect(() => {
     if (!open || clientSecret) return;
-
-    // TEMP: confirm Stripe key is present at runtime
-    console.log('[StripePaymentModal] VITE_STRIPE_PUBLISHABLE_KEY defined:', !!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+    if (!STRIPE_KEY) {
+      setInitError('Stripe publishable key not configured. Add VITE_STRIPE_PUBLISHABLE_KEY to your environment variables.');
+      return;
+    }
 
     setLoading(true);
     setInitError(null);
