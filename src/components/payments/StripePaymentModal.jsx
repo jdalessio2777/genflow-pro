@@ -317,6 +317,9 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
   useEffect(() => {
     if (!open || clientSecret) return;
 
+    // TEMP: confirm Stripe key is present at runtime
+    console.log('[StripePaymentModal] VITE_STRIPE_PUBLISHABLE_KEY defined:', !!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
     setLoading(true);
     setInitError(null);
 

@@ -7,7 +7,7 @@ import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Send, CheckCircle2, Loader2, Trash2, CreditCard } from "lucide-react";
+import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock } from "lucide-react";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -191,8 +191,30 @@ export default function InvoiceDetail() {
         )}
 
         {(invoice.status === "draft" || invoice.status === "sent") && (
+          <Card className="p-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="rounded-xl bg-blue-100 dark:bg-blue-900/60 p-2 shrink-0">
+                <Lock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">Charge Card Online</p>
+                <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">
+                  Securely charge a credit or debit card via Stripe
+                </p>
+              </div>
+            </div>
+            <Button
+              className="w-full rounded-xl h-12 gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+              onClick={() => setShowStripeModal(true)}
+            >
+              <CreditCard className="w-4 h-4" /> Charge Card Online
+            </Button>
+          </Card>
+        )}
+
+        {(invoice.status === "draft" || invoice.status === "sent") && (
           <Card className="p-4 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
-            <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-3 uppercase tracking-wider">Record Payment</p>
+            <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-3 uppercase tracking-wider">Record Payment (Manual)</p>
             <div className="grid grid-cols-3 gap-2">
               {["cash", "card", "check", "zelle", "venmo", "other"].map(method => (
                 <Button
@@ -204,15 +226,6 @@ export default function InvoiceDetail() {
                   <CheckCircle2 className="w-4 h-4 mr-1 text-green-600" /> {method}
                 </Button>
               ))}
-            </div>
-            <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-700">
-              <Button
-                variant="outline"
-                className="w-full rounded-xl h-11 gap-2 border-blue-300 dark:border-blue-700 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                onClick={() => setShowStripeModal(true)}
-              >
-                <CreditCard className="w-4 h-4" /> Charge Card (Online)
-              </Button>
             </div>
           </Card>
         )}
