@@ -1,4 +1,3 @@
-import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 async function readRawBody(req) {
@@ -11,8 +10,10 @@ async function readRawBody(req) {
 }
 
 export default async function handler(req, res) {
+  console.log('[stripe-webhook] handler invoked', req.method);
   if (req.method !== 'POST') return res.status(405).end();
 
+  const { default: Stripe } = await import('stripe');
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   const sig = req.headers['stripe-signature'];
 
@@ -50,7 +51,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true });
     }
 
-    // Idempotent: already marked paid (e.g. browser confirmed before webhook arrived)
     if (invoice.status === 'paid') {
       return res.status(200).json({ received: true, skipped: 'already_paid' });
     }

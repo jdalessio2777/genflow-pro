@@ -1,4 +1,3 @@
-import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 async function readJsonBody(req) {
@@ -14,6 +13,7 @@ async function readJsonBody(req) {
 }
 
 export default async function handler(req, res) {
+  console.log('[update-payment-intent] handler invoked', req.method);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -33,7 +33,6 @@ export default async function handler(req, res) {
       process.env.SUPABASE_SERVICE_ROLE_KEY,
     );
 
-    // Re-fetch invoice server-side — never trust client-sent amounts
     const { data: invoice, error } = await supabase
       .from('invoices')
       .select('id, total')
@@ -42,15 +41,14 @@ export default async function handler(req, res) {
 
     if (error || !invoice) return res.status(404).json({ error: 'Invoice not found' });
 
+    const { default: Stripe } = await import('stripe');
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-    // Verify the PaymentIntent belongs to this invoice before updating
     const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
     if (pi.metadata?.invoice_id !== invoice_id) {
       return res.status(403).json({ error: 'PaymentIntent does not match invoice' });
     }
 
-    // Recompute surcharge server-side (3% of base, capped at client's requested surcharge)
     const maxSurcharge = Math.round(invoice.total * 0.03 * 100) / 100;
     const appliedSurcharge = Math.min(Number(surcharge_amount), maxSurcharge);
     const newAmountCents = Math.round((invoice.total + appliedSurcharge) * 100);

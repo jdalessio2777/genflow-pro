@@ -1,4 +1,3 @@
-import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 async function readJsonBody(req) {
@@ -14,6 +13,7 @@ async function readJsonBody(req) {
 }
 
 export default async function handler(req, res) {
+  console.log('[create-payment-intent] handler invoked', req.method);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -40,6 +40,7 @@ export default async function handler(req, res) {
     if (invoice.status === 'paid') return res.status(400).json({ error: 'Invoice is already paid' });
     if (!invoice.total || invoice.total <= 0) return res.status(400).json({ error: 'Invoice has no amount due' });
 
+    const { default: Stripe } = await import('stripe');
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     const baseAmountCents = Math.round(invoice.total * 100);
 
