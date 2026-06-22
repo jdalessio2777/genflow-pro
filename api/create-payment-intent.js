@@ -9,7 +9,11 @@ export default async function handler(req, res) {
     const Stripe = (await import('stripe')).default;
     console.log('STRIPE IMPORTED');
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2024-06-20',
+      timeout: 30000,
+      maxNetworkRetries: 0,
+    });
     console.log('STRIPE INITIALIZED');
 
     const pi = await stripe.paymentIntents.create({
