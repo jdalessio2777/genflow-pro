@@ -5,7 +5,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useTheme } from 'next-themes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, CreditCard, ShieldCheck, Zap } from 'lucide-react';
+import { Loader2, CreditCard, ShieldCheck, Zap, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
@@ -36,6 +36,8 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
   const [lockedSurcharge, setLockedSurcharge] = useState(null);
   const [lockedTotal, setLockedTotal] = useState(null);
   const [lockError, setLockError] = useState(null);
+  const [stripeAppOpened, setStripeAppOpened] = useState(false);
+  const [confirmingStripeAppPaid, setConfirmingStripeAppPaid] = useState(false);
 
   const baseAmount = invoice.total || 0;
 
@@ -194,7 +196,14 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
     const text = `${formatCurrency(invoice.total)} — ${invoice.customer_name || ''} — ${invoice.id}`;
     try { await navigator.clipboard.writeText(text); } catch { /* silent */ }
     toast.success('Amount copied — open Stripe app to charge');
+    setStripeAppOpened(true);
     window.location.href = 'stripe://';
+  };
+
+  const handleStripeAppPaidConfirm = async () => {
+    haptics.success();
+    toast.success('Payment recorded');
+    await onSuccess({ surchargeAmount: 0, paymentIntentId: null });
   };
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -216,7 +225,8 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
           onChange={handleChange}
           options={{
             layout: 'tabs',
-            wallets: { applePay: 'auto', googlePay: 'auto' },
+            paymentMethodOrder: ['card'],
+            wallets: { applePay: 'never', googlePay: 'never' },
           }}
         />
       </div>
@@ -324,8 +334,8 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
       </div>
 
       {/* Stripe Dashboard app — Tap to Pay / card reader */}
-      <div className="rounded-xl bg-slate-900 dark:bg-slate-800 border border-slate-700 p-4">
-        <div className="flex items-center gap-3 mb-3">
+      <div className="rounded-xl bg-slate-900 dark:bg-slate-800 border border-slate-700 p-4 space-y-2">
+        <div className="flex items-center gap-3 mb-1">
           <div className="rounded-xl bg-slate-700 p-2 shrink-0">
             <Zap className="w-5 h-5 text-yellow-400" />
           </div>
@@ -334,6 +344,7 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
             <p className="text-xs text-slate-400 mt-0.5">Open Stripe app to use Tap to Pay or card reader</p>
           </div>
         </div>
+
         <Button
           className="w-full rounded-xl h-11 gap-2 bg-slate-700 hover:bg-slate-600 text-white border-0"
           onClick={handleOpenStripeApp}
@@ -341,6 +352,40 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
           <Zap className="w-4 h-4 text-yellow-400" />
           Open Stripe App
         </Button>
+
+        {stripeAppOpened && !confirmingStripeAppPaid && (
+          <Button
+            className="w-full rounded-xl h-11 gap-2 bg-green-600 hover:bg-green-700 text-white border-0"
+            onClick={() => setConfirmingStripeAppPaid(true)}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Mark as Paid — Stripe App
+          </Button>
+        )}
+
+        {confirmingStripeAppPaid && (
+          <div className="rounded-xl bg-slate-800 border border-slate-600 p-3 space-y-2">
+            <p className="text-xs text-slate-300 text-center">
+              Confirm payment of <span className="font-semibold text-white">{formatCurrency(baseAmount)}</span> was completed in Stripe app?
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl h-10 text-slate-300 border-slate-600 bg-transparent hover:bg-slate-700"
+                onClick={() => setConfirmingStripeAppPaid(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 rounded-xl h-10 gap-1.5 bg-green-600 hover:bg-green-700 text-white border-0"
+                onClick={handleStripeAppPaidConfirm}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Confirm
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -435,7 +480,7 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
           {clientSecret && !loading && stripePromise && (
             <Elements
               stripe={stripePromise}
-              options={{ clientSecret, appearance, paymentMethodCreation: 'manual' }}
+              options={{ clientSecret, appearance, paymentMethodCreation: 'manual', paymentMethodTypes: ['card'] }}
             >
               <PaymentForm
                 invoice={invoice}
