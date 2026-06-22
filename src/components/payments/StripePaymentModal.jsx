@@ -1,3 +1,4 @@
+// Stripe payment modal - rebuilt with env key
 import { useState, useCallback, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
