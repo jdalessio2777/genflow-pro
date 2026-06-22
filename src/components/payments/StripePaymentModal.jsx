@@ -1,7 +1,7 @@
 // Stripe payment modal - rebuilt with env key
 import { useState, useCallback, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useTheme } from 'next-themes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,9 @@ const SURCHARGE_RATE = 0.03;
 function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClose }) {
   const stripe = useStripe();
   const elements = useElements();
+  const { resolvedTheme } = useTheme();
 
   const [phase, setPhase] = useState('entry');
-  const [paymentType, setPaymentType] = useState(null);
   const [funding, setFunding] = useState(null);
   const [storedPm, setStoredPm] = useState(null);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -41,13 +41,11 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
 
   const baseAmount = invoice.total || 0;
 
-  // Preview values shown during card entry — never sent to Stripe directly
   const previewSurcharge = funding === 'credit'
     ? Math.round(baseAmount * SURCHARGE_RATE * 100) / 100
     : 0;
   const previewTotal = baseAmount + previewSurcharge;
 
-  // Confirmed values are only set after server responds; UI switches to them at that point
   const isConfirming = phase === 'confirming';
   const displaySurcharge = isConfirming ? lockedSurcharge : previewSurcharge;
   const displayTotal     = isConfirming ? lockedTotal     : previewTotal;
@@ -57,14 +55,22 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
   const isBusy       = isLocking || isSubmitting;
   const isEstimate   = phase === 'entry' && funding === 'credit';
 
+  const cardStyle = {
+    base: {
+      color: resolvedTheme === 'dark' ? '#f9fafb' : '#111827',
+      fontSize: '16px',
+      fontFamily: 'inherit',
+      fontSmoothing: 'antialiased',
+      '::placeholder': { color: resolvedTheme === 'dark' ? '#6b7280' : '#9ca3af' },
+    },
+    invalid: { color: '#ef4444', iconColor: '#ef4444' },
+  };
+
   // ── onChange: detect funding type as card is filled in ───────────────────────
 
   const handleChange = useCallback(async (event) => {
-    const type = event.value?.type ?? null;
-    setPaymentType(type);
     setIsComplete(event.complete);
 
-    // Card edited back to incomplete: reset everything so the full flow reruns
     if (!event.complete) {
       setStoredPm(null);
       setFunding(null);
@@ -75,10 +81,11 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
       return;
     }
 
-    if (event.complete && type === 'card' && stripe && elements && !storedPm) {
+    if (stripe && elements && !storedPm) {
       setIsDetecting(true);
       try {
-        const { paymentMethod, error } = await stripe.createPaymentMethod({ elements });
+        const card = elements.getElement(CardElement);
+        const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card });
         if (!error && paymentMethod) {
           setStoredPm(paymentMethod);
           setFunding(paymentMethod.card?.funding ?? 'unknown');
@@ -99,23 +106,20 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
     setLockError(null);
 
     try {
-      // Ensure we have a payment method (should already exist from auto-detect)
       let pm = storedPm;
       if (!pm) {
-        const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({ elements });
+        const card = elements.getElement(CardElement);
+        const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({ type: 'card', card });
         if (pmErr) throw new Error(pmErr.message);
         pm = paymentMethod;
         setStoredPm(pm);
         setFunding(pm.card?.funding ?? 'unknown');
       }
 
-      const cardFunding = pm.card?.funding;
-      const clientSurcharge = cardFunding === 'credit'
+      const clientSurcharge = pm.card?.funding === 'credit'
         ? Math.round(baseAmount * SURCHARGE_RATE * 100) / 100
         : 0;
 
-      // Always POST even when surcharge is 0 — this resets the PI amount if the user
-      // previously attempted a credit card and is now retrying with a debit card.
       const resp = await fetch('/api/update-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,17 +135,13 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
         throw new Error(data.error || 'Could not verify payment amount. Please try again.');
       }
 
-      // Server is the single source of truth for both values displayed to the customer
       const { surcharge, total } = await resp.json();
       setLockedSurcharge(surcharge);
       setLockedTotal(total);
 
       if (surcharge > 0) {
-        // Credit card: show the server-confirmed breakdown before charging
         setPhase('confirming');
       } else {
-        // Debit / no surcharge: preview already showed $0, so amounts match —
-        // skip the redundant confirm step and charge in one smooth motion
         await performConfirm(pm, surcharge);
       }
     } catch (err) {
@@ -155,30 +155,16 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
   const performConfirm = async (pm, surcharge) => {
     setPhase('submitting');
     try {
-      if (paymentType === 'card') {
-        const { error: confirmErr } = await stripe.confirmPayment({
-          clientSecret,
-          confirmParams: { payment_method: pm.id },
-          redirect: 'if_required',
-        });
-        if (confirmErr) throw new Error(confirmErr.message);
-      } else {
-        // Digital wallet — no surcharge; native sheet handles PM creation
-        const { error: confirmErr } = await stripe.confirmPayment({
-          elements,
-          clientSecret,
-          confirmParams: { return_url: window.location.href },
-          redirect: 'if_required',
-        });
-        if (confirmErr) throw new Error(confirmErr.message);
-      }
-
+      const { error: confirmErr } = await stripe.confirmPayment({
+        clientSecret,
+        confirmParams: { payment_method: pm.id },
+        redirect: 'if_required',
+      });
+      if (confirmErr) throw new Error(confirmErr.message);
       await onSuccess({ surchargeAmount: surcharge, paymentIntentId });
     } catch (err) {
       toast.error(err.message || 'Payment failed. Please try again.');
       haptics.error?.();
-      // Reset to entry so the customer can retry with a different card;
-      // the next handlePay call will re-lock the PI amount correctly.
       setPhase('entry');
       setStoredPm(null);
       setFunding(null);
@@ -208,7 +194,6 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  const showSurcharge = paymentType === 'card';
   const fundingLabel = funding === 'credit'
     ? 'Credit card — 3% surcharge applies'
     : funding === 'debit'
@@ -219,16 +204,9 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
 
   return (
     <div className="space-y-4">
-      {/* Payment element — visually locked while confirming/submitting to prevent accidental edits */}
-      <div className={isBusy || isConfirming ? 'pointer-events-none opacity-60' : ''}>
-        <PaymentElement
-          onChange={handleChange}
-          options={{
-            layout: 'tabs',
-            paymentMethodOrder: ['card'],
-            wallets: { applePay: 'never', googlePay: 'never' },
-          }}
-        />
+      {/* Card input — CardElement never shows Bank, Klarna, or any other method */}
+      <div className={`border rounded-xl p-3.5 bg-background transition-opacity ${isBusy || isConfirming ? 'pointer-events-none opacity-60' : ''}`}>
+        <CardElement onChange={handleChange} options={{ style: cardStyle, hidePostalCode: false }} />
       </div>
 
       {/* Breakdown */}
@@ -249,7 +227,7 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
           <span>{formatCurrency(baseAmount)}</span>
         </div>
 
-        {showSurcharge && (
+        {isComplete && (
           <div className={`flex justify-between transition-opacity ${isEstimate ? 'opacity-50' : ''}`}>
             <span className="text-muted-foreground">
               Card surcharge (3%)
@@ -400,7 +378,6 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
   const [loading, setLoading] = useState(false);
   const [initError, setInitError] = useState(null);
 
-  // Initialize a PaymentIntent when the modal opens
   useEffect(() => {
     if (!open || clientSecret) return;
     if (!STRIPE_KEY) {
@@ -428,7 +405,6 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
 
   const handleOpenChange = (isOpen) => {
     if (!isOpen) {
-      // Reset state so next open creates a fresh PI
       setClientSecret(null);
       setPaymentIntentId(null);
       setInitError(null);
@@ -443,10 +419,7 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
 
   const appearance = {
     theme: resolvedTheme === 'dark' ? 'night' : 'stripe',
-    variables: {
-      borderRadius: '12px',
-      fontFamily: 'inherit',
-    },
+    variables: { borderRadius: '12px', fontFamily: 'inherit' },
   };
 
   return (
@@ -478,10 +451,7 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
           )}
 
           {clientSecret && !loading && stripePromise && (
-            <Elements
-              stripe={stripePromise}
-              options={{ clientSecret, appearance, paymentMethodCreation: 'manual' }}
-            >
+            <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
               <PaymentForm
                 invoice={invoice}
                 clientSecret={clientSecret}
