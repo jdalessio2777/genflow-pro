@@ -193,8 +193,8 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
   const handleOpenStripeApp = async () => {
     const text = `${formatCurrency(invoice.total)} — ${invoice.customer_name || ''} — ${invoice.id}`;
     try { await navigator.clipboard.writeText(text); } catch { /* silent */ }
-    toast.success('Amount copied — charge in Stripe Dashboard app');
-    window.location.href = 'stripedashboard://';
+    toast.success('Amount copied — open Stripe app to charge');
+    window.location.href = 'stripe://';
   };
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -212,7 +212,13 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
     <div className="space-y-4">
       {/* Payment element — visually locked while confirming/submitting to prevent accidental edits */}
       <div className={isBusy || isConfirming ? 'pointer-events-none opacity-60' : ''}>
-        <PaymentElement onChange={handleChange} />
+        <PaymentElement
+          onChange={handleChange}
+          options={{
+            layout: 'tabs',
+            wallets: { applePay: 'auto', googlePay: 'auto' },
+          }}
+        />
       </div>
 
       {/* Breakdown */}
@@ -400,14 +406,14 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md flex flex-col max-h-[90dvh]">
+      <DialogContent className="sm:max-w-md flex flex-col max-h-[90dvh] overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5" /> Charge Card
           </DialogTitle>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 min-h-0 space-y-4 pr-1">
+        <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 space-y-4 pr-1" style={{ touchAction: 'pan-y' }}>
           {loading && (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
