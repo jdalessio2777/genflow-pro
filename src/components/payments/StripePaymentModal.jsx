@@ -480,7 +480,7 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
           {clientSecret && !loading && stripePromise && (
             <Elements
               stripe={stripePromise}
-              options={{ clientSecret, appearance, paymentMethodCreation: 'manual', paymentMethodTypes: ['card'] }}
+              options={{ clientSecret, appearance, paymentMethodCreation: 'manual' }}
             >
               <PaymentForm
                 invoice={invoice}
