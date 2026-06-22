@@ -5,7 +5,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useTheme } from 'next-themes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, CreditCard, ShieldCheck } from 'lucide-react';
+import { Loader2, CreditCard, ShieldCheck, Zap } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
@@ -190,6 +190,13 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
     performConfirm(storedPm, lockedSurcharge);
   };
 
+  const handleOpenStripeApp = async () => {
+    const text = `${formatCurrency(invoice.total)} — ${invoice.customer_name || ''} — ${invoice.id}`;
+    try { await navigator.clipboard.writeText(text); } catch { /* silent */ }
+    toast.success('Amount copied — charge in Stripe Dashboard app');
+    window.location.href = 'stripedashboard://';
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   const showSurcharge = paymentType === 'card';
@@ -301,6 +308,33 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
             {isLocking ? 'Verifying…' : `Pay ${formatCurrency(previewTotal)}`}
           </Button>
         )}
+      </div>
+
+      {/* OR divider */}
+      <div className="relative flex items-center gap-3">
+        <div className="flex-1 border-t" />
+        <span className="text-xs text-muted-foreground">OR</span>
+        <div className="flex-1 border-t" />
+      </div>
+
+      {/* Stripe Dashboard app — Tap to Pay / card reader */}
+      <div className="rounded-xl bg-slate-900 dark:bg-slate-800 border border-slate-700 p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="rounded-xl bg-slate-700 p-2 shrink-0">
+            <Zap className="w-5 h-5 text-yellow-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Tap to Pay</p>
+            <p className="text-xs text-slate-400 mt-0.5">Open Stripe app to use Tap to Pay or card reader</p>
+          </div>
+        </div>
+        <Button
+          className="w-full rounded-xl h-11 gap-2 bg-slate-700 hover:bg-slate-600 text-white border-0"
+          onClick={handleOpenStripeApp}
+        >
+          <Zap className="w-4 h-4 text-yellow-400" />
+          Open Stripe App
+        </Button>
       </div>
     </div>
   );
