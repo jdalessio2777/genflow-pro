@@ -400,45 +400,47 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md flex flex-col max-h-[90dvh]">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5" /> Charge Card
           </DialogTitle>
         </DialogHeader>
 
-        {loading && (
-          <div className="flex items-center justify-center py-10">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        )}
+        <div className="overflow-y-auto flex-1 min-h-0 space-y-4 pr-1">
+          {loading && (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
 
-        {initError && (
-          <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-            {initError}
-          </div>
-        )}
+          {initError && (
+            <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+              {initError}
+            </div>
+          )}
 
-        {!stripePromise && !loading && (
-          <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-            Stripe not configured. Contact support.
-          </div>
-        )}
+          {!stripePromise && !loading && (
+            <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+              Stripe not configured. Contact support.
+            </div>
+          )}
 
-        {clientSecret && !loading && stripePromise && (
-          <Elements
-            stripe={stripePromise}
-            options={{ clientSecret, appearance, paymentMethodCreation: 'manual' }}
-          >
-            <PaymentForm
-              invoice={invoice}
-              clientSecret={clientSecret}
-              paymentIntentId={paymentIntentId}
-              onSuccess={handleSuccess}
-              onClose={() => handleOpenChange(false)}
-            />
-          </Elements>
-        )}
+          {clientSecret && !loading && stripePromise && (
+            <Elements
+              stripe={stripePromise}
+              options={{ clientSecret, appearance, paymentMethodCreation: 'manual' }}
+            >
+              <PaymentForm
+                invoice={invoice}
+                clientSecret={clientSecret}
+                paymentIntentId={paymentIntentId}
+                onSuccess={handleSuccess}
+                onClose={() => handleOpenChange(false)}
+              />
+            </Elements>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
