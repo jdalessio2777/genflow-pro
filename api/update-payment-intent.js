@@ -42,7 +42,9 @@ export default async function handler(req, res) {
     if (error || !invoice) return res.status(404).json({ error: 'Invoice not found' });
 
     const { default: Stripe } = await import('stripe');
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2024-06-20',
+    });
 
     const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
     if (pi.metadata?.invoice_id !== invoice_id) {
