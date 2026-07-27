@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
     const { data: invoice, error } = await supabase
       .from('invoices')
-      .select('id, total, customer_name, invoice_number, status')
+      .select('id, total, tax_amount, customer_name, invoice_number, status')
       .eq('id', invoice_id)
       .single();
 
@@ -58,6 +58,7 @@ export default async function handler(req, res) {
         invoice_number: invoice.invoice_number || '',
         customer_name: invoice.customer_name || '',
         base_amount: String(invoice.total),
+        tax_amount: String(invoice.tax_amount || 0),
       },
     });
 
