@@ -121,7 +121,12 @@ export default function InvoiceDetail() {
     <div>
       <PageHeader
         title={invoice.invoice_number || "Invoice"}
-        subtitle={<span className="inline-flex items-center gap-1.5">{invoice.customer_name}<RewardBadge show={invoiceCustomer?.pending_reward} /></span>}
+        subtitle={
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="truncate min-w-0">{invoice.customer_name}</span>
+            <RewardBadge show={invoiceCustomer?.pending_reward} />
+          </span>
+        }
         back="/invoices"
         actions={
           <AlertDialog>

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Pencil, Mail, MapPin, Wrench, DollarSign, Loader2, Shield, Trash2, ChevronRight, FileText, Users } from "lucide-react";
+import { Pencil, Mail, MapPin, Wrench, DollarSign, Loader2, Shield, ShieldPlus, Trash2, ChevronRight, FileText, Users } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import RewardBadge from "@/components/ui/RewardBadge";
 import PageHeader from "@/components/layout/PageHeader";
@@ -182,7 +182,12 @@ export default function CustomerDetail() {
   return (
     <div>
       <PageHeader
-        title={<span className="inline-flex items-center gap-1.5">{customer.name}<RewardBadge show={customer.pending_reward} /></span>}
+        title={
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="truncate min-w-0">{customer.name}</span>
+            <RewardBadge show={customer.pending_reward} />
+          </span>
+        }
         subtitle={customer.generator_model || "No generator info"}
         back="/customers"
         actions={
@@ -198,7 +203,7 @@ export default function CustomerDetail() {
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <FileText className="w-3.5 h-3.5" />
               }
-              History
+              <span className="hidden sm:inline">History</span>
             </Button>
             <Link to={`/customers/${id}/membership`}>
               <Button
@@ -210,8 +215,11 @@ export default function CustomerDetail() {
                     : "border-blue-300 text-blue-700 bg-blue-50"
                 }`}
               >
-                <Shield className="w-3.5 h-3.5" />
-                {customer?.membership_plan && customer?.membership_signed ? "Member" : "Agreement"}
+                {customer?.membership_plan && customer?.membership_signed
+                  ? <Shield className="w-3.5 h-3.5" />
+                  : <ShieldPlus className="w-3.5 h-3.5" />
+                }
+                <span className="hidden sm:inline">{customer?.membership_plan && customer?.membership_signed ? "Member" : "Agreement"}</span>
               </Button>
             </Link>
             <Link to={`/customers/${id}/edit`}>
