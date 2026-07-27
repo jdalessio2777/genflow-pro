@@ -18,9 +18,14 @@ export const integrationsCore = {
     return { file_url: data.publicUrl };
   },
 
-  async SendEmail(body) {
-    const { data, error } = await supabase.functions.invoke('send-email', { body });
-    if (error) throw error;
+  async SendEmail({ to, subject, html }) {
+    const resp = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || 'Failed to send email');
     return data;
   },
 

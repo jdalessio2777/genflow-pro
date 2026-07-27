@@ -87,6 +87,7 @@ export default function InvoiceDetail() {
         paid_date: new Date().toISOString(),
         surcharge_amount: surchargeAmount,
         stripe_payment_intent_id: paymentIntentId,
+        total: (invoice.total || 0) + surchargeAmount,
       },
       {
         onSuccess: () => {
@@ -147,7 +148,7 @@ export default function InvoiceDetail() {
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <StatusBadge status={invoice.status} />
-            <span className="text-2xl font-bold">{formatCurrency(invoice.total)}</span>
+            <span className="text-2xl font-bold">{formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span>
           </div>
           <div className="text-sm space-y-1">
             <p className="flex items-center gap-1.5 flex-wrap"><span className="text-muted-foreground">Customer:</span> <Link to={`/customers/${invoice.customer_id}`} className="text-primary">{invoice.customer_name}</Link><RewardBadge show={invoiceCustomer?.pending_reward} /></p>
@@ -175,7 +176,14 @@ export default function InvoiceDetail() {
           <div className="border-t pt-3 mt-3 space-y-1">
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">Parts</span><span>{formatCurrency(invoice.parts_total)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">Labor</span><span>{formatCurrency(invoice.labor_total)}</span></div>
-            <div className="flex justify-between text-base font-bold pt-1 border-t"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
+            <div className="flex justify-between text-sm border-t pt-2 mt-1"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0))}</span></div>
+            {(invoice.tax_amount > 0) && (
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">NJ Sales Tax (6.625%)</span><span>{formatCurrency(invoice.tax_amount)}</span></div>
+            )}
+            {(invoice.surcharge_amount > 0) && (
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Card Surcharge (3%)</span><span>{formatCurrency(invoice.surcharge_amount)}</span></div>
+            )}
+            <div className="flex justify-between text-base font-bold pt-1 border-t"><span>Total</span><span>{formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
           </div>
         </Card>
 
@@ -216,7 +224,7 @@ export default function InvoiceDetail() {
           <Card className="p-4 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
             <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-3 uppercase tracking-wider">Record Payment (Manual)</p>
             <div className="grid grid-cols-3 gap-2">
-              {["cash", "card", "check", "zelle", "venmo", "other"].map(method => (
+              {["cash", "check", "zelle", "venmo", "other"].map(method => (
                 <Button
                   key={method}
                   variant="outline"

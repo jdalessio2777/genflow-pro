@@ -55,7 +55,7 @@ export default function InvoicePDF() {
       <div style="background:#1e3a5f;color:white;padding:22px 24px;border-radius:8px;margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;">AJ's Generator Service</h1>
+            <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;">GenShield</h1>
             <p style="font-size:12px;color:#a8c4e0;margin:0;">Professional Generator Service &amp; Maintenance</p>
           </div>
           <div style="text-align:right;">
@@ -96,13 +96,16 @@ export default function InvoicePDF() {
         <div style="min-width:200px;">
           <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Parts</span><span>${formatCurrency(invoice.parts_total)}</span></div>
           <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Labor</span><span>${formatCurrency(invoice.labor_total)}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:bold;border-top:2px solid #1e3a5f;margin-top:3px;"><span>Total</span><span style="color:#1e3a5f;">${formatCurrency(invoice.total)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span>${formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0))}</span></div>
+          ${invoice.tax_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">NJ Sales Tax (6.625%)</span><span>${formatCurrency(invoice.tax_amount)}</span></div>` : ''}
+          ${invoice.surcharge_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Card Surcharge (3%)</span><span>${formatCurrency(invoice.surcharge_amount)}</span></div>` : ''}
+          <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:bold;border-top:2px solid #1e3a5f;margin-top:3px;"><span>Total</span><span style="color:#1e3a5f;">${formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
         </div>
       </div>
       ${invoice.notes ? `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${invoice.notes}</p></div>` : ""}
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:16px;">
         <p style="font-size:11px;font-weight:bold;color:#166534;margin:0 0 4px 0;">PAYMENT ACCEPTED</p>
-        <p style="font-size:12px;color:#15803d;margin:0;">Cash · Check payable to AJ's Generator Service · Zelle · Venmo</p>
+        <p style="font-size:12px;color:#15803d;margin:0;">Cash · Check payable to GenShield · Zelle · Venmo</p>
       </div>
       ${signatureHTML}
     </div>`;
@@ -140,24 +143,23 @@ export default function InvoicePDF() {
       if (includeInvoice) bodyParts.push(buildInvoiceHTML());
       completedDocs.forEach(doc => { if (includedDocs[doc.id]) bodyParts.push(buildChecklistHTML(doc)); });
 
-      const fullHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;color:#1a1a1a;background:white;padding:28px;max-width:700px;margin:0 auto;}</style></head><body>${bodyParts.join('<div style="height:1px;background:#e5e7eb;margin:28px 0;"></div>')}<div style="margin-top:28px;text-align:center;border-top:1px solid #eee;padding-top:14px;"><p style="font-size:11px;color:#aaa;">AJ's Generator Service · Thank you for your business</p></div></body></html>`;
+      const fullHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;color:#1a1a1a;background:white;padding:28px;max-width:700px;margin:0 auto;}</style></head><body>${bodyParts.join('<div style="height:1px;background:#e5e7eb;margin:28px 0;"></div>')}<div style="margin-top:28px;text-align:center;border-top:1px solid #eee;padding-top:14px;"><p style="font-size:11px;color:#aaa;">GenShield · Thank you for your business</p></div></body></html>`;
 
       const subjectParts = [];
       if (includeInvoice) subjectParts.push(`Invoice ${invoice.invoice_number}`);
       if (Object.values(includedDocs).some(Boolean)) subjectParts.push("Service Report");
-      const subject = subjectParts.join(" & ") + " — AJ's Generator Service";
+      const subject = subjectParts.join(" & ") + " — GenShield";
 
       await integrationsCore.SendEmail({
         to: customer.email,
         subject,
         html: fullHTML,
-        from_name: "AJ's Generator Service",
       });
 
       setSent(true);
       toast.success(`Email sent to ${customer.email}`);
-    } catch {
-      toast.error("Failed to send email");
+    } catch (e) {
+      toast.error(e.message || "Failed to send email");
     } finally {
       setSending(false);
     }
@@ -190,7 +192,7 @@ export default function InvoicePDF() {
               </div>
               <div>
                 <p className="text-sm font-semibold">Invoice</p>
-                <p className="text-xs text-muted-foreground">Line items, totals, payment info · {formatCurrency(invoice.total)}</p>
+                <p className="text-xs text-muted-foreground">Line items, totals, payment info · {formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</p>
               </div>
             </button>
 

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import ExcelJS from 'exceljs';
+import { sendEmail } from './lib/sendEmail.js';
 
 const EXPENSE_CATEGORIES = [
   'Parts & Supplies', 'Fuel', 'Tools & Equipment', 'Insurance',
@@ -109,7 +110,7 @@ async function fetchData(supabase, start, end) {
   const [r1, r2, r3, r4] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, customer_name, job_id, total, payment_method, paid_date, created_at, parts_total, labor_total')
+      .select('id, invoice_number, customer_name, job_id, total, tax_amount, payment_method, paid_date, created_at, parts_total, labor_total')
       .eq('status', 'paid')
       .gte('paid_date', startISO)
       .lte('paid_date', endISO)
@@ -171,6 +172,7 @@ function buildSummarySheet(wb, data, type, start, end) {
   styleHeader(sheet.addRow(['Metric', 'Value']));
 
   const revenue = paidInvoices.reduce((s, i) => s + (i.total || 0), 0);
+  const taxCollected = paidInvoices.reduce((s, i) => s + (i.tax_amount || 0), 0);
   const expTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const netProfit = revenue - expTotal;
   const margin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
@@ -214,6 +216,7 @@ function buildSummarySheet(wb, data, type, start, end) {
   sheet.addRow([]);
 
   addMoney('Total Revenue', revenue);
+  addMoney('NJ Tax Collected', taxCollected);
   addMoney('Total Expenses', expTotal);
   addMoney('Net Profit', netProfit);
   addKV('Profit Margin', `${margin.toFixed(1)}%`);
@@ -243,13 +246,14 @@ function buildRevenueSheet(wb, paidInvoices, jobMap) {
     { key: 'customer', width: 26 },
     { key: 'job_type', width: 22 },
     { key: 'total', width: 14 },
+    { key: 'tax', width: 18 },
     { key: 'payment', width: 18 },
     { key: 'paid_date', width: 16 },
     { key: 'parts', width: 14 },
     { key: 'labor', width: 14 },
   ];
 
-  styleHeader(sheet.addRow(['Invoice #', 'Customer', 'Job Type', 'Amount', 'Payment Method', 'Paid Date', 'Parts', 'Labor']));
+  styleHeader(sheet.addRow(['Invoice #', 'Customer', 'Job Type', 'Amount', 'Tax Collected', 'Payment Method', 'Paid Date', 'Parts', 'Labor']));
 
   paidInvoices.forEach(inv => {
     const rawType = jobMap[inv.job_id]?.job_type;
@@ -259,14 +263,16 @@ function buildRevenueSheet(wb, paidInvoices, jobMap) {
       inv.customer_name || '—',
       jobType,
       inv.total || 0,
+      inv.tax_amount || 0,
       inv.payment_method || '—',
       inv.paid_date ? new Date(inv.paid_date).toLocaleDateString('en-US') : '—',
       inv.parts_total || 0,
       inv.labor_total || 0,
     ]);
     row.getCell(4).numFmt = CURRENCY_FMT;
-    row.getCell(7).numFmt = CURRENCY_FMT;
+    row.getCell(5).numFmt = CURRENCY_FMT;
     row.getCell(8).numFmt = CURRENCY_FMT;
+    row.getCell(9).numFmt = CURRENCY_FMT;
   });
 
   autoFit(sheet);
@@ -430,27 +436,13 @@ async function sendReport(buffer, filename, subject, { revenue, expTotal, netPro
   </div>
 </div>`;
 
-  const resp = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: 'GenShield Reports <contact@genshieldservice.com>',
-      to: ['derek.j.sainz@gmail.com', 'contact@genshieldservice.com'],
-      subject,
-      html,
-      attachments: [{ filename, content: buffer.toString('base64') }],
-    }),
+  return sendEmail({
+    from: 'GenShield Reports <contact@genshieldservice.com>',
+    to: ['derek.j.sainz@gmail.com', 'contact@genshieldservice.com'],
+    subject,
+    html,
+    attachments: [{ filename, content: buffer.toString('base64') }],
   });
-
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(`Resend error ${resp.status}: ${JSON.stringify(err)}`);
-  }
-
-  return resp.json();
 }
 
 // ─── handler ──────────────────────────────────────────────────────────────────

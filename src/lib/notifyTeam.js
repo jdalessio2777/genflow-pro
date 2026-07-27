@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
+import { toast } from "sonner";
 
 // Shared team notification sender
 // Reads team emails from AppSettings and sends to all filled-in addresses
-// All failures are silent — never block the user action
+// Never throws — never blocks the user action — but surfaces a toast if a send actually fails
 export async function notifyTeam({ subject, body, triggeredBy = "" }) {
   try {
     const allSettings = await db.AppSettings.list("key");
@@ -18,11 +19,10 @@ export async function notifyTeam({ subject, body, triggeredBy = "" }) {
 
     if (emails.length === 0) return;
 
-    const from_name = "AJ's Generator Service";
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
         <div style="background:#1e3a5f;padding:16px 20px;border-radius:8px 8px 0 0;">
-          <p style="color:white;margin:0;font-size:16px;font-weight:bold;">AJ's Generator Service</p>
+          <p style="color:white;margin:0;font-size:16px;font-weight:bold;">GenShield</p>
           <p style="color:#a8c4e0;margin:2px 0 0 0;font-size:11px;">Internal Team Notification</p>
         </div>
         <div style="background:#f8f9fa;padding:20px;border-radius:0 0 8px 8px;">
@@ -32,15 +32,19 @@ export async function notifyTeam({ subject, body, triggeredBy = "" }) {
       </div>
     `;
 
+    let failures = 0;
     for (const email of emails) {
       try {
-        await integrationsCore.SendEmail({ to: email, from_name, subject, html });
+        await integrationsCore.SendEmail({ to: email, subject, html });
       } catch {
-        // silently fail per address
+        failures++;
       }
     }
-  } catch {
-    // silently fail entirely — never block the user action
+    if (failures > 0) {
+      toast.error(`Team notification failed to send to ${failures} of ${emails.length} address${emails.length !== 1 ? "es" : ""}`);
+    }
+  } catch (e) {
+    toast.error(`Team notification failed: ${e.message}`);
   }
 }
 

@@ -10,7 +10,6 @@ async function readRawBody(req) {
 }
 
 export default async function handler(req, res) {
-  console.log('[stripe-webhook] handler invoked', req.method);
   if (req.method !== 'POST') return res.status(405).end();
 
   const { default: Stripe } = await import('stripe');
@@ -44,7 +43,7 @@ export default async function handler(req, res) {
 
     const { data: invoice } = await supabase
       .from('invoices')
-      .select('id, status')
+      .select('id, status, total, stripe_payment_intent_id')
       .eq('id', invoiceId)
       .single();
 
@@ -53,8 +52,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true });
     }
 
-    if (invoice.status === 'paid') {
-      return res.status(200).json({ received: true, skipped: 'already_paid' });
+    if (invoice.status === 'paid' && invoice.stripe_payment_intent_id === pi.id) {
+      return res.status(200).json({ received: true, skipped: 'already_processed' });
     }
 
     const surchargeAmount = parseFloat(pi.metadata?.surcharge_amount || '0');
@@ -65,6 +64,7 @@ export default async function handler(req, res) {
       paid_date: new Date().toISOString(),
       stripe_payment_intent_id: pi.id,
       surcharge_amount: surchargeAmount,
+      total: (invoice.total || 0) + surchargeAmount,
     }).eq('id', invoiceId);
 
     console.log('[stripe-webhook] invoice marked paid via webhook:', invoiceId, 'pi:', pi.id);

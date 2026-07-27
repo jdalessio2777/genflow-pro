@@ -80,7 +80,7 @@ TOTAL: ${formatCurrency(grandTotal)}
 
 Design requirements:
 - Professional, clean layout suitable for printing and viewing on mobile
-- Company name "AJ's Generator Service LLC" at top with a deep blue (#1e3a5f) header
+- Company name "GenShield LLC" at top with a deep blue (#1e3a5f) header
 - Customer info and generator info in a clean info block
 - Line items in a table with Description and Amount columns
 - Totals section with clear grand total
@@ -123,15 +123,14 @@ Return ONLY the complete HTML document, nothing else.`;
     try {
       await integrationsCore.SendEmail({
         to: customer.email,
-        subject: `Service Quote — ${job?.title} · AJ's Generator Service`,
+        subject: `Service Quote — ${job?.title} · GenShield`,
         html: htmlContent,
-        from_name: "AJ's Generator Service",
       });
       updateJob.mutate({ status: "quote_sent", quote_sent_date: new Date().toISOString() });
       setSent(true);
       toast.success(`Quote sent to ${customer.email}`);
-    } catch {
-      toast.error("Failed to send — check Base44 SendEmail integration is enabled");
+    } catch (e) {
+      toast.error(e.message || "Failed to send quote email");
     } finally {
       setSending(false);
     }

@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
+import { renewalEmailHTML, renewalEmailSubject } from "@/lib/emailTemplates/renewalEmail";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, Gift, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp } from "lucide-react";
@@ -40,22 +41,32 @@ function MembershipReminderCard({ c }) {
   const days = Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24));
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const queryClient = useQueryClient();
 
   const sendRenewalReminder = async () => {
     if (!c.email) { toast.error("No email on file for " + c.name); return; }
     setSending(true);
     try {
-      const planName = c.membership_plan === "semi_annual" ? "Semi-Annual Protection Plan ($595/yr)" : "Annual Protection Plan ($340/yr)";
-      const expiryStr = new Date(c.membership_expiry).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       await integrationsCore.SendEmail({
         to: c.email,
-        subject: `Your Generator Protection Plan expires ${expiryStr}`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1e3a5f;padding:22px 24px;border-radius:8px 8px 0 0;"><h1 style="color:white;margin:0;font-size:18px;">AJ's Generator Service</h1><p style="color:#a8c4e0;margin:3px 0 0 0;font-size:12px;">Protection Plan Renewal</p></div><div style="background:#f8f9fa;padding:22px 24px;border-radius:0 0 8px 8px;"><p style="font-size:14px;color:#1a1a1a;">Hi ${c.name},</p><p style="font-size:13px;color:#444;margin-top:8px;">Your <strong>${planName}</strong> is expiring on <strong>${expiryStr}</strong>${days > 0 ? ` — ${days} day${days !== 1 ? "s" : ""} from now` : " — today"}.</p><div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin:14px 0;"><p style="margin:0 0 8px 0;font-size:13px;font-weight:bold;color:#1e3a5f;">Your Plan Includes:</p><ul style="margin:0;padding-left:18px;font-size:13px;color:#444;"><li style="margin-bottom:4px;">Annual maintenance visit${c.membership_plan === "semi_annual" ? "s (2x per year)" : ""}</li><li style="margin-bottom:4px;">10% discount on all parts and labor</li><li>Priority scheduling</li></ul></div><p style="font-size:13px;color:#444;">To renew, simply reply to this email or give us a call.</p><p style="font-size:12px;color:#666;margin-top:16px;">Thank you for being a valued AJ's Generator Service customer.</p></div></div>`,
+        subject: renewalEmailSubject(),
+        html: renewalEmailHTML({
+          customerName: c.name,
+          plan: c.membership_plan === "semi_annual" ? "Semi-Annual" : "Annual",
+          expiryDate: c.membership_expiry,
+        }),
       });
+
+      // Set the same dedup flag the check-renewals.js cron checks, so it doesn't send a duplicate
+      const dedupField = days <= 7 ? "renewal_reminder_7_sent_at" : "renewal_reminder_30_sent_at";
+      await db.Customer.update(c.id, { [dedupField]: new Date().toISOString() });
+      queryClient.invalidateQueries({ queryKey: ["all-customers-svc"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+
       setSent(true);
       toast.success(`Renewal reminder sent to ${c.name}`);
     } catch (e) {
-      toast.error("Failed to send email");
+      toast.error(e.message || "Failed to send renewal reminder");
     } finally {
       setSending(false);
     }

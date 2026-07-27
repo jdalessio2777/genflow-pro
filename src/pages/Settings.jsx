@@ -38,7 +38,7 @@ function BusinessTab({ settings, setSetting, isSaving }) {
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Company Details</p>
         <div>
           <Label className="text-xs">Business Name</Label>
-          <Input value={local.business_name} onChange={e => setLocal(l => ({...l, business_name: e.target.value}))} className="mt-1" placeholder="AJ's Generator Service" />
+          <Input value={local.business_name} onChange={e => setLocal(l => ({...l, business_name: e.target.value}))} className="mt-1" placeholder="GenShield" />
           <p className="text-xs text-muted-foreground mt-1">Used on invoices and emails sent to customers</p>
         </div>
         <div>

@@ -138,7 +138,7 @@ export default function QuoteApproval() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div style={{ background: "#1e3a5f" }} className="px-6 py-5">
-        <h1 className="text-white text-lg font-bold">AJ's Generator Service LLC</h1>
+        <h1 className="text-white text-lg font-bold">GenShield LLC</h1>
         <p className="text-blue-200 text-sm mt-0.5">Service Quote for {job.customer_name}</p>
       </div>
 
@@ -218,7 +218,7 @@ export default function QuoteApproval() {
         </div>
 
         <p className="text-xs text-gray-400 dark:text-gray-500 text-center pb-4">
-          This quote is valid for 30 days · AJ's Generator Service LLC
+          This quote is valid for 30 days · GenShield LLC
         </p>
       </div>
     </div>

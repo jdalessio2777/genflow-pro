@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 
 export const SETTING_DEFAULTS = {
   home_address: "",
-  business_name: "AJ's Generator Service",
+  business_name: "GenShield",
   business_phone: "",
   business_email: "",
   first_half_hour_rate: "125",

@@ -255,11 +255,13 @@ function ExpensesTab({ expenses }) {
       resetForm();
       toast.success("Expense logged");
     },
+    onError: (e) => toast.error(e.message || "Failed to log expense"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => db.Expense.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+    onError: (e) => toast.error(e.message || "Failed to delete expense"),
   });
 
   const resetForm = () => {
@@ -293,7 +295,6 @@ function ExpensesTab({ expenses }) {
       ...form,
       amount: parseFloat(form.amount),
       receipt_url: receiptUrl || null,
-      scanned_by_ai: false,
       author_name: getUserDisplayName(user),
       author_email: user?.email || "",
     });
@@ -493,11 +494,13 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
       setManualForm({ date: new Date().toISOString().split("T")[0], miles: "", description: "", vehicle_id: "" });
       toast.success("Trip logged");
     },
+    onError: (e) => toast.error(e.message || "Failed to log trip"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => db.MileageLog.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["mileage"] }),
+    onError: (e) => toast.error(e.message || "Failed to delete trip"),
   });
 
   const addressOptions = [

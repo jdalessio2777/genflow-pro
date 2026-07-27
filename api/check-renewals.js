@@ -1,27 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { renewalEmailHTML, renewalEmailSubject } from '../src/lib/emailTemplates/renewalEmail.js';
+import { sendEmail } from './lib/sendEmail.js';
 
 const INTERNAL_EMAIL = 'contact@genshieldservice.com';
-const FROM = 'GenShield <contact@genshieldservice.com>';
 
 function planLabel(plan) {
   return plan === 'semi_annual' ? 'Semi-Annual' : 'Annual';
-}
-
-async function sendEmail({ to, subject, html }) {
-  const resp = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from: FROM, to, subject, html }),
-  });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(`Resend error ${resp.status}: ${JSON.stringify(err)}`);
-  }
-  return resp.json();
 }
 
 function internalAlertHTML({ customer, days }) {

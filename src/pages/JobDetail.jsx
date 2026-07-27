@@ -30,7 +30,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
-import { sendQuoteEmail, sendConfirmationEmail, sendCompletionEmail } from "@/lib/gmail";
+import { quoteEmailHTML, confirmationEmailHTML, completionEmailHTML } from "@/lib/emailTemplates";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -223,7 +223,7 @@ export default function JobDetail() {
   const queryClient = useQueryClient();
   const { isOnline } = useOffline();
   const { settings } = useSettings();
-  const { user, googleToken } = useAuth();
+  const { user } = useAuth();
   const { confirmDelete, use24h } = usePreferences();
 
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -440,29 +440,28 @@ export default function JobDetail() {
     }
     if (newStatus === "scheduled" && customer?.email && job.scheduled_date) {
       try {
-        const appointmentTime = new Date(job.scheduled_date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-        const appointmentHour = formatTime(job.scheduled_date, use24h);
+        const techFirstName = (job.assigned_to_name || "").split(" ")[0] || "our technician";
         await integrationsCore.SendEmail({
           to: customer.email,
-          from_name: "AJ's Generator Service",
-          subject: `Appointment Confirmed — ${job.title}`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1e3a5f;padding:22px 24px;border-radius:8px 8px 0 0;"><h1 style="color:white;margin:0;font-size:18px;">AJ's Generator Service</h1></div><div style="background:#f8f9fa;padding:22px 24px;border-radius:0 0 8px 8px;"><p style="font-size:14px;">Hi ${customer.name},</p><p style="font-size:13px;">Your appointment has been confirmed: <strong>${job.title}</strong> on <strong>${appointmentTime}</strong> at <strong>${appointmentHour}</strong>.</p></div></div>`,
+          subject: `Appointment Confirmed — GenShield Generator Service`,
+          html: confirmationEmailHTML({ customer, job, techFirstName }),
         });
         toast.success(`Confirmation sent to ${customer.name}`);
-      } catch { /* silently fail */ }
+      } catch (e) {
+        toast.error(`Failed to send confirmation email: ${e.message}`);
+      }
     }
     if (newStatus === "completed" && customer?.email) {
       try {
-        const laborLines = labor.map(l => `<li style="font-size:13px;">${l.description}</li>`).join("");
-        const partsLines = parts.filter(p => p.charge_for_part).map(p => `<li style="font-size:13px;">${p.name} (×${p.quantity})</li>`).join("");
         await integrationsCore.SendEmail({
           to: customer.email,
-          from_name: "AJ's Generator Service",
-          subject: `Service Complete — ${job.title}`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1e3a5f;padding:22px 24px;border-radius:8px 8px 0 0;"><h1 style="color:white;margin:0;font-size:18px;">AJ's Generator Service</h1></div><div style="background:#f8f9fa;padding:22px 24px;border-radius:0 0 8px 8px;"><p>Hi ${customer.name},</p><p>Your generator service has been completed.</p>${laborLines ? `<p><strong>Work Performed:</strong></p><ul>${laborLines}</ul>` : ""}${partsLines ? `<p><strong>Parts Replaced:</strong></p><ul>${partsLines}</ul>` : ""}${invoiceNotes ? `<p><strong>Notes:</strong> ${invoiceNotes}</p>` : ""}<p style="font-size:12px;color:#666;">Thank you for choosing AJ's Generator Service.</p></div></div>`,
+          subject: `Service Complete — GenShield Generator Service`,
+          html: completionEmailHTML({ customer, job, parts, labor, documents, includeChecklist }),
         });
         toast.success(`Completion summary sent to ${customer.name}`);
-      } catch { /* silently fail */ }
+      } catch (e) {
+        toast.error(`Failed to send completion email: ${e.message}`);
+      }
     }
     if (newStatus === "completed" && ["maintenance", "battery_replacement"].includes(job.job_type)) {
       const intervalMonths = customer?.service_interval === "6_months" ? 6 : customer?.service_interval === "24_months" ? 24 : 12;
@@ -523,28 +522,15 @@ export default function JobDetail() {
       const approvalToken = crypto.randomUUID();
       await db.Job.update(id, { quote_approval_token: approvalToken });
 
-      if (googleToken && customer) {
-        await sendQuoteEmail({
-          customer,
-          job,
-          lineItems,
-          subtotal: total,
-          discount: 0,
-          total,
-          accessToken: googleToken,
-          approvalToken,
-        });
-        updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
-        haptics.light();
-        toast.success(`Quote sent to ${email}`);
-      } else {
-        const approveUrl = `https://genshieldservice.com/approve?job=${id}&token=${approvalToken}`;
-        const plainBody = `Service Quote: ${job?.title}\n\nEstimated Total: $${total.toFixed(2)}\n\nApprove online: ${approveUrl}\n\nOr call (973) 787-2431 or reply to approve.`;
-        window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your Service Quote — GenShield Generator Service')}&body=${encodeURIComponent(plainBody)}`, '_blank');
-        updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
-        haptics.light();
-        toast.success(`Email drafted — send it and the status has been updated`);
-      }
+      const approveUrl = `https://genshieldservice.com/approve?job=${id}&token=${approvalToken}`;
+      await integrationsCore.SendEmail({
+        to: email,
+        subject: `Your Service Quote — GenShield Generator Service`,
+        html: quoteEmailHTML({ customer, job, lineItems, subtotal: total, discount: 0, total, approveUrl }),
+      });
+      updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
+      haptics.light();
+      toast.success(`Quote sent to ${email}`);
       setQuoteEmailOpen(false);
     } catch (e) {
       haptics.error();
@@ -559,7 +545,11 @@ export default function JobDetail() {
     setSendingConfirmation(true);
     try {
       const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
-      await sendConfirmationEmail({ customer, job, techFirstName, accessToken: googleToken });
+      await integrationsCore.SendEmail({
+        to: customer.email,
+        subject: `Appointment Confirmed — GenShield Generator Service`,
+        html: confirmationEmailHTML({ customer, job, techFirstName }),
+      });
       await db.Job.update(id, {
         status: 'scheduled',
         approval_source: 'phone',
@@ -578,17 +568,13 @@ export default function JobDetail() {
   };
 
   const doSendCompletionEmail = async () => {
-    if (!customer?.email || !googleToken) return;
+    if (!customer?.email) return;
     setSendingCompletion(true);
     try {
-      await sendCompletionEmail({
-        customer,
-        job,
-        parts,
-        labor,
-        documents,
-        includeChecklist,
-        accessToken: googleToken,
+      await integrationsCore.SendEmail({
+        to: customer.email,
+        subject: `Service Complete — GenShield Generator Service`,
+        html: completionEmailHTML({ customer, job, parts, labor, documents, includeChecklist }),
       });
       toast.success(`Completion summary sent to ${customer.email}`);
     } catch (e) {
@@ -609,13 +595,17 @@ export default function JobDetail() {
     }
   };
 
+  const TAX_RATE = 0.06625;
+
   const buildInvoiceData = () => {
     const { partsPrice, laborPrice } = getJobTotals();
+    const subtotal = partsPrice + laborPrice;
+    const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
     const lineItems = [
       ...parts.map(p => ({ type: "part", description: p.name, quantity: p.quantity, unit_price: p.price, total: p.total_price })),
       ...labor.map(l => ({ type: "labor", description: l.description, quantity: l.is_flat_rate ? 1 : l.hours, unit_price: l.is_flat_rate ? l.flat_rate_amount : l.rate, total: l.total_price })),
     ];
-    return { parts_total: partsPrice, labor_total: laborPrice, total: partsPrice + laborPrice, line_items: lineItems, notes: invoiceNotes, customer_signature: job.customer_signature || null };
+    return { parts_total: partsPrice, labor_total: laborPrice, total: subtotal + taxAmount, tax_amount: taxAmount, tax_rate: TAX_RATE, line_items: lineItems, notes: invoiceNotes, customer_signature: job.customer_signature || null };
   };
 
   const handleFinalizeInvoice = async () => {
@@ -1005,7 +995,7 @@ export default function JobDetail() {
                           time_on_site_hours: Math.round(hoursOnSite * 4) / 4,
                         });
                         if (hasPendingAgreement) setTimeout(() => setShowAgreementSign(true), 500);
-                        if (customer?.email && googleToken) setTimeout(() => setCompletionEmailOpen(true), 400);
+                        if (customer?.email) setTimeout(() => setCompletionEmailOpen(true), 400);
                       }}>
                       <CheckCircle2 className="w-4 h-4" /> Complete Job
                     </Button>

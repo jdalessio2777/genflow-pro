@@ -129,7 +129,7 @@ export default function Invoices() {
             </div>
             <p className="text-xs text-muted-foreground mb-4 truncate">{payingInvoice.customer_name} · {payingInvoice.invoice_number}</p>
             <div className="grid grid-cols-3 gap-2">
-              {["cash", "card", "check", "zelle", "venmo", "other"].map(method => (
+              {["cash", "check", "zelle", "venmo", "other"].map(method => (
                 <button
                   key={method}
                   onClick={() => markPaid(payingInvoice, method)}

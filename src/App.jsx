@@ -6,7 +6,8 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
-import { sendConfirmationEmail } from '@/lib/gmail';
+import { integrationsCore } from '@/lib/coreIntegrations';
+import { confirmationEmailHTML } from '@/lib/emailTemplates';
 
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -42,10 +43,10 @@ import AuthCallback from './pages/AuthCallback';
 import { OfflineProvider } from '@/lib/OfflineContext';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user, googleToken } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user } = useAuth();
 
   useEffect(() => {
-    if (!googleToken || !user) return;
+    if (!user) return;
     let cancelled = false;
 
     async function sendPendingConfirmations() {
@@ -69,7 +70,11 @@ const AuthenticatedApp = () => {
             if (!customer?.email) continue;
 
             const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
-            await sendConfirmationEmail({ customer, job, techFirstName, accessToken: googleToken });
+            await integrationsCore.SendEmail({
+              to: customer.email,
+              subject: `Appointment Confirmed — GenShield Generator Service`,
+              html: confirmationEmailHTML({ customer, job, techFirstName }),
+            });
 
             await supabase
               .from('jobs')
@@ -88,7 +93,7 @@ const AuthenticatedApp = () => {
 
     sendPendingConfirmations();
     return () => { cancelled = true; };
-  }, [googleToken, user]);
+  }, [user]);
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (

@@ -111,7 +111,7 @@ export default function CustomerDetail() {
   <div style="background:#1e3a5f;color:white;padding:24px 28px;border-radius:8px;margin-bottom:24px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
       <div>
-        <h1 style="font-size:20px;font-weight:bold;margin-bottom:3px;">AJ's Generator Service</h1>
+        <h1 style="font-size:20px;font-weight:bold;margin-bottom:3px;">GenShield</h1>
         <p style="font-size:12px;color:#a8c4e0;">Professional Generator Service &amp; Maintenance</p>
       </div>
       <div style="text-align:right;">
@@ -161,7 +161,7 @@ export default function CustomerDetail() {
     <tbody>${jobRows}</tbody>
   </table>
   <div style="margin-top:32px;text-align:center;border-top:1px solid #e5e7eb;padding-top:16px;">
-    <p style="font-size:11px;color:#aaa;">AJ's Generator Service · This document is a record of service visits performed by AJ's Generator Service</p>
+    <p style="font-size:11px;color:#aaa;">GenShield · This document is a record of service visits performed by GenShield</p>
   </div>
 </body>
 </html>`;
