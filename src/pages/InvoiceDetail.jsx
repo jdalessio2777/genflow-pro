@@ -124,7 +124,7 @@ export default function InvoiceDetail() {
         subtitle={
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="truncate min-w-0">{invoice.customer_name}</span>
-            <RewardBadge show={invoiceCustomer?.pending_reward} />
+            <RewardBadge show={invoiceCustomer?.pending_reward} compact />
           </span>
         }
         back="/invoices"

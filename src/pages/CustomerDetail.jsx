@@ -104,10 +104,15 @@ export default function CustomerDetail() {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; color: #1a1a1a; background: white; padding: 32px; max-width: 800px; margin: 0 auto; }
-  @media print { body { padding: 0; } @page { margin: 0.75in; } }
+  @media print { body { padding: 0; } @page { margin: 0.75in; } .no-print { display: none !important; } }
 </style>
 </head>
 <body>
+  <div class="no-print" style="max-width:800px;margin:0 auto 16px;display:flex;justify-content:flex-end;">
+    <button onclick="window.close()" style="font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#1e3a5f;background:#f0f4f8;border:1px solid #cbd5e1;border-radius:8px;padding:8px 16px;cursor:pointer;">
+      ✕ Close & Return to GenFlow Pro
+    </button>
+  </div>
   <div style="background:#1e3a5f;color:white;padding:24px 28px;border-radius:8px;margin-bottom:24px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
       <div>
@@ -185,7 +190,7 @@ export default function CustomerDetail() {
         title={
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="truncate min-w-0">{customer.name}</span>
-            <RewardBadge show={customer.pending_reward} />
+            <RewardBadge show={customer.pending_reward} compact />
           </span>
         }
         subtitle={customer.generator_model || "No generator info"}
@@ -256,15 +261,15 @@ export default function CustomerDetail() {
         {/* Contact quick actions */}
         <div className="flex gap-2">
           {customer.phone && (
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <Card className="p-3 text-center hover:bg-muted/50 transition-colors">
-                <p className="text-xs font-medium mb-2">{formatPhone(customer.phone)}</p>
+                <p className="text-xs font-medium mb-2 truncate">{formatPhone(customer.phone)}</p>
                 <CallButtons phone={customer.phone} />
               </Card>
             </div>
           )}
           {customer.email && (
-            <a href={`mailto:${customer.email}`} className="flex-1">
+            <a href={`mailto:${customer.email}`} className="flex-1 min-w-0">
               <Card className="p-3 text-center hover:bg-muted/50 transition-colors">
                 <Mail className="w-5 h-5 mx-auto text-primary mb-1" />
                 <p className="text-xs font-medium truncate">{customer.email}</p>
@@ -272,7 +277,7 @@ export default function CustomerDetail() {
             </a>
           )}
           {customer.address && (
-            <a href={`https://maps.google.com/?q=${encodeURIComponent(customer.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+            <a href={`https://maps.google.com/?q=${encodeURIComponent(customer.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0">
               <Card className="p-3 text-center hover:bg-muted/50 transition-colors">
                 <MapPin className="w-5 h-5 mx-auto text-primary mb-1" />
                 <p className="text-xs font-medium">Maps</p>
