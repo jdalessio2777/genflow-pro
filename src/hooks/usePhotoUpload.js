@@ -24,6 +24,13 @@ export function usePhotoUpload(baseConfig = {}) {
       await config.onUploaded?.(file_url, file);
       if (config.successMessage) toast.success(config.successMessage);
     } catch (err) {
+      console.error('[photo-upload] Full error:', {
+        message: err?.message,
+        status: err?.status,
+        statusCode: err?.statusCode,
+        name: err?.name,
+        error: err,
+      });
       if (config.onError) config.onError(err);
       else toast.error(config.errorMessage ? `${config.errorMessage}: ${err.message}` : (err.message || "Photo upload failed"));
     } finally {
