@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
-import { integrationsCore } from "@/lib/coreIntegrations";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Card } from "@/components/ui/card";
@@ -238,9 +238,13 @@ function ExpensesTab({ expenses }) {
   const queryClient = useQueryClient();
   const { confirmDelete } = usePreferences();
   const [open, setOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
+  const { uploading, handleFileChange: handlePhotoCapture } = usePhotoUpload({
+    onSelected: (file) => setReceiptPreview(URL.createObjectURL(file)),
+    onUploaded: (file_url) => setReceiptUrl(file_url),
+    onError: () => { toast.error("Photo upload failed — expense will save without receipt"); setReceiptUrl(null); },
+  });
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
     amount: "",
@@ -269,23 +273,6 @@ function ExpensesTab({ expenses }) {
     setReceiptUrl(null);
     setReceiptPreview(null);
     setForm({ date: new Date().toISOString().split("T")[0], amount: "", category: "Other", description: "" });
-  };
-
-  const handlePhotoCapture = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setReceiptPreview(URL.createObjectURL(file));
-    setUploading(true);
-    try {
-      const { file_url } = await integrationsCore.UploadFile({ file });
-      setReceiptUrl(file_url);
-    } catch {
-      toast.error("Photo upload failed — expense will save without receipt");
-      setReceiptUrl(null);
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
   };
 
   const handleSave = () => {

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
-import { integrationsCore } from "@/lib/coreIntegrations";
-import { compressImage } from "@/lib/compressImage";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,7 +13,6 @@ const PHOTO_TYPES = ["before", "after", "issue", "general"];
 
 export default function JobPhotosTab({ jobId, photos, isClosed }) {
   const queryClient = useQueryClient();
-  const [uploading, setUploading] = useState(false);
   const [photoType, setPhotoType] = useState("before");
   const { confirmDelete } = usePreferences();
 
@@ -26,13 +24,8 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
     },
   });
 
-  const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const compressed = await compressImage(file);
-      const { file_url } = await integrationsCore.UploadFile({ file: compressed });
+  const { uploading, handleFileChange: handleUpload } = usePhotoUpload({
+    onUploaded: async (file_url) => {
       await db.JobPhoto.create({
         job_id: jobId,
         url: file_url,
@@ -41,13 +34,9 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
       });
       queryClient.invalidateQueries({ queryKey: ["job-photos", jobId] });
       toast.success(`${photoType.charAt(0).toUpperCase() + photoType.slice(1)} photo added`);
-    } catch {
-      toast.error("Upload failed");
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
-  };
+    },
+    errorMessage: "Upload failed",
+  });
 
   const groups = [
     { key: "before", label: "Before" },

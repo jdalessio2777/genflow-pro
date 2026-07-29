@@ -3,12 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
-import { integrationsCore } from "@/lib/coreIntegrations";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Loader2, Camera, Printer } from "lucide-react";
+import { CheckCircle2, Loader2, Camera, ImagePlus, Printer } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { toast } from "sonner";
@@ -119,6 +119,9 @@ export default function DocumentFill() {
   const [values, setValues] = useState({});
   const initialized = useRef(false);
   const preFilledFields = useRef(new Set());
+  const { uploading: photoUploading, handleFileChange: handlePhotoFileChange } = usePhotoUpload({
+    errorMessage: "Photo upload failed",
+  });
 
   // Load saved field values once on mount
   useEffect(() => {
@@ -234,12 +237,6 @@ export default function DocumentFill() {
     }
   };
 
-  const handlePhotoUpload = async (fieldId, file) => {
-    const { file_url } = await integrationsCore.UploadFile({ file });
-    updateValue(fieldId, file_url);
-    toast.success("Photo uploaded");
-  };
-
   const handleSave = () => {
     debouncedSave.cancel();
     saveMutation.mutate({ field_values: values });
@@ -315,15 +312,35 @@ export default function DocumentFill() {
               <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>
             </div>
           ) : (
-            <label
-              className="flex items-center justify-center gap-2 h-16 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              style={{ borderColor: "#ddd" }}
-            >
-              <Camera className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-400">Tap to capture</span>
-              <input type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={e => { if (e.target.files[0]) handlePhotoUpload(field.id, e.target.files[0]); }} />
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label
+                className={`flex items-center justify-center gap-1.5 h-14 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${photoUploading ? "opacity-50 pointer-events-none" : ""}`}
+                style={{ borderColor: "#ddd" }}
+              >
+                {photoUploading
+                  ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                  : <Camera className="w-4 h-4 text-gray-400" />
+                }
+                <span className="text-sm text-gray-400">{photoUploading ? "Uploading..." : "Camera"}</span>
+                <input type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => handlePhotoFileChange(e, {
+                    onUploaded: (file_url) => updateValue(field.id, file_url),
+                    successMessage: "Photo uploaded",
+                  })} />
+              </label>
+              <label
+                className={`flex items-center justify-center gap-1.5 h-14 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${photoUploading ? "opacity-50 pointer-events-none" : ""}`}
+                style={{ borderColor: "#ddd" }}
+              >
+                <ImagePlus className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-400">Gallery</span>
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={e => handlePhotoFileChange(e, {
+                    onUploaded: (file_url) => updateValue(field.id, file_url),
+                    successMessage: "Photo uploaded",
+                  })} />
+              </label>
+            </div>
           )}
         </div>
       );
