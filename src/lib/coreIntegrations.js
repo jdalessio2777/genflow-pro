@@ -29,6 +29,25 @@ export const integrationsCore = {
     return data;
   },
 
+  // Most transient failures (a brief network blip, a momentary API hiccup)
+  // resolve themselves within seconds. Retries immediately, then after 3s,
+  // then after 10s — 3 attempts total — before giving up. Throws the last
+  // error once all attempts are exhausted, same contract as SendEmail.
+  async SendEmailWithRetry({ to, subject, html }, delays = [3000, 10000]) {
+    let lastError;
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      try {
+        return await this.SendEmail({ to, subject, html });
+      } catch (e) {
+        lastError = e;
+        if (attempt < delays.length) {
+          await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+        }
+      }
+    }
+    throw lastError;
+  },
+
   async InvokeLLM(body) {
     const { data, error } = await supabase.functions.invoke('invoke-llm', { body });
     if (error) throw error;
