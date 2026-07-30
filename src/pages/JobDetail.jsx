@@ -454,7 +454,7 @@ export default function JobDetail() {
         await integrationsCore.SendEmailWithRetry({
           to: customer.email,
           subject: `Appointment Confirmed — GenShield Generator Service`,
-          html: confirmationEmailHTML({ customer, job, techFirstName }),
+          html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
         });
         await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
         toast.success(`Confirmation sent to ${customer.name}`);
@@ -549,7 +549,7 @@ export default function JobDetail() {
       await integrationsCore.SendEmailWithRetry({
         to: customer.email,
         subject: `Appointment Confirmed — GenShield Generator Service`,
-        html: confirmationEmailHTML({ customer, job, techFirstName }),
+        html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
       });
       await db.Job.update(id, {
         status: 'scheduled',

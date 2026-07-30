@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import { integrationsCore } from '@/lib/coreIntegrations';
 import { confirmationEmailHTML } from '@/lib/emailTemplates';
+import { usePreferences } from '@/hooks/usePreferences';
 
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -44,6 +45,7 @@ import { OfflineProvider } from '@/lib/OfflineContext';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user } = useAuth();
+  const { use24h } = usePreferences();
 
   useEffect(() => {
     if (!user) return;
@@ -74,7 +76,7 @@ const AuthenticatedApp = () => {
               await integrationsCore.SendEmailWithRetry({
                 to: customer.email,
                 subject: `Appointment Confirmed — GenShield Generator Service`,
-                html: confirmationEmailHTML({ customer, job, techFirstName }),
+                html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
               });
 
               await supabase
@@ -104,7 +106,7 @@ const AuthenticatedApp = () => {
 
     sendPendingConfirmations();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, use24h]);
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (

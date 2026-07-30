@@ -7,9 +7,9 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 }
 
-function fmtTime(iso) {
+function fmtTime(iso, use24h = false) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return new Date(iso).toLocaleTimeString('en-US', { hour: use24h ? '2-digit' : 'numeric', minute: '2-digit', hour12: !use24h })
 }
 
 function fmtJobType(raw) {
@@ -202,11 +202,8 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, di
 </html>`
 }
 
-export function confirmationEmailHTML({ customer, job, techFirstName }) {
-  const arrivalTime = job.scheduled_date ? fmtTime(job.scheduled_date) : '—'
-  const arrivalEnd = job.scheduled_date
-    ? fmtTime(new Date(new Date(job.scheduled_date).getTime() + 2 * 60 * 60 * 1000).toISOString())
-    : '—'
+export function confirmationEmailHTML({ customer, job, techFirstName, use24h = false }) {
+  const arrivalTime = job.scheduled_date ? fmtTime(job.scheduled_date, use24h) : '—'
   const generatorInfo = [customer.generator_model, customer.generator_serial].filter(Boolean).join(' · ')
   const techName = techFirstName || 'our technician'
 
@@ -233,7 +230,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName }) {
         <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${customer.name},</p>
         <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
           Great news — your service appointment is confirmed and on our schedule.
-          Our certified technician will arrive during the window below.
+          Our certified technician will arrive at the time below.
           You don't need to do anything — just make sure the generator is accessible.
         </p>
         ${divider()}
@@ -250,7 +247,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName }) {
               <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;vertical-align:top;">📆 Date &amp; Time</td>
               <td style="padding:12px 20px;font-size:13px;color:#374151;">
                 <strong>${fmtDate(job.scheduled_date)}</strong><br>
-                <span style="color:#6b7280;font-size:12px;">Arrival window: ${arrivalTime} – ${arrivalEnd}</span>
+                <span style="color:#6b7280;font-size:12px;">Arrival time: ${arrivalTime}</span>
               </td>
             </tr>
             <tr style="border-bottom:1px solid #f0f0f0;">
