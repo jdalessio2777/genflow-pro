@@ -450,14 +450,16 @@ export default function JobDetail() {
     if (newStatus === "scheduled" && customer?.email && job.scheduled_date) {
       try {
         const techFirstName = (job.assigned_to_name || "").split(" ")[0] || "our technician";
-        await integrationsCore.SendEmail({
+        await integrationsCore.SendEmailWithRetry({
           to: customer.email,
           subject: `Appointment Confirmed — GenShield Generator Service`,
           html: confirmationEmailHTML({ customer, job, techFirstName }),
         });
+        await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
         toast.success(`Confirmation sent to ${customer.name}`);
       } catch (e) {
         toast.error(`Failed to send confirmation email: ${e.message}`);
+        await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
       }
     }
     // Completion email is sent from a single place: the "Send Completion Summary"
@@ -520,18 +522,19 @@ export default function JobDetail() {
       await db.Job.update(id, { quote_approval_token: approvalToken });
 
       const approveUrl = `https://genshieldservice.com/approve?job=${id}&token=${approvalToken}`;
-      await integrationsCore.SendEmail({
+      await integrationsCore.SendEmailWithRetry({
         to: email,
         subject: `Your Service Quote — GenShield Generator Service`,
         html: quoteEmailHTML({ customer, job, lineItems, subtotal: total, discount: 0, total, approveUrl }),
       });
-      updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString() });
+      updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString(), quote_send_failed: false });
       haptics.light();
       toast.success(`Quote sent to ${email}`);
       setQuoteEmailOpen(false);
     } catch (e) {
       haptics.error();
       toast.error(`Failed to send quote: ${e.message}`);
+      await db.Job.update(id, { quote_send_failed: true }).catch(() => {});
     } finally {
       setSendingQuote(false);
     }
@@ -542,7 +545,7 @@ export default function JobDetail() {
     setSendingConfirmation(true);
     try {
       const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
-      await integrationsCore.SendEmail({
+      await integrationsCore.SendEmailWithRetry({
         to: customer.email,
         subject: `Appointment Confirmed — GenShield Generator Service`,
         html: confirmationEmailHTML({ customer, job, techFirstName }),
@@ -551,6 +554,7 @@ export default function JobDetail() {
         status: 'scheduled',
         approval_source: 'phone',
         confirmation_sent_at: new Date().toISOString(),
+        confirmation_send_failed: false,
       });
       queryClient.invalidateQueries({ queryKey: ['job', id] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -559,6 +563,8 @@ export default function JobDetail() {
     } catch (e) {
       haptics.error();
       toast.error(`Failed to send confirmation: ${e.message}`);
+      await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['job', id] });
     } finally {
       setSendingConfirmation(false);
     }
@@ -568,15 +574,17 @@ export default function JobDetail() {
     if (!customer?.email) return;
     setSendingCompletion(true);
     try {
-      await integrationsCore.SendEmail({
+      await integrationsCore.SendEmailWithRetry({
         to: customer.email,
         subject: `Service Complete — GenShield Generator Service`,
         html: completionEmailHTML({ customer, job, parts, labor, documents, includeChecklist }),
       });
+      await db.Job.update(id, { completion_send_failed: false });
       toast.success(`Completion summary sent to ${customer.email}`);
     } catch (e) {
       haptics.error();
       toast.error(`Failed to send completion email: ${e.message}`);
+      await db.Job.update(id, { completion_send_failed: true }).catch(() => {});
     } finally {
       setSendingCompletion(false);
       setCompletionEmailOpen(false);

@@ -70,18 +70,29 @@ const AuthenticatedApp = () => {
             if (!customer?.email) continue;
 
             const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
-            await integrationsCore.SendEmail({
-              to: customer.email,
-              subject: `Appointment Confirmed — GenShield Generator Service`,
-              html: confirmationEmailHTML({ customer, job, techFirstName }),
-            });
+            try {
+              await integrationsCore.SendEmailWithRetry({
+                to: customer.email,
+                subject: `Appointment Confirmed — GenShield Generator Service`,
+                html: confirmationEmailHTML({ customer, job, techFirstName }),
+              });
 
-            await supabase
-              .from('jobs')
-              .update({ pending_confirmation: false, confirmation_sent_at: new Date().toISOString() })
-              .eq('id', job.id);
+              await supabase
+                .from('jobs')
+                .update({ pending_confirmation: false, confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false })
+                .eq('id', job.id);
 
-            toast.success(`Confirmation sent to ${customer.name}`);
+              toast.success(`Confirmation sent to ${customer.name}`);
+            } catch (sendError) {
+              // All 3 attempts failed. Stop retrying on every future app load —
+              // surface it on the Dashboard's "Needs Attention" alert instead,
+              // so it's never silently lost.
+              await supabase
+                .from('jobs')
+                .update({ pending_confirmation: false, confirmation_send_failed: true })
+                .eq('id', job.id);
+              console.warn('[AutoConfirm] Failed for job', job.id, sendError.message);
+            }
           } catch (e) {
             console.warn('[AutoConfirm] Failed for job', job.id, e.message);
           }
