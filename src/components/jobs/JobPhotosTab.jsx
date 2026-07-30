@@ -103,7 +103,7 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
                           onClick={() => {
                             if (!confirmDelete || window.confirm("Remove this photo?")) deleteMutation.mutate(photo.id);
                           }}
-                          className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity"
+                          className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 rounded-lg flex items-center justify-center active:bg-black/80 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5 text-white" />
                         </button>
