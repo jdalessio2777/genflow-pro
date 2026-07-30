@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
@@ -22,6 +22,8 @@ import StripePaymentModal from "@/components/payments/StripePaymentModal";
 export default function InvoiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromJobId = location.state?.fromJobId;
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [showStripeModal, setShowStripeModal] = useState(false);
@@ -41,9 +43,29 @@ export default function InvoiceDetail() {
 
   const updateMutation = useMutation({
     mutationFn: (data) => db.Invoice.update(id, data),
-    onSuccess: () => {
+    onSuccess: (updatedInvoice) => {
       queryClient.invalidateQueries({ queryKey: ["invoice", id] });
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      // The job this invoice belongs to caches its own copy of this same
+      // invoice (JobDetail.jsx's ["job-invoice", jobId] query) to show
+      // Paid/Unpaid. That query has no live subscriber while we're on this
+      // page, so invalidateQueries alone only marks it stale for whenever
+      // it next remounts — the remount's first render still paints from the
+      // (now-stale) cached value before its own refetch resolves, producing
+      // a brief flash of the old status. Patching the cache directly with
+      // the row this mutation just returned removes that flash entirely;
+      // invalidating on top is just a background double-check.
+      if (updatedInvoice?.job_id) {
+        queryClient.setQueryData(["job-invoice", updatedInvoice.job_id], (old) => {
+          if (!Array.isArray(old)) return [updatedInvoice];
+          const exists = old.some(inv => inv.id === updatedInvoice.id);
+          return exists
+            ? old.map(inv => (inv.id === updatedInvoice.id ? updatedInvoice : inv))
+            : [...old, updatedInvoice];
+        });
+        queryClient.invalidateQueries({ queryKey: ["job-invoice", updatedInvoice.job_id] });
+        queryClient.invalidateQueries({ queryKey: ["job", updatedInvoice.job_id] });
+      }
     },
   });
 
@@ -182,7 +204,8 @@ export default function InvoiceDetail() {
             <RewardBadge show={invoiceCustomer?.pending_reward} compact />
           </span>
         }
-        back="/invoices"
+        back={fromJobId ? `/jobs/${fromJobId}` : "/invoices"}
+        backLabel={fromJobId ? "Back to Job" : undefined}
         actions={
           <AlertDialog>
             <AlertDialogTrigger asChild>

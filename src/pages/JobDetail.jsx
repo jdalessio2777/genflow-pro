@@ -287,6 +287,7 @@ export default function JobDetail() {
   const { data: existingInvoices = [] } = useQuery({
     queryKey: ["job-invoice", id],
     queryFn: () => db.Invoice.filter({ job_id: id }),
+    initialData: () => queryClient.getQueryData(["job-invoice", id]),
   });
   const existingInvoice = existingInvoices[0] || null;
 
@@ -628,20 +629,20 @@ export default function JobDetail() {
     queryClient.invalidateQueries({ queryKey: ["job-invoice", id] });
     queryClient.invalidateQueries({ queryKey: ["invoices"] });
     toast.success("Invoice finalized");
-    navigate(`/invoices/${inv.id}`);
+    navigate(`/invoices/${inv.id}`, { state: { fromJobId: id } });
   };
 
   const handleCollectPayment = async () => {
     const invoiceData = buildInvoiceData();
     if (existingInvoice) {
       await db.Invoice.update(existingInvoice.id, invoiceData);
-      navigate(`/invoices/${existingInvoice.id}`);
+      navigate(`/invoices/${existingInvoice.id}`, { state: { fromJobId: id } });
     } else {
       const inv = await db.Invoice.create({
         ...invoiceData, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
         invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft",
       });
-      navigate(`/invoices/${inv.id}`);
+      navigate(`/invoices/${inv.id}`, { state: { fromJobId: id } });
     }
   };
 

@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-export default function PageHeader({ title, subtitle, back, actions, className }) {
+export default function PageHeader({ title, subtitle, back, backLabel, actions, className }) {
   const navigate = useNavigate();
 
   return (
@@ -19,9 +19,13 @@ export default function PageHeader({ title, subtitle, back, actions, className }
               else if (typeof back === "string") navigate(back);
               else navigate(-1);
             }}
-              className="touch-target flex items-center justify-center w-9 h-9 -ml-1 rounded-xl hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+              className={cn(
+                "touch-target flex items-center justify-center rounded-xl hover:bg-muted active:bg-muted/80 transition-colors shrink-0",
+                backLabel ? "h-9 pl-1.5 pr-3 -ml-1 gap-1" : "w-9 h-9 -ml-1"
+              )}
             >
               <ArrowLeft className="w-5 h-5" />
+              {backLabel && <span className="text-sm font-medium">{backLabel}</span>}
             </button>
           )}
           <div className="min-w-0">
