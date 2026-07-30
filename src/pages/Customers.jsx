@@ -45,6 +45,9 @@ function CustomerCard({ customer }) {
   const navigate = useNavigate();
   const deleteMutation = useMutation({
     mutationFn: async (customerId) => {
+      const invoices = await db.Invoice.filter({ customer_id: customerId });
+      await Promise.all(invoices.map(inv => db.Invoice.delete(inv.id)));
+
       const jobs = await db.Job.filter({ customer_id: customerId });
       for (const job of jobs) {
         const [parts, labor, docs, photos] = await Promise.all([

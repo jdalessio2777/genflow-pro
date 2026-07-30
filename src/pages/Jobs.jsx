@@ -65,17 +65,19 @@ export default function Jobs() {
 
   const deleteMutation = useMutation({
     mutationFn: async (jobId) => {
-      const [parts, labor, docs, photos] = await Promise.all([
+      const [parts, labor, docs, photos, invoices] = await Promise.all([
         db.JobPart.filter({ job_id: jobId }),
         db.JobLabor.filter({ job_id: jobId }),
         db.JobDocument.filter({ job_id: jobId }),
         db.JobPhoto.filter({ job_id: jobId }),
+        db.Invoice.filter({ job_id: jobId }),
       ]);
       await Promise.all([
         ...parts.map(r => db.JobPart.delete(r.id)),
         ...labor.map(r => db.JobLabor.delete(r.id)),
         ...docs.map(r => db.JobDocument.delete(r.id)),
         ...photos.map(r => db.JobPhoto.delete(r.id)),
+        ...invoices.map(r => db.Invoice.delete(r.id)),
       ]);
       return db.Job.delete(jobId);
     },

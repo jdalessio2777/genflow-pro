@@ -23,6 +23,9 @@ export default function CustomerDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
+      const invoices = await db.Invoice.filter({ customer_id: id });
+      await Promise.all(invoices.map(inv => db.Invoice.delete(inv.id)));
+
       const jobs = await db.Job.filter({ customer_id: id });
       for (const job of jobs) {
         await Promise.all([
@@ -33,8 +36,6 @@ export default function CustomerDetail() {
         ]);
         await db.Job.delete(job.id);
       }
-      const invoices = await db.Invoice.filter({ customer_id: id });
-      await Promise.all(invoices.map(inv => db.Invoice.delete(inv.id)));
       await db.Customer.delete(id);
     },
     onSuccess: () => {
