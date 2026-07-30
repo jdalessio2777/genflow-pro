@@ -6,6 +6,7 @@ const ALLOWED_EMAILS = new Set([
   'alex.russo@genshieldservice.com',
   'derek.j.sainz@gmail.com',
   'seanmch12@gmail.com',
+  'genflow-qa-test@genshieldservice.com',
 ]);
 
 const AuthContext = createContext();
