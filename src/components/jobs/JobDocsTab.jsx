@@ -46,6 +46,7 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
       setOpen(false);
       toast.success("Document attached");
     },
+    onError: (err) => toast.error("Failed to attach document: " + err.message),
   });
 
   return (

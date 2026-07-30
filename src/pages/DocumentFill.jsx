@@ -196,6 +196,7 @@ export default function DocumentFill() {
   const saveMutation = useMutation({
     mutationFn: (data) => db.JobDocument.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["job-doc", id] }),
+    onError: (err) => toast.error("Failed to save document: " + err.message),
   });
 
   const debouncedSave = useCallback(
