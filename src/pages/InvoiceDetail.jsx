@@ -7,7 +7,9 @@ import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock, Smartphone } from "lucide-react";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -23,6 +25,8 @@ export default function InvoiceDetail() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [showStripeModal, setShowStripeModal] = useState(false);
+  const [stripeAppOpened, setStripeAppOpened] = useState(false);
+  const [stripeAppTxnId, setStripeAppTxnId] = useState("");
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
@@ -106,6 +110,57 @@ export default function InvoiceDetail() {
                 buildRow("Method", "Stripe (credit/debit card)"),
                 buildRow("Date", new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
               ].filter(Boolean))}
+            `,
+            triggeredBy: getUserDisplayName(user),
+          });
+        },
+      }
+    );
+  };
+
+  // Base + tax only — matches what's actually owed. Deliberately excludes
+  // surcharge_amount (a concept specific to the in-app online-card flow;
+  // Tap to Pay via the Stripe Dashboard app has no such surcharge here).
+  const getOwedTotal = () => (invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0);
+
+  const handleChargeViaStripeApp = async () => {
+    const amountText = formatCurrency(getOwedTotal());
+    try {
+      await navigator.clipboard.writeText(amountText);
+    } catch {
+      // Clipboard write can fail (permissions/context) — still proceed to open the app.
+    }
+    window.location.href = "stripedashboard://";
+    toast.success(`Copied ${amountText} to clipboard — opening Stripe Dashboard app`);
+    setStripeAppOpened(true);
+  };
+
+  const markStripeAppPaid = () => {
+    const owedTotal = getOwedTotal();
+    const txnId = stripeAppTxnId.trim();
+    updateMutation.mutate(
+      {
+        status: "paid",
+        payment_method: "stripe_app",
+        paid_date: new Date().toISOString(),
+        stripe_payment_intent_id: txnId,
+      },
+      {
+        onSuccess: () => {
+          haptics.success();
+          toast.success("Invoice marked as paid");
+          notifyTeam({
+            subject: `Invoice Paid (Stripe App) — ${invoice.customer_name} · $${owedTotal.toFixed(2)}`,
+            body: `
+              <p style="font-size:14px;margin:0 0 4px 0;">${buildEventBadge("Payment Received", "green")}</p>
+              ${buildTable([
+                buildRow("Customer", invoice.customer_name),
+                buildRow("Invoice", invoice.invoice_number),
+                buildRow("Amount", `$${owedTotal.toFixed(2)}`),
+                buildRow("Method", "Stripe App (Tap to Pay)"),
+                buildRow("Transaction ID", txnId),
+                buildRow("Date", new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
+              ])}
             `,
             triggeredBy: getUserDisplayName(user),
           });
@@ -222,6 +277,64 @@ export default function InvoiceDetail() {
             >
               <CreditCard className="w-4 h-4" /> Charge Card Online
             </Button>
+          </Card>
+        )}
+
+        {(invoice.status === "draft" || invoice.status === "sent") && (
+          <Card className="p-4 border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/40">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="rounded-xl bg-indigo-100 dark:bg-indigo-900/60 p-2 shrink-0">
+                <Smartphone className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Charge via Stripe App</p>
+                <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-0.5">
+                  Use Tap to Pay in the Stripe Dashboard app, then record the transaction here
+                </p>
+              </div>
+            </div>
+            <Button
+              className="w-full rounded-xl h-12 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+              onClick={handleChargeViaStripeApp}
+            >
+              <Smartphone className="w-4 h-4" /> Charge via Stripe App
+            </Button>
+
+            {stripeAppOpened && (
+              <div className="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-800 space-y-2">
+                <div>
+                  <Label className="text-xs font-semibold text-indigo-900 dark:text-indigo-100">Stripe Transaction ID</Label>
+                  <Input
+                    value={stripeAppTxnId}
+                    onChange={e => setStripeAppTxnId(e.target.value)}
+                    placeholder="ch_... or pi_..."
+                    className="rounded-xl font-mono text-sm mt-1"
+                  />
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      className="w-full rounded-xl h-11 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                      disabled={!stripeAppTxnId.trim()}
+                    >
+                      <CheckCircle2 className="w-4 h-4" /> Record Stripe Payment
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Confirm Stripe App Payment</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Confirm you charged {formatCurrency(getOwedTotal())} via Stripe app and are recording transaction ID: {stripeAppTxnId.trim()}?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={markStripeAppPaid} className="bg-indigo-600 hover:bg-indigo-700">Confirm &amp; Mark Paid</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
           </Card>
         )}
 
