@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
 import { formatTime } from "@/lib/formatTime";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useAuth } from "@/lib/AuthContext";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 
@@ -114,6 +115,7 @@ function StatCard({ icon: Icon, label, value, sub, color }) {
 
 export default function Dashboard() {
   const { use24h } = usePreferences();
+  const { user } = useAuth();
   const { data: jobs = [] } = useQuery({
     queryKey: ["jobs"],
     queryFn: () => db.Job.list("-created_date", 100),
@@ -188,6 +190,7 @@ export default function Dashboard() {
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = (user?.full_name || user?.name || user?.email?.split("@")[0] || "").split(" ")[0];
 
   const now = new Date();
   const thisMonthRevenue = invoices
@@ -217,7 +220,7 @@ export default function Dashboard() {
               <p className="text-blue-200 text-sm font-medium">
                 {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </p>
-              <h1 className="text-white text-2xl font-bold mt-0.5">{greeting}, Jeremy</h1>
+              <h1 className="text-white text-2xl font-bold mt-0.5">{firstName ? `${greeting}, ${firstName}` : greeting}</h1>
               <p className="text-blue-200/80 text-sm mt-0.5">Here's what's happening today.</p>
             </div>
             <div className="flex items-center gap-2">
