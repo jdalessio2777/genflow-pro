@@ -48,21 +48,29 @@ export default function DocumentTemplateForm() {
     enabled: isEdit,
   });
 
+  const cleanPayload = (data) => ({
+    name: data.name,
+    description: data.description,
+    category: data.category,
+    field_definitions: data.field_definitions,
+  });
+
   const mutation = useMutation({
     mutationFn: (data) => isEdit
-      ? db.DocumentTemplate.update(id, data)
-      : db.DocumentTemplate.create(data),
+      ? db.DocumentTemplate.update(id, cleanPayload(data))
+      : db.DocumentTemplate.create(cleanPayload(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success(isEdit ? "Template updated" : "Template created");
       navigate("/catalog");
     },
+    onError: (err) => toast.error("Failed to save template: " + err.message),
   });
 
   const addField = () => {
     setForm(prev => ({
       ...prev,
-      fields: [...prev.field_definitions, {
+      field_definitions: [...prev.field_definitions, {
         id: `field_${Date.now()}`,
         label: "",
         type: "text",
@@ -75,11 +83,11 @@ export default function DocumentTemplateForm() {
   const updateField = (index, key, value) => {
     const updated = [...form.field_definitions];
     updated[index] = { ...updated[index], [key]: value };
-    setForm(prev => ({ ...prev, fields: updated }));
+    setForm(prev => ({ ...prev, field_definitions: updated }));
   };
 
   const removeField = (index) => {
-    setForm(prev => ({ ...prev, fields: prev.field_definitions.filter((_, i) => i !== index) }));
+    setForm(prev => ({ ...prev, field_definitions: prev.field_definitions.filter((_, i) => i !== index) }));
   };
 
   const handleSubmit = (e) => {
