@@ -400,6 +400,15 @@ export default function JobDetail() {
     return { partsCost, partsPrice, laborCost, laborPrice };
   };
 
+  const maybeOpenScheduleNext = () => {
+    if (!["maintenance", "battery_replacement"].includes(job.job_type)) return;
+    const intervalMonths = customer?.service_interval === "6_months" ? 6 : customer?.service_interval === "24_months" ? 24 : 12;
+    const suggested = new Date();
+    suggested.setMonth(suggested.getMonth() + intervalMonths);
+    setNextDate(suggested.toISOString().slice(0, 16));
+    setScheduleNextOpen(true);
+  };
+
   const handleStatusChange = async (newStatus, extraFields = {}) => {
     if (isClosed) return;
     if (newStatus === "completed" && job?.requires_document) {
@@ -451,24 +460,12 @@ export default function JobDetail() {
         toast.error(`Failed to send confirmation email: ${e.message}`);
       }
     }
-    if (newStatus === "completed" && customer?.email) {
-      try {
-        await integrationsCore.SendEmail({
-          to: customer.email,
-          subject: `Service Complete — GenShield Generator Service`,
-          html: completionEmailHTML({ customer, job, parts, labor, documents, includeChecklist }),
-        });
-        toast.success(`Completion summary sent to ${customer.name}`);
-      } catch (e) {
-        toast.error(`Failed to send completion email: ${e.message}`);
-      }
-    }
-    if (newStatus === "completed" && ["maintenance", "battery_replacement"].includes(job.job_type)) {
-      const intervalMonths = customer?.service_interval === "6_months" ? 6 : customer?.service_interval === "24_months" ? 24 : 12;
-      const suggested = new Date();
-      suggested.setMonth(suggested.getMonth() + intervalMonths);
-      setNextDate(suggested.toISOString().slice(0, 16));
-      setScheduleNextOpen(true);
+    // Completion email is sent from a single place: the "Send Completion Summary"
+    // dialog (doSendCompletionEmail), triggered explicitly by the user. It used to
+    // also auto-send here, which could duplicate-send if the user then clicked
+    // "Send Summary" in that dialog too.
+    if (newStatus === "completed" && !customer?.email) {
+      maybeOpenScheduleNext();
     }
 
     const triggeredBy = getUserDisplayName(user);
@@ -583,6 +580,7 @@ export default function JobDetail() {
     } finally {
       setSendingCompletion(false);
       setCompletionEmailOpen(false);
+      maybeOpenScheduleNext();
     }
   };
 
@@ -742,7 +740,7 @@ export default function JobDetail() {
       </div>
 
       {/* ── HORIZONTAL TAB BAR ── */}
-      <div className="bg-white dark:bg-gray-900 border-b border-border shrink-0 shadow-sm">
+      <div className="bg-white dark:bg-gray-900 border-b border-border shrink-0 shadow-sm min-w-0">
       <div className="flex overflow-x-auto max-w-lg mx-auto" style={{ scrollbarWidth: "none" }}>
       {[
         { key: "overview", label: "Overview", icon: "⚡" },
@@ -1180,7 +1178,7 @@ export default function JobDetail() {
                     </div>
                   )}
                   <div className="flex gap-2 mt-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCompletionEmailOpen(false)}>Skip</Button>
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setCompletionEmailOpen(false); maybeOpenScheduleNext(); }}>Skip</Button>
                     <Button
                       className="flex-1 rounded-xl gap-1.5 bg-green-600 hover:bg-green-700"
                       disabled={sendingCompletion}
