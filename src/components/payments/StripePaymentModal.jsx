@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { useTheme } from 'next-themes';
+import { usePreferences } from '@/hooks/usePreferences';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, CreditCard, ShieldCheck } from 'lucide-react';
@@ -26,7 +26,7 @@ const SURCHARGE_RATE = 0.03;
 function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClose }) {
   const stripe = useStripe();
   const elements = useElements();
-  const { resolvedTheme } = useTheme();
+  const { darkMode } = usePreferences();
 
   const [phase, setPhase] = useState('entry');
   const [funding, setFunding] = useState(null);
@@ -55,11 +55,11 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
 
   const cardStyle = {
     base: {
-      color: resolvedTheme === 'dark' ? '#f9fafb' : '#111827',
+      color: darkMode ? '#f9fafb' : '#111827',
       fontSize: '16px',
       fontFamily: 'inherit',
       fontSmoothing: 'antialiased',
-      '::placeholder': { color: resolvedTheme === 'dark' ? '#6b7280' : '#9ca3af' },
+      '::placeholder': { color: darkMode ? '#6b7280' : '#9ca3af' },
     },
     invalid: { color: '#ef4444', iconColor: '#ef4444' },
   };
@@ -295,7 +295,7 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
 // ─── Modal shell ──────────────────────────────────────────────────────────────
 
 export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
-  const { resolvedTheme } = useTheme();
+  const { darkMode } = usePreferences();
   const [clientSecret, setClientSecret] = useState(null);
   const [paymentIntentId, setPaymentIntentId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -341,7 +341,7 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
   };
 
   const appearance = {
-    theme: resolvedTheme === 'dark' ? 'night' : 'stripe',
+    theme: darkMode ? 'night' : 'stripe',
     variables: { borderRadius: '12px', fontFamily: 'inherit' },
   };
 
