@@ -8,7 +8,7 @@ export default function PageTransition({ children }) {
       animate={{ opacity: 1, y: 0 }}
       exit={reduced ? {} : { opacity: 0, y: -6 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
-      style={{ willChange: 'opacity, transform' }}
+      style={{ willChange: 'opacity, transform', touchAction: 'pan-y' }}
     >
       {children}
     </motion.div>

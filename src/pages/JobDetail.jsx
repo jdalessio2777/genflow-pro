@@ -777,7 +777,7 @@ export default function JobDetail() {
       </div>
 
       {/* ── TAB CONTENT ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" style={{ touchAction: "pan-y" }}>
         <div className="max-w-lg mx-auto">
 
           {/* ════ OVERVIEW TAB ════ */}
