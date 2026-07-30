@@ -186,6 +186,16 @@ export default function Dashboard() {
   const totalProfit = completedJobs.reduce((s, j) => s + (j.profit || 0), 0);
   const unpaidInvoices = invoices.filter(i => i.status !== "paid" && i.status !== "draft");
 
+  const failedEmailJobs = jobs
+    .filter(j => j.confirmation_send_failed || j.completion_send_failed || j.quote_send_failed)
+    .map(j => {
+      const types = [];
+      if (j.confirmation_send_failed) types.push("confirmation");
+      if (j.completion_send_failed) types.push("completion summary");
+      if (j.quote_send_failed) types.push("quote");
+      return { ...j, _failedTypes: types };
+    });
+
   const [alertsOpen, setAlertsOpen] = useState(false);
 
   const hour = new Date().getHours();
@@ -406,7 +416,7 @@ export default function Dashboard() {
         </div>
 
         {/* Collapsible Alerts */}
-        {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || referralSummary.length >= 2) && (
+        {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || failedEmailJobs.length > 0 || referralSummary.length >= 2) && (
           <div>
             <button
               onClick={() => setAlertsOpen(v => !v)}
@@ -414,9 +424,9 @@ export default function Dashboard() {
             >
               <div className="flex items-center gap-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alerts & Insights</p>
-                {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0) && (
+                {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || failedEmailJobs.length > 0) && (
                   <span className="text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-                    {lowStockParts.length + expiringMemberships.length + expiredMemberships.length + unpaidInvoices.length}
+                    {lowStockParts.length + expiringMemberships.length + expiredMemberships.length + unpaidInvoices.length + failedEmailJobs.length}
                   </span>
                 )}
               </div>
@@ -427,6 +437,32 @@ export default function Dashboard() {
 
             {alertsOpen && (
               <div className="space-y-3 tab-fade">
+                {failedEmailJobs.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-red-500" />
+                      Needs Attention — Email Failed to Send
+                    </p>
+                    <div className="space-y-2">
+                      {failedEmailJobs.map(j => (
+                        <Link key={j.id} to={`/jobs/${j.id}`}>
+                          <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 hover:opacity-80 transition-all dark:border-red-700 dark:bg-red-900/20">
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                              <span className="text-sm font-semibold text-red-800 dark:text-red-200 truncate">
+                                {j.title || j.customer_name}
+                              </span>
+                            </div>
+                            <p className="text-xs text-red-700 dark:text-red-300">
+                              {j._failedTypes.join(", ")} email failed after 3 attempts — tap to retry
+                            </p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {unpaidInvoices.length > 0 && (
                   <Link to="/invoices">
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 hover:opacity-80 transition-all dark:border-amber-700 dark:bg-amber-900/20">
