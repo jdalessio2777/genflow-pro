@@ -34,7 +34,10 @@ export default function CustomerForm() {
     queryKey: ["customer", id],
     queryFn: async () => {
       const customers = await db.Customer.filter({ id });
-      if (customers.length > 0) setForm(prev => ({ ...prev, ...customers[0] }));
+      if (customers.length > 0) {
+        const c = customers[0];
+        setForm(prev => ({ ...prev, ...c, referred_by: c.referral_source || "" }));
+      }
       return customers[0];
     },
     enabled: isEdit,
@@ -46,7 +49,7 @@ export default function CustomerForm() {
       'generator_model', 'generator_serial', 'service_interval',
       'last_service_date', 'membership_plan', 'membership_start',
       'membership_expiry', 'membership_signed', 'membership_signature',
-      'repeat_note', 'property_notes', 'credit_card_on_file'
+      'repeat_note', 'property_notes', 'credit_card_on_file', 'notes'
     ];
     const nullableFields = [
       'last_service_date', 'membership_start', 'membership_expiry',
@@ -59,6 +62,7 @@ export default function CustomerForm() {
         out[f] = nullableFields.includes(f) && data[f] === '' ? null : data[f];
       }
     });
+    if (data.referred_by !== undefined) out.referral_source = data.referred_by || null;
     return out;
   };
 
