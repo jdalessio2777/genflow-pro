@@ -87,8 +87,13 @@ export default function JobForm() {
     'scheduled_date', 'notes', 'generator_notes', 'quote_notes',
     'requires_document', 'assigned_to_name', 'calendar_event_id', 'last_synced_at',
   ]);
+  const nullableFields = ['scheduled_date', 'last_synced_at'];
   const cleanPayload = (data) =>
-    Object.fromEntries(Object.entries(data).filter(([k]) => JOB_FIELDS.has(k)));
+    Object.fromEntries(
+      Object.entries(data)
+        .filter(([k]) => JOB_FIELDS.has(k))
+        .map(([k, v]) => [k, nullableFields.includes(k) && v === '' ? null : v])
+    );
 
   const mutation = useMutation({
     mutationFn: (data) => isEdit
