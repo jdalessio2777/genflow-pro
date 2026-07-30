@@ -65,6 +65,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
       setForm({ name: "", cost: 0, price: 0, quantity: 1, charge_for_part: false });
       toast.success("Part added");
     },
+    onError: (err) => toast.error("Failed to add part: " + err.message),
   });
 
   const deleteMutation = useMutation({
