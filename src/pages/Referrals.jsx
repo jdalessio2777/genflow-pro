@@ -134,7 +134,7 @@ function AddReferralModal({ open, onClose, onSuccess }) {
         referred_phone: form.referredPhone.trim(),
         referred_email: form.referredEmail.trim() || null,
         plan_type: form.planType,
-        source: "phone_call",
+        referrer_customer_id: form.referrerCustomerId || null,
         status: "pending",
       });
 
@@ -302,6 +302,11 @@ export default function Referrals() {
       const phone = referral.referrer_phone?.trim();
 
       try {
+        if (referral.referrer_customer_id) {
+          await db.Customer.update(referral.referrer_customer_id, { pending_reward: true });
+          return;
+        }
+
         let matches = [];
         if (email) {
           const { data } = await supabase
