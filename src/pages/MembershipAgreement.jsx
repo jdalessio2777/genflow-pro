@@ -260,7 +260,7 @@ export default function MembershipAgreement() {
                 <ul style="margin:0;padding-left:18px;font-size:13px;color:#444;">${plan.includes.map(i => `<li style="margin-bottom:3px;">${i}</li>`).join("")}</ul>
               </div>
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:11px;margin-bottom:14px;">
-                <p style="margin:0;font-size:13px;color:#166534;">✓ Your {selectedPlan === "semi_annual" ? "15%" : "10%"} member discount will be automatically applied to all qualifying services.</p>
+                <p style="margin:0;font-size:13px;color:#166534;">✓ Your ${selectedPlan === "semi_annual" ? "15%" : "10%"} member discount will be automatically applied to all qualifying services.</p>
               </div>
               ${selectedPlan === "semi_annual" ? `<p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are complimentary on each visit.</p>` : ""}
               <p style="font-size:12px;color:#666;margin-top:16px;">Thank you for choosing GenShield.</p>
