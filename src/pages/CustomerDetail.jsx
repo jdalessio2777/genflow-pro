@@ -321,7 +321,7 @@ export default function CustomerDetail() {
                   </div>
                   <div>
                     <p className="text-sm font-bold text-blue-900">Enroll in Protection Plan</p>
-                    <p className="text-xs text-blue-700 mt-0.5">Annual $340 · Semi-Annual $595 · 10% off all services</p>
+                    <p className="text-xs text-blue-700 mt-0.5">Guardian Plan $325 · Sentinel Plan $575 · 10% off all services</p>
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-blue-400 shrink-0" />

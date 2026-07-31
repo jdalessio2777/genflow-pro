@@ -650,11 +650,11 @@ export default function JobDetail() {
     const FALLBACK = {
       annual_air_cooled: {
         description: "Annual Service Agreement — Air-Cooled Generator · 1 maintenance visit/yr · 10% off parts, labor & repairs",
-        flat_rate_amount: 340,
+        flat_rate_amount: 325,
       },
       semi_annual_air_cooled: {
         description: "Semi-Annual Service Agreement — Air-Cooled Generator · 2 maintenance visits/yr · 15% off parts, labor & repairs",
-        flat_rate_amount: 595,
+        flat_rate_amount: 575,
       },
     };
     let details = FALLBACK[type] ?? { description: `Service Agreement — ${type.replace(/_/g, " ")}`, flat_rate_amount: 0 };
@@ -693,6 +693,7 @@ export default function JobDetail() {
   const isSemiMember = !!(customer?.membership_plan === "semi_annual" && customer?.membership_signed);
   const memberDiscountRate = isSemiMember ? 0.85 : isMember ? 0.90 : 1.0;
   const hasPendingAgreement = labor.some(l => l.requires_agreement);
+  const pendingAgreementLine = labor.find(l => l.requires_agreement);
   const isActive = ["dispatched", "on_site"].includes(job.status);
   const headerBg = job.status === "on_site" ? "bg-amber-500" : job.status === "dispatched" ? "bg-cyan-600" : isClosed ? "bg-gray-600" : "bg-primary";
   const headerDot = job.status === "on_site" ? "bg-amber-300" : "bg-cyan-300";
@@ -948,7 +949,7 @@ export default function JobDetail() {
                     <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
                       ✅ SERVICE AGREEMENT ACTIVE
                     </p>
-                    <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">Annual Service Agreement — Air-Cooled</p>
+                    <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{pendingAgreementLine?.description}</p>
                     <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed · Discounts applied automatically</p>
                   </Card>
                 ) : (
@@ -956,8 +957,8 @@ export default function JobDetail() {
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">📋 SERVICE AGREEMENT PENDING</p>
-                        <p className="text-xs text-indigo-800 dark:text-indigo-300 mt-0.5">Annual Service Agreement — Air-Cooled Generator</p>
-                        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">$340/yr · Customer signature required</p>
+                        <p className="text-xs text-indigo-800 dark:text-indigo-300 mt-0.5">{pendingAgreementLine?.description}</p>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">{formatCurrency(pendingAgreementLine?.flat_rate_amount)}/yr · Customer signature required</p>
                       </div>
                       <Button size="sm" className="rounded-xl h-8 text-xs bg-indigo-600 hover:bg-indigo-700 shrink-0 ml-2"
                         onClick={() => navigate(`/customers/${job.customer_id}/membership?from_job=${id}`)}>
@@ -1432,21 +1433,41 @@ export default function JobDetail() {
                         {/* Service Agreements folder */}
                          {flatFolder === "service_agreements" && (
                            <div className="space-y-2">
-                             {/* Air-Cooled — enabled */}
+                             {/* Air-Cooled Annual — enabled */}
                              <Card className="p-3.5 border-indigo-200 bg-indigo-50/40 dark:border-indigo-700 dark:bg-indigo-900/20">
                                <div className="flex items-start justify-between gap-2">
                                  <div className="min-w-0 flex-1">
                                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                                     <p className="text-sm font-semibold">Service Agreement (Air-Cooled)</p>
+                                     <p className="text-sm font-semibold">Service Agreement (Air-Cooled) — Annual</p>
                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">Agreement Required</span>
                                    </div>
                                    <p className="text-xs text-muted-foreground">1 maintenance visit/yr · 10% off parts, labor & repairs</p>
                                    <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 font-medium">Price is fixed — not subject to member discount</p>
                                  </div>
                                  <div className="flex items-center gap-2 shrink-0 mt-1">
-                                   <p className="text-sm font-bold">$340</p>
+                                   <p className="text-sm font-bold">$325</p>
                                    <Button size="icon" className="h-7 w-7 rounded-lg bg-indigo-600 hover:bg-indigo-700"
                                      onClick={() => { addServiceAgreement("annual_air_cooled"); setFlatFolder(null); setWorkSubTab("parts"); }}>
+                                     <Plus className="w-3.5 h-3.5" />
+                                   </Button>
+                                 </div>
+                               </div>
+                             </Card>
+                             {/* Air-Cooled Semi-Annual — enabled */}
+                             <Card className="p-3.5 border-indigo-200 bg-indigo-50/40 dark:border-indigo-700 dark:bg-indigo-900/20">
+                               <div className="flex items-start justify-between gap-2">
+                                 <div className="min-w-0 flex-1">
+                                   <div className="flex items-center gap-2 flex-wrap mb-1">
+                                     <p className="text-sm font-semibold">Service Agreement (Air-Cooled) — Semi-Annual</p>
+                                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">Agreement Required</span>
+                                   </div>
+                                   <p className="text-xs text-muted-foreground">2 maintenance visits/yr · 15% off parts, labor & repairs</p>
+                                   <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 font-medium">Price is fixed — not subject to member discount</p>
+                                 </div>
+                                 <div className="flex items-center gap-2 shrink-0 mt-1">
+                                   <p className="text-sm font-bold">$575</p>
+                                   <Button size="icon" className="h-7 w-7 rounded-lg bg-indigo-600 hover:bg-indigo-700"
+                                     onClick={() => { addServiceAgreement("semi_annual_air_cooled"); setFlatFolder(null); setWorkSubTab("parts"); }}>
                                      <Plus className="w-3.5 h-3.5" />
                                    </Button>
                                  </div>

@@ -139,9 +139,9 @@ function SignatureCanvas({ onSave }) {
 
 const PLANS = {
   annual: {
-    name: "Annual Protection Plan",
-    price: 340,
-    billingLabel: "$340.00 / year",
+    name: "Guardian Plan (Annual)",
+    price: 325,
+    billingLabel: "$325.00 / year",
     color: "border-blue-200 bg-blue-50",
     headerColor: "bg-blue-600",
     includes: [
@@ -151,9 +151,9 @@ const PLANS = {
     ],
   },
   semi_annual: {
-    name: "Semi-Annual Protection Plan",
-    price: 595,
-    billingLabel: "$595.00 / year",
+    name: "Sentinel Plan (Semi-Annual)",
+    price: 575,
+    billingLabel: "$575.00 / year",
     color: "border-emerald-200 bg-emerald-50",
     headerColor: "bg-emerald-600",
     includes: [
@@ -236,7 +236,7 @@ export default function MembershipAgreement() {
 
     if (customer?.email) {
       const plan = PLANS[selectedPlan];
-      const planName = selectedPlan === "semi_annual" ? "Semi-Annual Protection Plan ($595/yr)" : "Annual Protection Plan ($340/yr)";
+      const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr)" : "Guardian Plan (Annual $325/yr)";
       const expiryStr = expiry.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       const startStr = start.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       try {
@@ -272,7 +272,7 @@ export default function MembershipAgreement() {
       }
     }
 
-    const planName = selectedPlan === "semi_annual" ? "Semi-Annual ($595/yr)" : "Annual ($340/yr)";
+    const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr)" : "Guardian Plan (Annual $325/yr)";
     notifyTeam({
       subject: `Membership Signed — ${customer.name} · ${planName}`,
       body: `
