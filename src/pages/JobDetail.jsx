@@ -30,7 +30,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
-import { quoteEmailHTML, confirmationEmailHTML, completionEmailHTML } from "@/lib/emailTemplates";
+import { quoteEmailHTML, confirmationEmailHTML, invoiceSummaryHTML, checklistSummaryHTML, combineEmailSections } from "@/lib/emailTemplates";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -248,9 +248,11 @@ export default function JobDetail() {
   const [pendingPlan, setPendingPlan] = useState(null);
   const [showAgreementSign, setShowAgreementSign] = useState(false);
   const [customerExpanded, setCustomerExpanded] = useState(false);
-  const [completionEmailOpen, setCompletionEmailOpen] = useState(false);
-  const [includeChecklist, setIncludeChecklist] = useState(true);
-  const [sendingCompletion, setSendingCompletion] = useState(false);
+  const [completeJobOpen, setCompleteJobOpen] = useState(false);
+  const [completionSnapshot, setCompletionSnapshot] = useState(null);
+  const [sendInvoiceOnComplete, setSendInvoiceOnComplete] = useState(false);
+  const [completeDocIds, setCompleteDocIds] = useState({});
+  const [completingJob, setCompletingJob] = useState(false);
   useSwipeBack("/jobs");
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
@@ -412,10 +414,6 @@ export default function JobDetail() {
 
   const handleStatusChange = async (newStatus, extraFields = {}) => {
     if (isClosed) return;
-    if (newStatus === "completed" && job?.requires_document) {
-      const hasCompleted = documents.some(d => d.status === "completed");
-      if (!hasCompleted) { haptics.error(); toast.error("Complete at least one document before finishing this job"); return; }
-    }
     const { partsCost, partsPrice, laborCost, laborPrice } = getJobTotals();
     updateJobOffline.mutate({
       entityId: id,
@@ -463,14 +461,6 @@ export default function JobDetail() {
         await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
       }
     }
-    // Completion email is sent from a single place: the "Send Completion Summary"
-    // dialog (doSendCompletionEmail), triggered explicitly by the user. It used to
-    // also auto-send here, which could duplicate-send if the user then clicked
-    // "Send Summary" in that dialog too.
-    if (newStatus === "completed" && !customer?.email) {
-      maybeOpenScheduleNext();
-    }
-
     const triggeredBy = getUserDisplayName(user);
     if (newStatus === "scheduled") {
       const scheduledStr = job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
@@ -571,25 +561,63 @@ export default function JobDetail() {
     }
   };
 
-  const doSendCompletionEmail = async () => {
-    if (!customer?.email) return;
-    setSendingCompletion(true);
+  const completedDocuments = documents.filter(d => d.status === "completed");
+
+  const openCompleteJob = () => {
+    if (job?.requires_document) {
+      const hasCompleted = documents.some(d => d.status === "completed");
+      if (!hasCompleted) { haptics.error(); toast.error("Complete at least one document before finishing this job"); return; }
+    }
+    const hoursOnSite = elapsedSeconds / 3600;
+    setCompletionSnapshot({
+      time_on_site_seconds: elapsedSeconds,
+      time_on_site_hours: Math.round(hoursOnSite * 4) / 4,
+    });
+    setSendInvoiceOnComplete(!!existingInvoice);
+    setCompleteDocIds({});
+    setCompleteJobOpen(true);
+  };
+
+  const doCompleteJob = async () => {
+    setCompletingJob(true);
     try {
-      await integrationsCore.SendEmailWithRetry({
-        to: customer.email,
-        subject: `Service Complete — GenShield Generator Service`,
-        html: completionEmailHTML({ customer, job, parts, labor, documents, includeChecklist }),
-      });
-      await db.Job.update(id, { completion_send_failed: false });
-      toast.success(`Completion summary sent to ${customer.email}`);
-    } catch (e) {
-      haptics.error();
-      toast.error(`Failed to send completion email: ${e.message}`);
-      await db.Job.update(id, { completion_send_failed: true }).catch(() => {});
+      const anyDocSelected = completedDocuments.some(d => completeDocIds[d.id]);
+      const anySelected = sendInvoiceOnComplete || anyDocSelected;
+      if (customer?.email && anySelected) {
+        try {
+          const bodyParts = [];
+          if (sendInvoiceOnComplete && existingInvoice) bodyParts.push(invoiceSummaryHTML({ invoice: existingInvoice, customer }));
+          completedDocuments.forEach(doc => { if (completeDocIds[doc.id]) bodyParts.push(checklistSummaryHTML(doc)); });
+          const subjectParts = [];
+          if (sendInvoiceOnComplete && existingInvoice) subjectParts.push(`Invoice ${existingInvoice.invoice_number}`);
+          if (anyDocSelected) subjectParts.push("Service Report");
+          const subject = subjectParts.join(" & ") + " — GenShield";
+          await integrationsCore.SendEmailWithRetry({
+            to: customer.email,
+            subject,
+            html: combineEmailSections(bodyParts),
+          });
+          await db.Job.update(id, { completion_send_failed: false });
+          toast.success(`Summary sent to ${customer.email}`);
+        } catch (e) {
+          haptics.error();
+          toast.error(`Failed to send summary email: ${e.message}`);
+          await db.Job.update(id, { completion_send_failed: true }).catch(() => {});
+        }
+      }
+
+      setCompleteJobOpen(false);
+      await handleStatusChange("completed", completionSnapshot || {});
+
+      if (hasPendingAgreement) {
+        setTimeout(() => setShowAgreementSign(true), 500);
+      } else if (["maintenance", "battery_replacement"].includes(job.job_type)) {
+        maybeOpenScheduleNext();
+      } else {
+        navigate("/jobs");
+      }
     } finally {
-      setSendingCompletion(false);
-      setCompletionEmailOpen(false);
-      maybeOpenScheduleNext();
+      setCompletingJob(false);
     }
   };
 
@@ -996,15 +1024,7 @@ export default function JobDetail() {
                   )}
                   {(job.status === "on_site" || job.status === "in_progress") && (
                     <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
-                      onClick={() => {
-                        const hoursOnSite = elapsedSeconds / 3600;
-                        handleStatusChange("completed", {
-                          time_on_site_seconds: elapsedSeconds,
-                          time_on_site_hours: Math.round(hoursOnSite * 4) / 4,
-                        });
-                        if (hasPendingAgreement) setTimeout(() => setShowAgreementSign(true), 500);
-                        if (customer?.email) setTimeout(() => setCompletionEmailOpen(true), 400);
-                      }}>
+                      onClick={openCompleteJob}>
                       <CheckCircle2 className="w-4 h-4" /> Complete Job
                     </Button>
                   )}
@@ -1164,39 +1184,76 @@ export default function JobDetail() {
                 </DialogContent>
               </Dialog>
 
-              {/* Completion email modal */}
-              <Dialog open={completionEmailOpen} onOpenChange={setCompletionEmailOpen}>
+              {/* Complete Job modal */}
+              <Dialog open={completeJobOpen} onOpenChange={setCompleteJobOpen}>
                 <DialogContent className="max-w-sm">
-                  <DialogHeader><DialogTitle>Send Completion Summary</DialogTitle></DialogHeader>
-                  <p className="text-sm text-muted-foreground">
-                    Send a service completion email to <strong>{customer?.email}</strong>?
-                  </p>
-                  {documents.some(d => d.status === 'completed') && (
-                    <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-3 py-3">
-                      <div>
-                        <p className="text-sm font-medium">Include completed checklists</p>
-                        <p className="text-xs text-muted-foreground">
-                          {documents.filter(d => d.status === 'completed').length} checklist{documents.filter(d => d.status === 'completed').length !== 1 ? 's' : ''} completed
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setIncludeChecklist(v => !v)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${includeChecklist ? 'bg-green-600' : 'bg-muted-foreground/30'}`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${includeChecklist ? 'translate-x-6' : 'translate-x-1'}`} />
-                      </button>
+                  <DialogHeader><DialogTitle>Complete Job</DialogTitle></DialogHeader>
+
+                  {existingInvoice && existingInvoice.status !== "paid" && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">⚠ Invoice is still unpaid</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">You can complete the job and collect payment later.</p>
                     </div>
                   )}
+
+                  {(existingInvoice || completedDocuments.length > 0) ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">What to send</p>
+
+                      {existingInvoice && (
+                        <button
+                          onClick={() => setSendInvoiceOnComplete(v => !v)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${sendInvoiceOnComplete ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+                        >
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${sendInvoiceOnComplete ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                            {sendInvoiceOnComplete && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold">Invoice</p>
+                            <p className="text-xs text-muted-foreground">
+                              {existingInvoice.invoice_number} · {formatCurrency((existingInvoice.parts_total || 0) + (existingInvoice.labor_total || 0) + (existingInvoice.tax_amount || 0) + (existingInvoice.surcharge_amount || 0))}
+                            </p>
+                          </div>
+                        </button>
+                      )}
+
+                      {completedDocuments.map(doc => (
+                        <button
+                          key={doc.id}
+                          onClick={() => setCompleteDocIds(prev => ({ ...prev, [doc.id]: !prev[doc.id] }))}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${completeDocIds[doc.id] ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+                        >
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${completeDocIds[doc.id] ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                            {completeDocIds[doc.id] && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <p className="text-sm font-semibold truncate">{doc.template_name}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground ml-5">Completed service checklist</p>
+                          </div>
+                        </button>
+                      ))}
+
+                      {!customer?.email && (
+                        <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nothing to send — the job will be marked complete.</p>
+                  )}
+
                   <div className="flex gap-2 mt-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setCompletionEmailOpen(false); maybeOpenScheduleNext(); }}>Skip</Button>
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
                     <Button
                       className="flex-1 rounded-xl gap-1.5 bg-green-600 hover:bg-green-700"
-                      disabled={sendingCompletion}
-                      onClick={doSendCompletionEmail}
+                      disabled={completingJob}
+                      onClick={doCompleteJob}
                     >
-                      {sendingCompletion
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
-                        : <><Send className="w-4 h-4" /> Send Summary</>}
+                      {completingJob
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                        : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
                     </Button>
                   </div>
                 </DialogContent>
@@ -1211,7 +1268,7 @@ export default function JobDetail() {
                     <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setScheduleNextOpen(false)}>Skip</Button>
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); navigate("/jobs"); }}>Skip</Button>
                     <Button className="flex-1 rounded-xl" onClick={async () => {
                       if (!nextDate) return;
                       await db.Job.create({
@@ -1223,6 +1280,7 @@ export default function JobDetail() {
                       setScheduleNextOpen(false);
                       toast.success("Next service scheduled");
                       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+                      navigate("/jobs");
                     }}>Schedule It</Button>
                   </div>
                 </DialogContent>
