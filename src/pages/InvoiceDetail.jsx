@@ -18,6 +18,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import StripePaymentModal from "@/components/payments/StripePaymentModal";
+import CheckNumberDialog from "@/components/payments/CheckNumberDialog";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -29,6 +30,7 @@ export default function InvoiceDetail() {
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [stripeAppOpened, setStripeAppOpened] = useState(false);
   const [stripeAppTxnId, setStripeAppTxnId] = useState("");
+  const [showCheckNumberDialog, setShowCheckNumberDialog] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
@@ -79,9 +81,9 @@ export default function InvoiceDetail() {
   });
 
   const markSent = () => { updateMutation.mutate({ status: "sent" }); toast.success("Invoice marked as sent"); };
-  const markPaid = (method) => {
+  const markPaid = (method, reference) => {
     updateMutation.mutate(
-      { status: "paid", payment_method: method, paid_date: new Date().toISOString() },
+      { status: "paid", payment_method: method, payment_reference: reference || null, paid_date: new Date().toISOString() },
       {
         onSuccess: () => {
           haptics.success();
@@ -95,8 +97,9 @@ export default function InvoiceDetail() {
                 buildRow("Invoice", invoice.invoice_number),
                 buildRow("Amount", `$${(invoice.total || 0).toFixed(2)}`),
                 buildRow("Method", method),
+                reference ? buildRow("Reference", `#${reference}`) : "",
                 buildRow("Date", new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
-              ])}
+              ].filter(Boolean))}
             `,
             triggeredBy: getUserDisplayName(user),
           });
@@ -236,7 +239,7 @@ export default function InvoiceDetail() {
           <div className="text-sm space-y-1">
             <p className="flex items-center gap-1.5 flex-wrap"><span className="text-muted-foreground">Customer:</span> <Link to={`/customers/${invoice.customer_id}`} className="text-primary">{invoice.customer_name}</Link><RewardBadge show={invoiceCustomer?.pending_reward} /></p>
             <p><span className="text-muted-foreground">Date:</span> {formatDate(invoice.created_date)}</p>
-            {invoice.paid_date && <p><span className="text-muted-foreground">Paid:</span> {formatDate(invoice.paid_date)} ({invoice.payment_method})</p>}
+            {invoice.paid_date && <p><span className="text-muted-foreground">Paid:</span> {formatDate(invoice.paid_date)} ({invoice.payment_method}{invoice.payment_reference ? ` #${invoice.payment_reference}` : ""})</p>}
           </div>
         </Card>
 
@@ -370,7 +373,7 @@ export default function InvoiceDetail() {
                   key={method}
                   variant="outline"
                   className="rounded-xl capitalize h-11 border-green-300 dark:border-green-700 bg-white dark:bg-gray-800 hover:bg-green-100 dark:hover:bg-green-900/30"
-                  onClick={() => markPaid(method)}
+                  onClick={() => method === "check" ? setShowCheckNumberDialog(true) : markPaid(method)}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-1 text-green-600" /> {method}
                 </Button>
@@ -400,6 +403,12 @@ export default function InvoiceDetail() {
           onPaid={markStripePaid}
         />
       )}
+
+      <CheckNumberDialog
+        open={showCheckNumberDialog}
+        onOpenChange={setShowCheckNumberDialog}
+        onConfirm={(checkNumber) => { setShowCheckNumberDialog(false); markPaid("check", checkNumber); }}
+      />
     </div>
   );
 }

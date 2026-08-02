@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader2, FileText, CheckCircle2, Send, ArrowLeft } from "lucide-react";
 import { useState } from "react";
-import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { formatCurrency } from "@/lib/utils/format";
+import { invoiceSummaryHTML, checklistSummaryHTML, combineEmailSections } from "@/lib/emailTemplates";
 import { toast } from "sonner";
 
 export default function InvoicePDF() {
@@ -35,102 +36,6 @@ export default function InvoicePDF() {
 
   const completedDocs = jobDocs.filter(d => d.status === "completed");
 
-  const buildInvoiceHTML = () => {
-    const lineItemsHTML = (invoice.line_items || []).map((item, i) => `
-      <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
-        <td style="padding:9px 12px;font-size:13px;">${item.description}</td>
-        <td style="padding:9px 12px;font-size:13px;text-align:center;">${item.quantity}</td>
-        <td style="padding:9px 12px;font-size:13px;text-align:right;">${formatCurrency(item.unit_price)}</td>
-        <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600;">${formatCurrency(item.total)}</td>
-      </tr>`).join("");
-
-    const signatureHTML = invoice.customer_signature
-      ? `<div style="margin-top:20px;border-top:1px solid #ddd;padding-top:14px;">
-           <p style="font-size:11px;color:#888;margin:0 0 8px 0;">CUSTOMER SIGNATURE</p>
-           <img src="${invoice.customer_signature}" style="max-height:56px;border:1px solid #eee;border-radius:6px;padding:4px;" />
-         </div>`
-      : "";
-
-    return `<div>
-      <div style="background:#1e3a5f;color:white;padding:22px 24px;border-radius:8px;margin-bottom:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;">GenShield</h1>
-            <p style="font-size:12px;color:#a8c4e0;margin:0;">Professional Generator Service &amp; Maintenance</p>
-          </div>
-          <div style="text-align:right;">
-            <p style="font-size:16px;font-weight:bold;color:#a8c4e0;margin:0;">INVOICE</p>
-            <p style="font-size:12px;margin:3px 0 0 0;">${invoice.invoice_number}</p>
-            <p style="font-size:11px;color:#a8c4e0;margin:2px 0 0 0;">${formatDate(invoice.created_date)}</p>
-          </div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-        <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
-          <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
-          <p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${customer?.name || invoice.customer_name}</p>
-          ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${customer.address}</p>` : ""}
-          ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${customer.phone}</p>` : ""}
-        </div>
-        <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
-          <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">GENERATOR</p>
-          <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${customer?.generator_model || "—"}</p>
-          ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0 0 6px 0;">S/N: ${customer.generator_serial}</p>` : ""}
-          <p style="font-size:12px;font-weight:bold;margin:0;color:${invoice.paid_date ? "#16a34a" : "#d97706"};">
-            ${invoice.paid_date ? `PAID — ${formatDate(invoice.paid_date)}` : "PAYMENT DUE"}
-          </p>
-        </div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
-        <thead>
-          <tr style="background:#1e3a5f;color:white;">
-            <th style="padding:9px 12px;text-align:left;font-size:12px;">Description</th>
-            <th style="padding:9px 12px;text-align:center;font-size:12px;">Qty</th>
-            <th style="padding:9px 12px;text-align:right;font-size:12px;">Rate</th>
-            <th style="padding:9px 12px;text-align:right;font-size:12px;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>${lineItemsHTML}</tbody>
-      </table>
-      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
-        <div style="min-width:200px;">
-          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Parts</span><span>${formatCurrency(invoice.parts_total)}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Labor</span><span>${formatCurrency(invoice.labor_total)}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span>${formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0))}</span></div>
-          ${invoice.tax_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">NJ Sales Tax (6.625%)</span><span>${formatCurrency(invoice.tax_amount)}</span></div>` : ''}
-          ${invoice.surcharge_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Card Surcharge (3%)</span><span>${formatCurrency(invoice.surcharge_amount)}</span></div>` : ''}
-          <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:bold;border-top:2px solid #1e3a5f;margin-top:3px;"><span>Total</span><span style="color:#1e3a5f;">${formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
-        </div>
-      </div>
-      ${invoice.notes ? `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${invoice.notes}</p></div>` : ""}
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:16px;">
-        <p style="font-size:11px;font-weight:bold;color:#166534;margin:0 0 4px 0;">PAYMENT ACCEPTED</p>
-        <p style="font-size:12px;color:#15803d;margin:0;">Cash · Check payable to GenShield · Zelle · Venmo</p>
-      </div>
-      ${signatureHTML}
-    </div>`;
-  };
-
-  const buildChecklistHTML = (doc) => {
-    const fields = doc.field_definitions || [];
-    const values = doc.field_values || {};
-    let rows = "";
-    fields.forEach(field => {
-      if (field.type === "section_header") {
-        rows += `<tr><td colspan="2" style="background:#1e3a5f;color:white;font-weight:bold;font-size:11px;padding:7px 10px;letter-spacing:0.5px;">${field.label}</td></tr>`;
-      } else if (field.type === "checkbox") {
-        const checked = values[field.id];
-        rows += `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#333;">${field.label}</td><td style="padding:6px 10px;text-align:center;font-size:13px;color:${checked ? "#16a34a" : "#9ca3af"};">${checked ? "✓" : "○"}</td></tr>`;
-      } else if (values[field.id]) {
-        rows += `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#555;">${field.label}</td><td style="padding:6px 10px;font-size:12px;font-weight:600;">${values[field.id]}</td></tr>`;
-      }
-    });
-    return `<div style="margin-top:28px;border-top:2px solid #1e3a5f;padding-top:20px;">
-      <h2 style="color:#1e3a5f;font-size:15px;margin:0 0 12px 0;font-family:Arial,sans-serif;">${doc.template_name}</h2>
-      <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">${rows}</table>
-    </div>`;
-  };
-
   const handleSend = async () => {
     if (!invoice || !customer?.email) { toast.error("No email on file for this customer"); return; }
     if (!includeInvoice && !Object.values(includedDocs).some(Boolean)) {
@@ -140,10 +45,10 @@ export default function InvoicePDF() {
     setSending(true);
     try {
       const bodyParts = [];
-      if (includeInvoice) bodyParts.push(buildInvoiceHTML());
-      completedDocs.forEach(doc => { if (includedDocs[doc.id]) bodyParts.push(buildChecklistHTML(doc)); });
+      if (includeInvoice) bodyParts.push(invoiceSummaryHTML({ invoice, customer }));
+      completedDocs.forEach(doc => { if (includedDocs[doc.id]) bodyParts.push(checklistSummaryHTML(doc)); });
 
-      const fullHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;color:#1a1a1a;background:white;padding:28px;max-width:700px;margin:0 auto;}</style></head><body>${bodyParts.join('<div style="height:1px;background:#e5e7eb;margin:28px 0;"></div>')}<div style="margin-top:28px;text-align:center;border-top:1px solid #eee;padding-top:14px;"><p style="font-size:11px;color:#aaa;">GenShield · Thank you for your business</p></div></body></html>`;
+      const fullHTML = combineEmailSections(bodyParts);
 
       const subjectParts = [];
       if (includeInvoice) subjectParts.push(`Invoice ${invoice.invoice_number}`);

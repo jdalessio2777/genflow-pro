@@ -9,6 +9,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import SwipeableListItem from "@/components/ui/SwipeableListItem";
+import CheckNumberDialog from "@/components/payments/CheckNumberDialog";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 export default function Invoices() {
   const [filter, setFilter] = useState("all");
   const [payingInvoice, setPayingInvoice] = useState(null);
+  const [showCheckNumberDialog, setShowCheckNumberDialog] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: invoices = [], isLoading } = useQuery({
@@ -31,9 +33,9 @@ export default function Invoices() {
     onError: (e) => toast.error("Failed to update: " + e.message),
   });
 
-  const markPaid = (inv, method) => {
+  const markPaid = (inv, method, reference) => {
     updateMutation.mutate(
-      { id: inv.id, data: { status: "paid", payment_method: method, paid_date: new Date().toISOString() } },
+      { id: inv.id, data: { status: "paid", payment_method: method, payment_reference: reference || null, paid_date: new Date().toISOString() } },
       { onSuccess: () => { haptics.success(); toast.success("Invoice marked as paid"); } }
     );
     setPayingInvoice(null);
@@ -111,7 +113,7 @@ export default function Invoices() {
         )}
       </div>
 
-      {payingInvoice && (
+      {payingInvoice && !showCheckNumberDialog && (
         <div
           className="fixed inset-0 z-50 flex items-end"
           onClick={() => setPayingInvoice(null)}
@@ -132,7 +134,7 @@ export default function Invoices() {
               {["cash", "check", "zelle", "venmo", "other"].map(method => (
                 <button
                   key={method}
-                  onClick={() => markPaid(payingInvoice, method)}
+                  onClick={() => method === "check" ? setShowCheckNumberDialog(true) : markPaid(payingInvoice, method)}
                   className="py-3 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground text-sm font-medium capitalize transition-colors"
                 >
                   {method}
@@ -142,6 +144,12 @@ export default function Invoices() {
           </div>
         </div>
       )}
+
+      <CheckNumberDialog
+        open={showCheckNumberDialog}
+        onOpenChange={setShowCheckNumberDialog}
+        onConfirm={(checkNumber) => { setShowCheckNumberDialog(false); markPaid(payingInvoice, "check", checkNumber); }}
+      />
     </div>
   );
 }
