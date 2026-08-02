@@ -689,9 +689,14 @@ export default function JobDetail() {
     try {
       const rates = await db.LaborRate.filter({ category: "service_agreements" });
       const isSemi = type.startsWith("semi");
-      const match = rates.find(r =>
-        isSemi ? r.name.toLowerCase().includes("semi") : (!r.name.toLowerCase().includes("semi") && r.name.toLowerCase().includes("annual"))
-      );
+      // Must also gate on "air-cooled" — the catalog has liquid-cooled placeholder
+      // rows in this same category with their own annual/semi-annual names, and
+      // without this check the match could silently resolve to one of those instead
+      // (their price is unrelated and shouldn't ever be charged for an air-cooled job).
+      const match = rates.find(r => {
+        const name = r.name.toLowerCase();
+        return name.includes("air-cooled") && (isSemi ? name.includes("semi") : !name.includes("semi") && name.includes("annual"));
+      });
       if (match && match.flat_price > 0) {
         details = { ...details, flat_rate_amount: Number(match.flat_price) };
       }
