@@ -45,12 +45,14 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
   const [editingPriceId, setEditingPriceId] = useState(null);
   const [editingPriceValue, setEditingPriceValue] = useState("");
   const [overriddenPriceIds, setOverriddenPriceIds] = useState(new Set());
+  const [updateCatalogPrice, setUpdateCatalogPrice] = useState(false);
   const [form, setForm] = useState({
     name: "",
     part_number: "",
     description: "",
     cost: 0,
     price: 0,
+    catalogPrice: null,
     quantity: 1,
     charge_for_part: true,
     save_to_catalog: true,
@@ -166,6 +168,12 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
         queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
       }
     }
+
+    // Tech explicitly opted to carry a manually-typed price forward to future jobs
+    if (updateCatalogPrice && form.part_id && form.price !== form.catalogPrice) {
+      db.Part.update(form.part_id, { default_price: form.price })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
+    }
   };
 
   const totalCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
@@ -175,7 +183,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Cost: {formatCurrency(totalCost)} → Charge: {formatCurrency(totalPrice)}</p>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPartsFolder(null); setForm({ name: "", part_number: "", description: "", cost: 0, price: 0, quantity: 1, charge_for_part: true, save_to_catalog: true, category: "other" }); } }}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPartsFolder(null); setUpdateCatalogPrice(false); setForm({ name: "", part_number: "", description: "", cost: 0, price: 0, catalogPrice: null, quantity: 1, charge_for_part: true, save_to_catalog: true, category: "other" }); } }}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-xl gap-1 text-xs h-8">
               <Plus className="w-3 h-3" /> Add Part
@@ -255,7 +263,8 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                     <p className="text-sm text-muted-foreground text-center py-4">No {partsFolder.label} in catalog</p>
                   ) : catParts.map(p => (
                     <button key={p.id} onClick={() => {
-                      setForm(f => ({ ...f, name: p.name, cost: p.cost, price: p.default_price, part_id: p.id, charge_for_part: true }));
+                      setForm(f => ({ ...f, name: p.name, part_number: p.part_number || "", cost: p.cost, price: p.default_price || 0, catalogPrice: p.default_price || 0, part_id: p.id, charge_for_part: (p.default_price || 0) > 0 }));
+                      setUpdateCatalogPrice(false);
                       setPartsFolder({ key: "confirm", label: "confirm", part: p });
                     }} className="w-full text-left">
                       <Card className="p-3 hover:border-primary/30 hover:bg-primary/5 transition-all active:scale-[0.99]">
@@ -367,21 +376,45 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
               <div className="space-y-3">
                 <Card className="p-3 bg-muted/30">
                   <p className="text-sm font-semibold">{form.name}</p>
-                  <p className="text-xs text-muted-foreground">Selected from catalog</p>
+                  <p className="text-xs text-muted-foreground">
+                    Selected from catalog{form.cost > 0 ? ` · your cost ${formatCurrency(form.cost)}/ea` : ""}
+                  </p>
                 </Card>
                 <div className="grid grid-cols-2 gap-2">
                   <div><Label className="text-xs">Qty</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({...f, quantity: parseInt(e.target.value) || 1}))} className="mt-1" /></div>
-                  <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({...f, price: parseFloat(e.target.value) || 0}))} className="mt-1" disabled={!form.charge_for_part} /></div>
+                  <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
                 </div>
-                <button type="button" onClick={() => setForm(f => ({...f, charge_for_part: !f.charge_for_part}))}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${form.charge_for_part ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-300" : "border-border bg-muted/30 text-muted-foreground"}`}>
-                  <span className="text-sm font-medium">Charge for part</span>
-                  <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 ${form.charge_for_part ? "bg-green-500" : "bg-muted-foreground/30"}`}>
-                    <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.charge_for_part ? "translate-x-5" : "translate-x-0"}`} />
+                <button
+                  type="button"
+                  disabled={!(form.price > 0)}
+                  title={!(form.price > 0) ? "No price set — enter a price above to enable charging" : undefined}
+                  onClick={() => setForm(f => ({...f, charge_for_part: !f.charge_for_part}))}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${
+                    !(form.price > 0)
+                      ? "border-border bg-muted/20 text-muted-foreground/50 cursor-not-allowed"
+                      : form.charge_for_part
+                        ? "border-green-500 bg-green-50 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-300"
+                        : "border-border bg-muted/30 text-muted-foreground"
+                  }`}>
+                  <span className="text-sm font-medium">{!(form.price > 0) ? "No price set" : "Charge for part"}</span>
+                  <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 ${form.charge_for_part && form.price > 0 ? "bg-green-500" : "bg-muted-foreground/30"}`}>
+                    <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.charge_for_part && form.price > 0 ? "translate-x-5" : "translate-x-0"}`} />
                   </div>
                 </button>
-                {isMember && form.charge_for_part && (
+                {isMember && form.charge_for_part && form.price > 0 && (
                  <p className="text-xs text-emerald-600 font-medium">🛡️ Member price: {formatCurrency(Math.round(form.price * memberDiscountRate * 100) / 100)} ({Math.round((1-memberDiscountRate)*100)}% off)</p>
+                )}
+                {form.part_id && form.price > 0 && form.price !== form.catalogPrice && (
+                  <button type="button" onClick={() => setUpdateCatalogPrice(v => !v)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${updateCatalogPrice ? "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-300" : "border-border bg-muted/30 text-muted-foreground"}`}>
+                    <div className="text-left">
+                      <p className="text-xs font-medium">Update catalog price to {formatCurrency(form.price)} for future jobs</p>
+                      <p className="text-[10px] opacity-75">Catalog currently shows {formatCurrency(form.catalogPrice)}</p>
+                    </div>
+                    <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 shrink-0 ml-2 ${updateCatalogPrice ? "bg-blue-500" : "bg-muted-foreground/30"}`}>
+                      <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${updateCatalogPrice ? "translate-x-5" : "translate-x-0"}`} />
+                    </div>
+                  </button>
                 )}
                 <Button onClick={handleAdd} className="w-full rounded-xl" disabled={createMutation.isPending}>Add to Job</Button>
               </div>
