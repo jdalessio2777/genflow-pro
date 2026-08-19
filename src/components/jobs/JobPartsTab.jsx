@@ -64,7 +64,9 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
       setOpen(false);
-      setForm({ name: "", cost: 0, price: 0, quantity: 1, charge_for_part: false });
+      setPartsFolder(null);
+      setUpdateCatalogPrice(false);
+      setForm({ name: "", part_number: "", description: "", cost: 0, price: 0, catalogPrice: null, quantity: 1, charge_for_part: true, save_to_catalog: true, category: "other" });
       toast.success("Part added");
     },
     onError: (err) => toast.error("Failed to add part: " + err.message),
