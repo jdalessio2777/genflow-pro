@@ -193,9 +193,9 @@ function PartsItemList({ category, parts }) {
               <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
               <div><Label className="text-xs">Part Number</Label><Input value={form.part_number} onChange={e => setForm(f => ({...f, part_number: e.target.value}))} className="mt-1" /></div>
               <div className="grid grid-cols-3 gap-2">
-                <div><Label className="text-xs">Cost</Label><Input type="number" step="0.01" value={form.cost} onChange={e => setForm(f => ({...f, cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.default_price} onChange={e => setForm(f => ({...f, default_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">In Stock</Label><Input type="number" value={form.in_stock} onChange={e => setForm(f => ({...f, in_stock: parseInt(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Cost</Label><Input type="number" step="0.01" value={form.cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.default_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, default_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">In Stock</Label><Input type="number" value={form.in_stock} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, in_stock: parseInt(e.target.value) || 0}))} className="mt-1" /></div>
               </div>
               <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, category: category.key }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Part</Button>
             </div>
@@ -272,8 +272,8 @@ function LaborRatesList() {
             <div className="space-y-3">
               <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" placeholder="e.g. Standard Hour" /></div>
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-xs">Bill Rate/hr</Label><Input type="number" step="0.01" value={form.rate} onChange={e => setForm(f => ({...f, rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Cost Rate/hr</Label><Input type="number" step="0.01" value={form.cost_rate} onChange={e => setForm(f => ({...f, cost_rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Bill Rate/hr</Label><Input type="number" step="0.01" value={form.rate} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Cost Rate/hr</Label><Input type="number" step="0.01" value={form.cost_rate} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, cost_rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
               </div>
               <div><Label className="text-xs">Notes</Label><Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} className="mt-1" /></div>
               <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, type: "hourly" }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Save Rate</Button>
@@ -369,8 +369,8 @@ function FlatRatesItemList({ folder }) {
             <div className="space-y-3">
               <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-xs">Flat Price</Label><Input type="number" step="0.01" value={form.flat_price} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Flat Price</Label><Input type="number" step="0.01" value={form.flat_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
               </div>
               <div><Label className="text-xs">Notes</Label><Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} className="mt-1" /></div>
               <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, type: "flat_rate", category: folder.key }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Rate</Button>
@@ -450,8 +450,8 @@ function MaintenanceList() {
             <div className="space-y-3">
               <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" placeholder="e.g. Full Annual Maintenance (Liquid-Cooled)" /></div>
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.flat_price} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.flat_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
               </div>
               <div><Label className="text-xs">Notes</Label><Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} className="mt-1" /></div>
               <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, type: "flat_rate", category: "maintenance" }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Package</Button>

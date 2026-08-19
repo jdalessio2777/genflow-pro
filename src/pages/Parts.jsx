@@ -73,10 +73,10 @@ export default function Parts() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-xs">Cost</Label><Input type="number" step="0.01" value={form.cost} onChange={e => setForm(f => ({...f, cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                  <div><Label className="text-xs">Default Price</Label><Input type="number" step="0.01" value={form.default_price} onChange={e => setForm(f => ({...f, default_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                  <div><Label className="text-xs">Cost</Label><Input type="number" step="0.01" value={form.cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                  <div><Label className="text-xs">Default Price</Label><Input type="number" step="0.01" value={form.default_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, default_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
                 </div>
-                <div><Label className="text-xs">In Stock</Label><Input type="number" value={form.in_stock} onChange={e => setForm(f => ({...f, in_stock: parseInt(e.target.value) || 0}))} className="mt-1" /></div>
+                <div><Label className="text-xs">In Stock</Label><Input type="number" value={form.in_stock} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, in_stock: parseInt(e.target.value) || 0}))} className="mt-1" /></div>
                 <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate(form); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Part</Button>
               </div>
             </DialogContent>
