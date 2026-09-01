@@ -162,12 +162,29 @@ function SignatureCanvas({ onSave }) {
   );
 }
 
-function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
+const TAX_RATE = 0.06625; // NJ sales tax
+
+// Single source of truth for job financials — used by both the Overview tab's
+// live running total and the invoice (buildInvoiceData), so they can never
+// drift apart. Discount lines are just job_labor rows with a negative
+// total_price (per the discount feature), so they net out of laborTotal
+// automatically; discountTotal below is only for display breakdown.
+function computeJobFinancials(parts, labor) {
+  const partsCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
   const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
+  const laborCost = labor.reduce((s, l) => s + (l.total_cost || 0), 0);
   const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
-  const total = partsTotal + laborTotal;
-  const costTotal = parts.reduce((s, p) => s + (p.total_cost || 0), 0) + labor.reduce((s, l) => s + (l.total_cost || 0), 0);
-  const profit = total - costTotal;
+  const discountTotal = labor.reduce((s, l) => s + Math.min(l.total_price || 0, 0), 0);
+  const subtotal = partsTotal + laborTotal;
+  const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
+  const total = subtotal + taxAmount;
+  const cost = partsCost + laborCost;
+  const profit = subtotal - cost;
+  return { partsCost, partsTotal, laborCost, laborTotal, discountTotal, subtotal, taxAmount, total, cost, profit };
+}
+
+function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
+  const { partsTotal, laborTotal, discountTotal, subtotal, taxAmount, total, profit } = computeJobFinancials(parts, labor);
 
   return (
     <Card className="p-4 bg-gradient-to-br from-primary/8 to-primary/4 border-primary/15 shadow-sm">
@@ -175,25 +192,31 @@ function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNote
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Running Total</p>
         {isSaving && <p className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> saving...</p>}
       </div>
-      <div className="flex items-end justify-between">
-        <div className="flex gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Parts</p>
-            <p className="text-sm font-semibold">{formatCurrency(partsTotal)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Labor</p>
-            <p className="text-sm font-semibold">{formatCurrency(laborTotal)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Profit</p>
-            <p className={`text-sm font-semibold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>{formatCurrency(profit)}</p>
-          </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        <div>
+          <p className="text-xs text-muted-foreground">Parts</p>
+          <p className="text-sm font-semibold">{formatCurrency(partsTotal)}</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground">Total</p>
-          <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrency(total)}</p>
+        <div>
+          <p className="text-xs text-muted-foreground">Labor</p>
+          <p className="text-sm font-semibold">{formatCurrency(laborTotal - discountTotal)}</p>
         </div>
+        {discountTotal < 0 && (
+          <div>
+            <p className="text-xs text-muted-foreground">Discount</p>
+            <p className="text-sm font-semibold text-destructive">{formatCurrency(discountTotal)}</p>
+          </div>
+        )}
+        <div>
+          <p className="text-xs text-muted-foreground">Profit</p>
+          <p className={`text-sm font-semibold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>{formatCurrency(profit)}</p>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-primary/10 flex items-end justify-between">
+        <p className="text-xs text-muted-foreground">
+          {formatCurrency(subtotal)} + {formatCurrency(taxAmount)} tax
+        </p>
+        <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrency(total)}</p>
       </div>
       <div className="mt-2 pt-2 border-t border-blue-100/40 dark:border-blue-800/40">
         <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-1 flex items-center gap-1.5">
@@ -457,11 +480,8 @@ export default function JobDetail() {
   };
 
   const getJobTotals = () => {
-    const partsCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
-    const partsPrice = parts.reduce((s, p) => s + (p.total_price || 0), 0);
-    const laborCost = labor.reduce((s, l) => s + (l.total_cost || 0), 0);
-    const laborPrice = labor.reduce((s, l) => s + (l.total_price || 0), 0);
-    return { partsCost, partsPrice, laborCost, laborPrice };
+    const f = computeJobFinancials(parts, labor);
+    return { partsCost: f.partsCost, partsPrice: f.partsTotal, laborCost: f.laborCost, laborPrice: f.laborTotal };
   };
 
   const maybeOpenScheduleNext = () => {
@@ -691,17 +711,13 @@ export default function JobDetail() {
     }
   };
 
-  const TAX_RATE = 0.06625;
-
   const buildInvoiceData = () => {
-    const { partsPrice, laborPrice } = getJobTotals();
-    const subtotal = partsPrice + laborPrice;
-    const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
+    const { partsTotal, laborTotal, taxAmount, total } = computeJobFinancials(parts, labor);
     const lineItems = [
       ...parts.map(p => ({ type: "part", description: p.name, quantity: p.quantity, unit_price: p.price, total: p.total_price })),
       ...labor.map(l => ({ type: "labor", description: l.description, quantity: l.is_flat_rate ? 1 : l.hours, unit_price: l.is_flat_rate ? l.flat_rate_amount : l.rate, total: l.total_price })),
     ];
-    return { parts_total: partsPrice, labor_total: laborPrice, total: subtotal + taxAmount, tax_amount: taxAmount, tax_rate: TAX_RATE, line_items: lineItems, notes: invoiceNotes, customer_signature: job.customer_signature || null };
+    return { parts_total: partsTotal, labor_total: laborTotal, total, tax_amount: taxAmount, tax_rate: TAX_RATE, line_items: lineItems, notes: invoiceNotes, customer_signature: job.customer_signature || null };
   };
 
   // Parts/labor mutations (add, edit price, delete) only ever invalidate their
