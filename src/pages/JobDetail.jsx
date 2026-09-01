@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package } from "lucide-react";
+import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import StatusBadge from "@/components/ui/StatusBadge";
 import RewardBadge from "@/components/ui/RewardBadge";
@@ -245,6 +245,10 @@ export default function JobDetail() {
   const [workSubTab, setWorkSubTab] = useState("parts");
   const [flatFolder, setFlatFolder] = useState(null);
   const [workSearch, setWorkSearch] = useState("");
+  const [editingLaborPriceId, setEditingLaborPriceId] = useState(null);
+  const [editingLaborPriceValue, setEditingLaborPriceValue] = useState("");
+  const [editingPartPriceId, setEditingPartPriceId] = useState(null);
+  const [editingPartPriceValue, setEditingPartPriceValue] = useState("");
   const [pendingPlan, setPendingPlan] = useState(null);
   const [showAgreementSign, setShowAgreementSign] = useState(false);
   const [customerExpanded, setCustomerExpanded] = useState(false);
@@ -353,6 +357,62 @@ export default function JobDetail() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
   });
+
+  const updateLaborPriceMutation = useMutation({
+    mutationFn: ({ id, data }) => db.JobLabor.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job-labor", id] });
+      setEditingLaborPriceId(null);
+      toast.success("Price updated");
+    },
+    onError: () => toast.error("Failed to update price"),
+  });
+
+  const startEditingLaborPrice = (item) => {
+    setEditingLaborPriceId(item.id);
+    setEditingLaborPriceValue(String(item.is_flat_rate ? (item.flat_rate_amount ?? 0) : (item.rate ?? 0)));
+  };
+
+  const cancelLaborPriceEdit = () => {
+    setEditingLaborPriceId(null);
+    setEditingLaborPriceValue("");
+  };
+
+  const commitLaborPriceEdit = (item) => {
+    const newPrice = parseFloat(editingLaborPriceValue);
+    if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
+    if (item.is_flat_rate) {
+      updateLaborPriceMutation.mutate({ id: item.id, data: { flat_rate_amount: newPrice, total_price: newPrice } });
+    } else {
+      updateLaborPriceMutation.mutate({ id: item.id, data: { rate: newPrice, total_price: newPrice * (item.hours || 0) } });
+    }
+  };
+
+  const updatePartPriceMutation = useMutation({
+    mutationFn: ({ id, price, quantity }) => db.JobPart.update(id, { price, total_price: price * quantity }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job-parts", id] });
+      setEditingPartPriceId(null);
+      toast.success("Price updated");
+    },
+    onError: () => toast.error("Failed to update price"),
+  });
+
+  const startEditingPartPrice = (part) => {
+    setEditingPartPriceId(part.id);
+    setEditingPartPriceValue(String(part.price ?? 0));
+  };
+
+  const cancelPartPriceEdit = () => {
+    setEditingPartPriceId(null);
+    setEditingPartPriceValue("");
+  };
+
+  const commitPartPriceEdit = (part) => {
+    const newPrice = parseFloat(editingPartPriceValue);
+    if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
+    updatePartPriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity });
+  };
 
   const updateJobOffline = useOfflineMutation({
     entity: 'Job',
@@ -1351,12 +1411,43 @@ export default function JobDetail() {
                                 <p className="text-sm font-medium truncate">{item.description}</p>
                                 <p className="text-xs text-muted-foreground">{item.is_flat_rate ? "Flat rate" : `${item.hours}h @ $${item.rate}/hr`}</p>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <p className="text-sm font-bold">{formatCurrency(item.total_price)}</p>
-                                <Button variant="ghost" size="icon" className="h-7 w-7"
-                                  onClick={() => db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))}>
-                                  <Trash2 className="w-3 h-3 text-destructive" />
-                                </Button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {editingLaborPriceId === item.id ? (
+                                  <>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={editingLaborPriceValue}
+                                      onChange={e => setEditingLaborPriceValue(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") commitLaborPriceEdit(item);
+                                        if (e.key === "Escape") cancelLaborPriceEdit();
+                                      }}
+                                      className="w-20 h-7 text-sm text-right px-2 rounded-lg"
+                                      autoFocus
+                                    />
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:bg-green-50"
+                                      onClick={() => commitLaborPriceEdit(item)} disabled={updateLaborPriceMutation.isPending}>
+                                      <Check className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={cancelLaborPriceEdit}>
+                                      <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="text-sm font-bold">{formatCurrency(item.total_price)}</p>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                      onClick={() => startEditingLaborPrice(item)}>
+                                      <Pencil className="w-3 h-3" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7"
+                                      onClick={() => db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))}>
+                                      <Trash2 className="w-3 h-3 text-destructive" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </Card>
@@ -1716,14 +1807,45 @@ export default function JobDetail() {
                                 <p className="text-sm font-medium truncate">{part.name}</p>
                                 <p className="text-xs text-muted-foreground">{part.quantity}x &middot; {formatCurrency(part.price)}/ea</p>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <p className="text-sm font-semibold">{formatCurrency(part.total_price)}</p>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                                  if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) {
-                                    haptics.medium();
-                                    db.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
-                                  }
-                                }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {editingPartPriceId === part.id ? (
+                                  <>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={editingPartPriceValue}
+                                      onChange={e => setEditingPartPriceValue(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") commitPartPriceEdit(part);
+                                        if (e.key === "Escape") cancelPartPriceEdit();
+                                      }}
+                                      className="w-20 h-7 text-sm text-right px-2 rounded-lg"
+                                      autoFocus
+                                    />
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:bg-green-50"
+                                      onClick={() => commitPartPriceEdit(part)} disabled={updatePartPriceMutation.isPending}>
+                                      <Check className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={cancelPartPriceEdit}>
+                                      <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="text-sm font-semibold">{formatCurrency(part.total_price)}</p>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                      onClick={() => startEditingPartPrice(part)}>
+                                      <Pencil className="w-3 h-3" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                      if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) {
+                                        haptics.medium();
+                                        db.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
+                                      }
+                                    }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </Card>
@@ -1742,14 +1864,45 @@ export default function JobDetail() {
                                 <p className="text-sm font-medium truncate">{item.description}</p>
                                 <p className="text-xs text-muted-foreground">{item.is_flat_rate ? "Flat rate" : `${item.hours}h @ ${formatCurrency(item.rate)}/hr`}</p>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <p className="text-sm font-semibold">{formatCurrency(item.total_price)}</p>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                                  if (!confirmDelete || window.confirm(`Remove "${item.description}" from this job?`)) {
-                                    haptics.medium();
-                                    db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
-                                  }
-                                }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {editingLaborPriceId === item.id ? (
+                                  <>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={editingLaborPriceValue}
+                                      onChange={e => setEditingLaborPriceValue(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") commitLaborPriceEdit(item);
+                                        if (e.key === "Escape") cancelLaborPriceEdit();
+                                      }}
+                                      className="w-20 h-7 text-sm text-right px-2 rounded-lg"
+                                      autoFocus
+                                    />
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:bg-green-50"
+                                      onClick={() => commitLaborPriceEdit(item)} disabled={updateLaborPriceMutation.isPending}>
+                                      <Check className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={cancelLaborPriceEdit}>
+                                      <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="text-sm font-semibold">{formatCurrency(item.total_price)}</p>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                      onClick={() => startEditingLaborPrice(item)}>
+                                      <Pencil className="w-3 h-3" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                      if (!confirmDelete || window.confirm(`Remove "${item.description}" from this job?`)) {
+                                        haptics.medium();
+                                        db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
+                                      }
+                                    }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </Card>

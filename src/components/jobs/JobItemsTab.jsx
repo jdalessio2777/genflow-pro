@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronLeft, Clock, Zap, Wrench, Trash2, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronRight, ChevronLeft, Clock, Zap, Wrench, Trash2, Plus, Pencil, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
@@ -37,6 +38,8 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
       ? FLAT_RATE_FOLDERS.find(f => f.key === presetSubFolderKey) ?? { key: presetSubFolderKey, label: presetSubFolderKey.replace(/_/g, " "), icon: "📦" }
       : null
   );
+  const [editingPriceId, setEditingPriceId] = useState(null);
+  const [editingPriceValue, setEditingPriceValue] = useState("");
 
   const { data: rates = [] } = useQuery({
     queryKey: ["labor-rates"],
@@ -108,6 +111,36 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
     mutationFn: (id) => db.JobLabor.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["job-labor", jobId] }),
   });
+
+  const updatePriceMutation = useMutation({
+    mutationFn: ({ id, data }) => db.JobLabor.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job-labor", jobId] });
+      setEditingPriceId(null);
+      toast.success("Price updated");
+    },
+    onError: () => toast.error("Failed to update price"),
+  });
+
+  const startEditingPrice = (item) => {
+    setEditingPriceId(item.id);
+    setEditingPriceValue(String(item.is_flat_rate ? (item.flat_rate_amount ?? 0) : (item.rate ?? 0)));
+  };
+
+  const cancelPriceEdit = () => {
+    setEditingPriceId(null);
+    setEditingPriceValue("");
+  };
+
+  const commitPriceEdit = (item) => {
+    const newPrice = parseFloat(editingPriceValue);
+    if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
+    if (item.is_flat_rate) {
+      updatePriceMutation.mutate({ id: item.id, data: { flat_rate_amount: newPrice, total_price: newPrice } });
+    } else {
+      updatePriceMutation.mutate({ id: item.id, data: { rate: newPrice, total_price: newPrice * (item.hours || 0) } });
+    }
+  };
 
   const addRate = (rate) => {
     if (rate.type === "hourly") {
@@ -355,12 +388,43 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
                       {l.is_flat_rate ? "Flat rate" : `${l.hours}h @ ${formatCurrency(l.rate)}/hr`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-sm font-semibold">{formatCurrency(l.total_price)}</span>
-                    <Button variant="ghost" size="icon" className="h-8 w-8"
-                      onClick={() => { if (!confirmDelete || window.confirm(`Remove "${l.description}" from this job?`)) deleteMutation.mutate(l.id); }}>
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {editingPriceId === l.id ? (
+                      <>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={editingPriceValue}
+                          onChange={e => setEditingPriceValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") commitPriceEdit(l);
+                            if (e.key === "Escape") cancelPriceEdit();
+                          }}
+                          className="w-20 h-7 text-sm text-right px-2 rounded-lg"
+                          autoFocus
+                        />
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:bg-green-50"
+                          onClick={() => commitPriceEdit(l)} disabled={updatePriceMutation.isPending}>
+                          <Check className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={cancelPriceEdit}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm font-semibold">{formatCurrency(l.total_price)}</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => startEditingPrice(l)}>
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => { if (!confirmDelete || window.confirm(`Remove "${l.description}" from this job?`)) deleteMutation.mutate(l.id); }}>
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </Card>
