@@ -35,7 +35,7 @@ export async function notifyTeam({ subject, body, triggeredBy = "" }) {
     let failures = 0;
     for (const email of emails) {
       try {
-        await integrationsCore.SendEmail({ to: email, subject, html });
+        await integrationsCore.SendEmail({ to: email, subject, html, internal: true });
       } catch {
         failures++;
       }

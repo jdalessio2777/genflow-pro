@@ -20,13 +20,13 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { to, subject, html } = await readJsonBody(req);
+  const { to, subject, html, internal } = await readJsonBody(req);
   if (!to || !subject || !html) {
     return res.status(400).json({ error: 'to, subject, and html are required' });
   }
 
   try {
-    const result = await sendEmail({ to, subject, html });
+    const result = await sendEmail({ to, subject, html, internal });
     return res.status(200).json({ ok: true, id: result.id });
   } catch (err) {
     console.error('[send-email]', err.message);

@@ -442,6 +442,7 @@ async function sendReport(buffer, filename, subject, { revenue, expTotal, netPro
     subject,
     html,
     attachments: [{ filename, content: buffer.toString('base64') }],
+    internal: true,
   });
 }
 

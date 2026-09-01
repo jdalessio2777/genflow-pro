@@ -18,11 +18,11 @@ export const integrationsCore = {
     return { file_url: data.publicUrl };
   },
 
-  async SendEmail({ to, subject, html }) {
+  async SendEmail({ to, subject, html, internal = false }) {
     const resp = await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, html }),
+      body: JSON.stringify({ to, subject, html, internal }),
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || 'Failed to send email');
@@ -33,11 +33,11 @@ export const integrationsCore = {
   // resolve themselves within seconds. Retries immediately, then after 3s,
   // then after 10s — 3 attempts total — before giving up. Throws the last
   // error once all attempts are exhausted, same contract as SendEmail.
-  async SendEmailWithRetry({ to, subject, html }, delays = [3000, 10000]) {
+  async SendEmailWithRetry({ to, subject, html, internal = false }, delays = [3000, 10000]) {
     let lastError;
     for (let attempt = 0; attempt <= delays.length; attempt++) {
       try {
-        return await this.SendEmail({ to, subject, html });
+        return await this.SendEmail({ to, subject, html, internal });
       } catch (e) {
         lastError = e;
         if (attempt < delays.length) {

@@ -100,6 +100,7 @@ export default async function handler(req, res) {
           }
           await sendEmail({
             to: INTERNAL_EMAIL,
+            internal: true,
             subject: `Renewal Alert — ${c.name} (${days} day${days !== 1 ? 's' : ''})`,
             html: internalAlertHTML({ customer: c, days }),
           });
@@ -122,6 +123,7 @@ export default async function handler(req, res) {
           }
           await sendEmail({
             to: INTERNAL_EMAIL,
+            internal: true,
             subject: `Renewal Alert — ${c.name} (${days} days)`,
             html: internalAlertHTML({ customer: c, days }),
           });
@@ -133,6 +135,7 @@ export default async function handler(req, res) {
           console.log(`[renewals] expired: ${c.name} (${Math.abs(days)}d ago)`);
           await sendEmail({
             to: INTERNAL_EMAIL,
+            internal: true,
             subject: `Renewal Alert — ${c.name} (EXPIRED ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''} ago)`,
             html: internalAlertHTML({ customer: c, days }),
           });
