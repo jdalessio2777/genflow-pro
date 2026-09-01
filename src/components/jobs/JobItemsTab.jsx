@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronRight, ChevronLeft, Clock, Zap, Wrench, Trash2, Plus, Pencil, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { computeJobFinancials } from "@/lib/utils/jobFinancials";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 
@@ -28,7 +29,7 @@ const FLAT_RATE_FOLDERS = [
   { key: "other", label: "Other", icon: "📦" },
 ];
 
-export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, initialFolder = null, presetSubFolderKey = null, customerId = null }) {
+export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRate = 1.0, initialFolder = null, presetSubFolderKey = null, customerId = null }) {
   const isMember = memberDiscountRate < 1.0;
   const queryClient = useQueryClient();
   const [folder, setFolder] = useState(initialFolder);
@@ -155,6 +156,23 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
         is_flat_rate: false,
         total_price: discountedRate,
         total_cost: (rate.cost_rate || 0) * 1,
+      });
+    } else if (rate.category === "discounts") {
+      // Discount catalog items are stored at $0 — their notes carry the
+      // percentage ("adjust amount to X% of job total"). Compute the actual
+      // negative amount off the job's current subtotal at add-time instead of
+      // requiring a manual price entry before it shows up anywhere.
+      const pct = parseFloat((rate.notes || "").match(/(\d+(?:\.\d+)?)\s*%/)?.[1]) || 0;
+      const { subtotal } = computeJobFinancials(parts, labor);
+      const amount = pct > 0 ? -Math.round((subtotal * pct / 100) * 100) / 100 : 0;
+      createMutation.mutate({
+        job_id: jobId,
+        description: rate.name,
+        is_flat_rate: true,
+        flat_rate_amount: amount,
+        flat_rate_cost: 0,
+        total_price: amount,
+        total_cost: 0,
       });
     } else {
       const discountedPrice = Math.round(rate.flat_price * memberDiscountRate * 100) / 100;

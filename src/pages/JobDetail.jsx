@@ -17,6 +17,7 @@ import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
+import { TAX_RATE, computeJobFinancials } from "@/lib/utils/jobFinancials";
 import { formatTime } from "@/lib/formatTime";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
@@ -162,30 +163,6 @@ function SignatureCanvas({ onSave }) {
   );
 }
 
-const TAX_RATE = 0.06625; // NJ sales tax
-
-// Single source of truth for job financials — used by both the Overview tab's
-// live running total and the invoice (buildInvoiceData), so they can never
-// drift apart. Discount lines are just job_labor rows with a negative
-// total_price (per the discount feature); discountLines/discountTotal pull
-// them out individually for display, laborGross is labor before discounts.
-function computeJobFinancials(parts, labor) {
-  const partsCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
-  const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
-  const laborCost = labor.reduce((s, l) => s + (l.total_cost || 0), 0);
-  const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
-  const discountLines = labor
-    .filter(l => (l.total_price || 0) < 0)
-    .map(l => ({ description: l.description, amount: l.total_price || 0 }));
-  const discountTotal = discountLines.reduce((s, d) => s + d.amount, 0);
-  const laborGross = laborTotal - discountTotal;
-  const subtotal = partsTotal + laborTotal;
-  const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
-  const total = subtotal + taxAmount;
-  const cost = partsCost + laborCost;
-  const profit = subtotal - cost;
-  return { partsCost, partsTotal, laborCost, laborTotal, laborGross, discountLines, discountTotal, subtotal, taxAmount, total, cost, profit };
-}
 
 function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
   const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
@@ -1708,7 +1685,7 @@ export default function JobDetail() {
 
                         {/* Other flat rate folders via JobItemsTab */}
                         {flatFolder !== "service_agreements" && (
-                           <JobItemsTab key={flatFolder} jobId={id} labor={labor} memberDiscountRate={memberDiscountRate} initialFolder="flat_rates" presetSubFolderKey={flatFolder} customerId={job.customer_id} />
+                           <JobItemsTab key={flatFolder} jobId={id} labor={labor} parts={parts} memberDiscountRate={memberDiscountRate} initialFolder="flat_rates" presetSubFolderKey={flatFolder} customerId={job.customer_id} />
                         )}
                       </>
                     )}
