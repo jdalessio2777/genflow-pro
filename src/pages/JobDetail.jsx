@@ -167,24 +167,28 @@ const TAX_RATE = 0.06625; // NJ sales tax
 // Single source of truth for job financials — used by both the Overview tab's
 // live running total and the invoice (buildInvoiceData), so they can never
 // drift apart. Discount lines are just job_labor rows with a negative
-// total_price (per the discount feature), so they net out of laborTotal
-// automatically; discountTotal below is only for display breakdown.
+// total_price (per the discount feature); discountLines/discountTotal pull
+// them out individually for display, laborGross is labor before discounts.
 function computeJobFinancials(parts, labor) {
   const partsCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
   const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
   const laborCost = labor.reduce((s, l) => s + (l.total_cost || 0), 0);
   const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
-  const discountTotal = labor.reduce((s, l) => s + Math.min(l.total_price || 0, 0), 0);
+  const discountLines = labor
+    .filter(l => (l.total_price || 0) < 0)
+    .map(l => ({ description: l.description, amount: l.total_price || 0 }));
+  const discountTotal = discountLines.reduce((s, d) => s + d.amount, 0);
+  const laborGross = laborTotal - discountTotal;
   const subtotal = partsTotal + laborTotal;
   const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
   const total = subtotal + taxAmount;
   const cost = partsCost + laborCost;
   const profit = subtotal - cost;
-  return { partsCost, partsTotal, laborCost, laborTotal, discountTotal, subtotal, taxAmount, total, cost, profit };
+  return { partsCost, partsTotal, laborCost, laborTotal, laborGross, discountLines, discountTotal, subtotal, taxAmount, total, cost, profit };
 }
 
 function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
-  const { partsTotal, laborTotal, discountTotal, subtotal, taxAmount, total, profit } = computeJobFinancials(parts, labor);
+  const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
 
   return (
     <Card className="p-4 bg-gradient-to-br from-primary/8 to-primary/4 border-primary/15 shadow-sm">
@@ -192,31 +196,41 @@ function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNote
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Running Total</p>
         {isSaving && <p className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> saving...</p>}
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-2">
-        <div>
-          <p className="text-xs text-muted-foreground">Parts</p>
-          <p className="text-sm font-semibold">{formatCurrency(partsTotal)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Labor</p>
-          <p className="text-sm font-semibold">{formatCurrency(laborTotal - discountTotal)}</p>
-        </div>
-        {discountTotal < 0 && (
-          <div>
-            <p className="text-xs text-muted-foreground">Discount</p>
-            <p className="text-sm font-semibold text-destructive">{formatCurrency(discountTotal)}</p>
+      <div className="space-y-1.5">
+        {partsTotal > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Parts</span>
+            <span className="font-medium">{formatCurrency(partsTotal)}</span>
           </div>
         )}
-        <div>
-          <p className="text-xs text-muted-foreground">Profit</p>
-          <p className={`text-sm font-semibold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>{formatCurrency(profit)}</p>
+        {laborGross > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Labor</span>
+            <span className="font-medium">{formatCurrency(laborGross)}</span>
+          </div>
+        )}
+        {discountLines.map((d, i) => (
+          <div key={i} className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{d.description}</span>
+            <span className="font-medium text-destructive">{formatCurrency(d.amount)}</span>
+          </div>
+        ))}
+        {discountLines.length > 0 && (
+          <div className="flex items-center justify-between text-sm pt-1 border-t border-primary/10">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="font-medium">{formatCurrency(subtotal)}</span>
+          </div>
+        )}
+        {taxAmount > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">NJ Sales Tax (6.625%)</span>
+            <span className="font-medium">{formatCurrency(taxAmount)}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between pt-2 mt-1 border-t border-primary/10">
+          <span className="text-sm font-semibold">Total</span>
+          <span className="text-2xl font-bold text-primary tracking-tight">{formatCurrency(total)}</span>
         </div>
-      </div>
-      <div className="mt-3 pt-3 border-t border-primary/10 flex items-end justify-between">
-        <p className="text-xs text-muted-foreground">
-          {formatCurrency(subtotal)} + {formatCurrency(taxAmount)} tax
-        </p>
-        <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrency(total)}</p>
       </div>
       <div className="mt-2 pt-2 border-t border-blue-100/40 dark:border-blue-800/40">
         <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-1 flex items-center gap-1.5">
