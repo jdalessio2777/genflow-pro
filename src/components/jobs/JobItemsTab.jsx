@@ -134,7 +134,8 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
 
   const commitPriceEdit = (item) => {
     const newPrice = parseFloat(editingPriceValue);
-    if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
+    // Flat-rate items (e.g. discounts) may be negative to reduce the invoice; hourly rates may not.
+    if (isNaN(newPrice) || (newPrice < 0 && !item.is_flat_rate)) { toast.error("Enter a valid price"); return; }
     if (item.is_flat_rate) {
       updatePriceMutation.mutate({ id: item.id, data: { flat_rate_amount: newPrice, total_price: newPrice } });
     } else {
@@ -394,7 +395,6 @@ export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, in
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
                           value={editingPriceValue}
                           onChange={e => setEditingPriceValue(e.target.value)}
                           onKeyDown={e => {
