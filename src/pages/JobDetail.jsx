@@ -704,6 +704,31 @@ export default function JobDetail() {
     return { parts_total: partsPrice, labor_total: laborPrice, total: subtotal + taxAmount, tax_amount: taxAmount, tax_rate: TAX_RATE, line_items: lineItems, notes: invoiceNotes, customer_signature: job.customer_signature || null };
   };
 
+  // Parts/labor mutations (add, edit price, delete) only ever invalidate their
+  // own query — nothing recomputes an already-created invoice, so its stored
+  // total/tax silently goes stale the moment a line item changes after
+  // Finalize/Collect Payment. Keep it in sync automatically, matching the
+  // stored-invoice-cache pattern from the payment stale-data fix. Skip once
+  // paid — a paid invoice's total shouldn't retroactively change.
+  useEffect(() => {
+    if (!job || !existingInvoice || existingInvoice.status === "paid") return;
+    const fresh = buildInvoiceData();
+    const unchanged =
+      Math.abs((existingInvoice.parts_total || 0) - fresh.parts_total) < 0.005 &&
+      Math.abs((existingInvoice.labor_total || 0) - fresh.labor_total) < 0.005 &&
+      Math.abs((existingInvoice.tax_amount || 0) - fresh.tax_amount) < 0.005;
+    if (unchanged) return;
+
+    db.Invoice.update(existingInvoice.id, fresh).then((updated) => {
+      queryClient.setQueryData(["job-invoice", id], (old) =>
+        Array.isArray(old) ? old.map(inv => (inv.id === updated.id ? updated : inv)) : [updated]
+      );
+      queryClient.invalidateQueries({ queryKey: ["job-invoice", id] });
+      queryClient.invalidateQueries({ queryKey: ["invoice", existingInvoice.id] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    });
+  }, [parts, labor, existingInvoice?.id, existingInvoice?.status]);
+
   const handleFinalizeInvoice = async () => {
     const invoiceData = { ...buildInvoiceData(), job_id: id, customer_id: job.customer_id, customer_name: job.customer_name };
     let inv;
