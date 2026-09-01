@@ -1561,7 +1561,7 @@ export default function JobDetail() {
 
                         {/* Other flat rate folders via JobItemsTab */}
                         {flatFolder !== "service_agreements" && (
-                           <JobItemsTab jobId={id} labor={labor} memberDiscountRate={memberDiscountRate} initialFolder="flat_rates" customerId={job.customer_id} />
+                           <JobItemsTab key={flatFolder} jobId={id} labor={labor} memberDiscountRate={memberDiscountRate} initialFolder="flat_rates" presetSubFolderKey={flatFolder} customerId={job.customer_id} />
                         )}
                       </>
                     )}

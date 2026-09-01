@@ -22,16 +22,21 @@ const FLAT_RATE_FOLDERS = [
   { key: "load_shed", label: "Load Shed", icon: "🔌" },
   { key: "smm_boards", label: "SMM Boards", icon: "📟" },
   { key: "batteries", label: "Batteries", icon: "🔋" },
+  { key: "maintenance", label: "Maintenance", icon: "🔧" },
   { key: "discounts", label: "Discounts", icon: "🏷️" },
   { key: "other", label: "Other", icon: "📦" },
 ];
 
-export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, initialFolder = null, customerId = null }) {
+export default function JobItemsTab({ jobId, labor, memberDiscountRate = 1.0, initialFolder = null, presetSubFolderKey = null, customerId = null }) {
   const isMember = memberDiscountRate < 1.0;
   const queryClient = useQueryClient();
   const [folder, setFolder] = useState(initialFolder);
   const { confirmDelete } = usePreferences();
-  const [subFolder, setSubFolder] = useState(null);
+  const [subFolder, setSubFolder] = useState(() =>
+    presetSubFolderKey
+      ? FLAT_RATE_FOLDERS.find(f => f.key === presetSubFolderKey) ?? { key: presetSubFolderKey, label: presetSubFolderKey.replace(/_/g, " "), icon: "📦" }
+      : null
+  );
 
   const { data: rates = [] } = useQuery({
     queryKey: ["labor-rates"],
