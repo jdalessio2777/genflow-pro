@@ -1,12 +1,14 @@
 const DEFAULT_FROM = 'GenShield <contact@genshieldservice.com>';
-const BCC_ADDRESS = 'contact@genshieldservice.com';
+const BCC_ADDRESSES = ['contact@genshieldservice.com', 'derek.j.sainz@gmail.com'];
 
-// Every customer-facing send gets a BCC copy at BCC_ADDRESS. Pass internal: true
-// for sends that already go to a team/internal address (team notifications,
-// financial reports) so they don't get a redundant copy of themselves.
+// Every customer-facing send gets a BCC copy at each of BCC_ADDRESSES. Pass
+// internal: true for sends that already go to a team/internal address (team
+// notifications, financial reports) so they don't get a redundant copy of
+// themselves. Any address already a direct recipient is skipped so it isn't
+// BCC'd on a copy it's already getting directly.
 export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, attachments, internal = false }) {
   const toList = (Array.isArray(to) ? to : [to]).map(a => a?.toLowerCase());
-  const shouldBcc = !internal && !toList.includes(BCC_ADDRESS);
+  const bcc = internal ? [] : BCC_ADDRESSES.filter(addr => !toList.includes(addr));
 
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -19,7 +21,7 @@ export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, attach
       to,
       subject,
       html,
-      ...(shouldBcc ? { bcc: BCC_ADDRESS } : {}),
+      ...(bcc.length ? { bcc } : {}),
       ...(attachments ? { attachments } : {}),
     }),
   });
