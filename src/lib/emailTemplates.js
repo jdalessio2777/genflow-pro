@@ -17,6 +17,12 @@ function fmtJobType(raw) {
   return raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+function fmtPaymentMethod(method) {
+  const labels = { cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo', stripe: 'Card', stripe_app: 'Card', other: 'Other' }
+  if (!method) return ''
+  return labels[method] || (method.charAt(0).toUpperCase() + method.slice(1))
+}
+
 function header() {
   return `
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#0D1014;">
@@ -446,16 +452,16 @@ export function invoiceSummaryHTML({ invoice, customer }) {
     : "PAYMENT DUE";
 
   return `<div>
-    <div style="background:#1e3a5f;color:white;padding:22px 24px;border-radius:8px;margin-bottom:20px;">
+    <div style="background:#0D1014;color:white;padding:22px 24px;border-radius:8px;margin-bottom:20px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
-          <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;">GenShield</h1>
-          <p style="font-size:12px;color:#a8c4e0;margin:0;">Professional Generator Service &amp; Maintenance</p>
+          <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;letter-spacing:1px;">GEN<span style="color:#E03010;">SHIELD</span></h1>
+          <p style="font-size:12px;color:#A8B4C4;margin:0;">Professional Generator Service &amp; Maintenance</p>
         </div>
         <div style="text-align:right;">
-          <p style="font-size:16px;font-weight:bold;color:#a8c4e0;margin:0;">INVOICE</p>
+          <p style="font-size:16px;font-weight:bold;color:#CC2200;margin:0;">INVOICE</p>
           <p style="font-size:12px;margin:3px 0 0 0;">${invoice.invoice_number}</p>
-          <p style="font-size:11px;color:#a8c4e0;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>
+          <p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>
         </div>
       </div>
     </div>
@@ -477,7 +483,7 @@ export function invoiceSummaryHTML({ invoice, customer }) {
     </div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
       <thead>
-        <tr style="background:#1e3a5f;color:white;">
+        <tr style="background:#0D1014;color:white;">
           <th style="padding:9px 12px;text-align:left;font-size:12px;">Description</th>
           <th style="padding:9px 12px;text-align:center;font-size:12px;">Qty</th>
           <th style="padding:9px 12px;text-align:right;font-size:12px;">Rate</th>
@@ -493,14 +499,19 @@ export function invoiceSummaryHTML({ invoice, customer }) {
         <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span>${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0))}</span></div>
         ${invoice.tax_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">NJ Sales Tax (6.625%)</span><span>${fmt(invoice.tax_amount)}</span></div>` : ''}
         ${invoice.surcharge_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Card Surcharge (3%)</span><span>${fmt(invoice.surcharge_amount)}</span></div>` : ''}
-        <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:bold;border-top:2px solid #1e3a5f;margin-top:3px;"><span>Total</span><span style="color:#1e3a5f;">${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;margin-top:3px;"><span>Total</span><span style="color:#0D1014;">${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
       </div>
     </div>
     ${invoice.notes ? `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${invoice.notes}</p></div>` : ""}
+    ${invoice.paid_date ? `
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:16px;">
-      <p style="font-size:11px;font-weight:bold;color:#166534;margin:0 0 4px 0;">PAYMENT ACCEPTED</p>
-      <p style="font-size:12px;color:#15803d;margin:0;">Cash · Check payable to GenShield · Zelle · Venmo</p>
-    </div>
+      <p style="font-size:11px;font-weight:bold;color:#166534;margin:0 0 4px 0;">✓ PAID — THANK YOU!</p>
+      <p style="font-size:12px;color:#15803d;margin:0;">${fmtDate(invoice.paid_date)}${invoice.payment_method ? ` · ${fmtPaymentMethod(invoice.payment_method)}` : ""}${invoice.payment_reference ? ` #${invoice.payment_reference}` : ""}</p>
+    </div>` : `
+    <div style="background:#f4f5f7;border:1px solid #dde1e7;border-radius:8px;padding:12px;margin-bottom:16px;">
+      <p style="font-size:11px;font-weight:bold;color:#3f4753;margin:0 0 4px 0;">PAYMENT DUE</p>
+      <p style="font-size:12px;color:#5b6472;margin:0;">Cash · Check (payable to GenShield) · Zelle · Venmo · Card</p>
+    </div>`}
     ${signatureHTML}
   </div>`;
 }
@@ -511,7 +522,7 @@ export function checklistSummaryHTML(doc) {
   let rows = "";
   fields.forEach(field => {
     if (field.type === "section_header") {
-      rows += `<tr><td colspan="2" style="background:#1e3a5f;color:white;font-weight:bold;font-size:11px;padding:7px 10px;letter-spacing:0.5px;">${field.label}</td></tr>`;
+      rows += `<tr><td colspan="2" style="background:#0D1014;color:white;font-weight:bold;font-size:11px;padding:7px 10px;letter-spacing:0.5px;">${field.label}</td></tr>`;
     } else if (field.type === "checkbox") {
       const checked = values[field.id];
       rows += `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#333;">${field.label}</td><td style="padding:6px 10px;text-align:center;font-size:13px;color:${checked ? "#16a34a" : "#9ca3af"};">${checked ? "✓" : "○"}</td></tr>`;
@@ -519,8 +530,8 @@ export function checklistSummaryHTML(doc) {
       rows += `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#555;">${field.label}</td><td style="padding:6px 10px;font-size:12px;font-weight:600;">${values[field.id]}</td></tr>`;
     }
   });
-  return `<div style="margin-top:28px;border-top:2px solid #1e3a5f;padding-top:20px;">
-    <h2 style="color:#1e3a5f;font-size:15px;margin:0 0 12px 0;font-family:Arial,sans-serif;">${doc.template_name}</h2>
+  return `<div style="margin-top:28px;border-top:3px solid #CC2200;padding-top:20px;">
+    <h2 style="color:#0D1014;font-size:15px;margin:0 0 12px 0;font-family:Arial,sans-serif;">${doc.template_name}</h2>
     <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">${rows}</table>
   </div>`;
 }
