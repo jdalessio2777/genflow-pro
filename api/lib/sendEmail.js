@@ -1,4 +1,5 @@
-const DEFAULT_FROM = 'GenShield <contact@genshieldservice.com>';
+const DEFAULT_FROM = 'GenShield <office@genshieldservice.com>';
+const DEFAULT_REPLY_TO = 'contact@genshieldservice.com';
 const BCC_ADDRESSES = ['contact@genshieldservice.com', 'derek.j.sainz@gmail.com'];
 
 // Every customer-facing send gets a BCC copy at each of BCC_ADDRESSES. Pass
@@ -6,7 +7,7 @@ const BCC_ADDRESSES = ['contact@genshieldservice.com', 'derek.j.sainz@gmail.com'
 // notifications, financial reports) so they don't get a redundant copy of
 // themselves. Any address already a direct recipient is skipped so it isn't
 // BCC'd on a copy it's already getting directly.
-export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, attachments, internal = false }) {
+export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, replyTo = DEFAULT_REPLY_TO, attachments, internal = false }) {
   const toList = (Array.isArray(to) ? to : [to]).map(a => a?.toLowerCase());
   const bcc = internal ? [] : BCC_ADDRESSES.filter(addr => !toList.includes(addr));
 
@@ -21,6 +22,7 @@ export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, attach
       to,
       subject,
       html,
+      ...(replyTo ? { reply_to: replyTo } : {}),
       ...(bcc.length ? { bcc } : {}),
       ...(attachments ? { attachments } : {}),
     }),
