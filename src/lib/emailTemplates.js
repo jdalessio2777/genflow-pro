@@ -538,7 +538,22 @@ export function invoiceSummaryHTML({ invoice, customer }) {
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:16px;">
       <p style="font-size:11px;font-weight:bold;color:#166534;margin:0 0 4px 0;">✓ PAID — THANK YOU!</p>
       <p style="font-size:12px;color:#15803d;margin:0;">${fmtDate(invoice.paid_date)}${invoice.payment_method ? ` · ${fmtPaymentMethod(invoice.payment_method)}` : ""}${invoice.payment_reference ? ` #${invoice.payment_reference}` : ""}</p>
-    </div>` : `
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      <tr>
+        <td align="center" style="padding:4px 0 0;">
+          <p style="font-size:13px;font-weight:bold;color:#0D1014;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.5px;">How did we do?</p>
+          <table cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td align="center" bgcolor="#CC2200" style="border-radius:6px;background:#CC2200;">
+                <a href="https://g.page/r/CTZ_-W7KWjXzEAE/review" target="_blank" style="display:inline-block;padding:12px 28px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:6px;">★ Leave us a Google Review</a>
+              </td>
+            </tr>
+          </table>
+          <p style="font-size:12px;color:#6b7280;margin:14px 0 0;">Know someone who needs generator service? <a href="https://genshieldservice.com/rewards" style="color:#CC2200;font-weight:600;text-decoration:none;">Earn rewards →</a></p>
+        </td>
+      </tr>
+    </table>` : `
     <div style="background:#f4f5f7;border:1px solid #dde1e7;border-radius:8px;padding:12px;margin-bottom:16px;">
       <p style="font-size:11px;font-weight:bold;color:#3f4753;margin:0 0 4px 0;">PAYMENT DUE</p>
       <p style="font-size:12px;color:#5b6472;margin:0;">Cash · Check (payable to GenShield) · Zelle · Venmo · Card</p>

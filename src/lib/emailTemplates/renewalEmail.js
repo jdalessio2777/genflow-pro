@@ -106,6 +106,17 @@ export function renewalEmailHTML({ customerName, plan, expiryDate }) {
               GenShield Generator Service &amp; Repair
             </p>
 
+            <!-- REFERRAL -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;">
+              <tr>
+                <td style="border-top:1px solid #e0e0e0;padding-top:16px;text-align:center;">
+                  <p style="margin:0;font-size:12px;color:#888888;">
+                    Know someone who needs generator service? <a href="https://genshieldservice.com/rewards" style="color:#D32C2C;font-weight:700;text-decoration:none;">Earn rewards &rarr;</a>
+                  </p>
+                </td>
+              </tr>
+            </table>
+
           </td>
         </tr>
 
