@@ -453,34 +453,42 @@ export function invoiceSummaryHTML({ invoice, customer }) {
 
   return `<div>
     <div style="background:#0D1014;color:white;padding:22px 24px;border-radius:8px;margin-bottom:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div>
-          <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;letter-spacing:1px;">GEN<span style="color:#E03010;">SHIELD</span></h1>
-          <p style="font-size:12px;color:#A8B4C4;margin:0;">Professional Generator Service &amp; Maintenance</p>
-        </div>
-        <div style="text-align:right;">
-          <p style="font-size:16px;font-weight:bold;color:#CC2200;margin:0;">INVOICE</p>
-          <p style="font-size:12px;margin:3px 0 0 0;">${invoice.invoice_number}</p>
-          <p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>
-        </div>
-      </div>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="vertical-align:top;">
+            <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;letter-spacing:1px;">GEN<span style="color:#E03010;">SHIELD</span></h1>
+            <p style="font-size:12px;color:#A8B4C4;margin:0;">Professional Generator Service &amp; Maintenance</p>
+          </td>
+          <td style="vertical-align:top;text-align:right;">
+            <p style="font-size:16px;font-weight:bold;color:#CC2200;margin:0;">INVOICE</p>
+            <p style="font-size:12px;margin:3px 0 0 0;">${invoice.invoice_number}</p>
+            <p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>
+          </td>
+        </tr>
+      </table>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-      <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
-        <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
-        <p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${customer?.name || invoice.customer_name}</p>
-        ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${customer.address}</p>` : ""}
-        ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${customer.phone}</p>` : ""}
-      </div>
-      <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
-        <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">GENERATOR</p>
-        <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${customer?.generator_model || "—"}</p>
-        ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0 0 6px 0;">S/N: ${customer.generator_serial}</p>` : ""}
-        <p style="font-size:12px;font-weight:bold;margin:0;color:${invoice.paid_date ? "#16a34a" : "#d97706"};">
-          ${paymentLine}
-        </p>
-      </div>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+      <tr>
+        <td style="width:50%;vertical-align:top;padding:0 8px 0 0;">
+          <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
+            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
+            <p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${customer?.name || invoice.customer_name}</p>
+            ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${customer.address}</p>` : ""}
+            ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${customer.phone}</p>` : ""}
+          </div>
+        </td>
+        <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">
+          <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
+            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">GENERATOR</p>
+            <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${customer?.generator_model || "—"}</p>
+            ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0 0 6px 0;">S/N: ${customer.generator_serial}</p>` : ""}
+            <p style="font-size:12px;font-weight:bold;margin:0;color:${invoice.paid_date ? "#16a34a" : "#d97706"};">
+              ${paymentLine}
+            </p>
+          </div>
+        </td>
+      </tr>
+    </table>
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
       <thead>
         <tr style="background:#0D1014;color:white;">
@@ -492,16 +500,39 @@ export function invoiceSummaryHTML({ invoice, customer }) {
       </thead>
       <tbody>${lineItemsHTML}</tbody>
     </table>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
-      <div style="min-width:200px;">
-        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Parts</span><span>${fmt(invoice.parts_total)}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Labor</span><span>${fmt(invoice.labor_total)}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Subtotal</span><span>${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0))}</span></div>
-        ${invoice.tax_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">NJ Sales Tax (6.625%)</span><span>${fmt(invoice.tax_amount)}</span></div>` : ''}
-        ${invoice.surcharge_amount > 0 ? `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #eee;"><span style="color:#555;">Card Surcharge (3%)</span><span>${fmt(invoice.surcharge_amount)}</span></div>` : ''}
-        <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;margin-top:3px;"><span>Total</span><span style="color:#0D1014;">${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
-      </div>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      <tr>
+        <td></td>
+        <td style="width:220px;min-width:220px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">Parts</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.parts_total)}</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">Labor</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.labor_total)}</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">Subtotal</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0))}</td>
+            </tr>
+            ${invoice.tax_amount > 0 ? `<tr>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">NJ Sales Tax (6.625%)</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.tax_amount)}</td>
+            </tr>` : ''}
+            ${invoice.surcharge_amount > 0 ? `<tr>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">Card Surcharge (3%)</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.surcharge_amount)}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="padding:9px 0 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;">Total</td>
+              <td style="padding:9px 0 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;text-align:right;color:#0D1014;">${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
     ${invoice.notes ? `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${invoice.notes}</p></div>` : ""}
     ${invoice.paid_date ? `
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:16px;">
