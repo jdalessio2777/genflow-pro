@@ -25,7 +25,6 @@ import QuoteDetail from './pages/QuoteDetail';
 import DocumentTemplateForm from './pages/DocumentTemplateForm';
 import DocumentFill from './pages/DocumentFill';
 import Catalog from './pages/Catalog';
-import QuotePDF from './pages/QuotePDF';
 import Schedule from './pages/Schedule';
 import RouteMap from './pages/RouteMap';
 import MembershipAgreement from './pages/MembershipAgreement';
@@ -70,7 +69,6 @@ const AuthenticatedApp = () => {
         <Route path="/jobs/new" element={<JobForm />} />
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/jobs/:id/edit" element={<JobForm />} />
-        <Route path="/jobs/:id/quote" element={<QuotePDF />} />
         <Route path="/parts" element={<Parts />} />
         <Route path="/invoices" element={<Invoices />} />
         <Route path="/invoices/:id" element={<InvoiceDetail />} />

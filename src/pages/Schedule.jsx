@@ -120,7 +120,7 @@ export default function Schedule() {
 
   const scheduledJobs = jobs.filter(j =>
     j.scheduled_date &&
-    ["quote", "quote_sent", "scheduled", "in_progress", "completed"].includes(j.status)
+    ["scheduled", "in_progress", "completed"].includes(j.status)
   );
 
   const prev = () => {

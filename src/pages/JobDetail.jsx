@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
+import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import StatusBadge from "@/components/ui/StatusBadge";
 import RewardBadge from "@/components/ui/RewardBadge";
@@ -31,7 +31,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
-import { quoteEmailHTML, confirmationEmailHTML, invoiceSummaryHTML, checklistSummaryHTML, combineEmailSections } from "@/lib/emailTemplates";
+import { confirmationEmailHTML, invoiceSummaryHTML, checklistSummaryHTML, combineEmailSections } from "@/lib/emailTemplates";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -241,11 +241,6 @@ export default function JobDetail() {
   const { confirmDelete, use24h } = usePreferences();
 
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [quoteEmailOpen, setQuoteEmailOpen] = useState(false);
-  const [manualEmail, setManualEmail] = useState('');
-  const [sendingQuote, setSendingQuote] = useState(false);
-  const [confirmSkipOpen, setConfirmSkipOpen] = useState(false);
-  const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [sigOpen, setSigOpen] = useState(false);
@@ -519,34 +514,7 @@ export default function JobDetail() {
 
       db.Customer.update(job.customer_id, customerUpdate);
     }
-    if (newStatus === "scheduled" && job.scheduled_date) {
-      if (!customer?.email) {
-        // No email on file isn't a silent no-op — it's a real gap in the
-        // confirmation flow and needs to surface on Dashboard's Needs
-        // Attention alert just like any other failed send.
-        toast.error(`No email on file for ${customer?.name || "this customer"} — confirmation not sent`);
-        await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
-      } else {
-        try {
-          const techFirstName = (job.assigned_to_name || "").split(" ")[0] || "our technician";
-          await integrationsCore.SendEmailWithRetry({
-            to: customer.email,
-            subject: `Appointment Confirmed — GenShield Generator Service`,
-            html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
-          });
-          await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
-          toast.success(`Confirmation sent to ${customer.name}`);
-        } catch (e) {
-          toast.error(`Failed to send confirmation email: ${e.message}`);
-          await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
-        }
-      }
-    }
     const triggeredBy = getUserDisplayName(user);
-    if (newStatus === "scheduled") {
-      const scheduledStr = job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
-      notifyTeam({ subject: `Job Scheduled — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Scheduled", "blue")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Date", scheduledStr), buildRow("Assigned To", job.assigned_to_name || "Unassigned")])}`, triggeredBy });
-    }
     if (newStatus === "dispatched") {
       notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned")])}`, triggeredBy });
     }
@@ -570,78 +538,11 @@ export default function JobDetail() {
     handleStatusChange("canceled", { cancel_reason: cancelReason });
   };
 
-  const doSendQuote = async (email) => {
-    setSendingQuote(true);
-    try {
-      const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
-      const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
-      const total = partsTotal + laborTotal;
-
-      const lineItems = [
-        ...labor.map(l => ({
-          description: l.description,
-          qty: l.is_flat_rate ? '—' : `${l.hours}h`,
-          amount: l.total_price,
-        })),
-        ...parts.filter(p => p.total_price > 0).map(p => ({
-          description: p.name,
-          qty: `×${p.quantity}`,
-          amount: p.total_price,
-        })),
-      ];
-
-      await integrationsCore.SendEmailWithRetry({
-        to: email,
-        subject: `Your Service Quote — GenShield Generator Service`,
-        html: quoteEmailHTML({ customer, job, lineItems, subtotal: total, discount: 0, total }),
-      });
-      updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString(), quote_send_failed: false });
-      haptics.light();
-      toast.success(`Quote sent to ${email}`);
-      setQuoteEmailOpen(false);
-    } catch (e) {
-      haptics.error();
-      toast.error(`Failed to send quote: ${e.message}`);
-      await db.Job.update(id, { quote_send_failed: true }).catch(() => {});
-    } finally {
-      setSendingQuote(false);
-    }
-  };
-
-  const doSendConfirmation = async () => {
-    if (!customer?.email) return;
-    setSendingConfirmation(true);
-    try {
-      const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
-      await integrationsCore.SendEmailWithRetry({
-        to: customer.email,
-        subject: `Appointment Confirmed — GenShield Generator Service`,
-        html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
-      });
-      await db.Job.update(id, {
-        status: 'scheduled',
-        approval_source: 'phone',
-        confirmation_sent_at: new Date().toISOString(),
-        confirmation_send_failed: false,
-      });
-      queryClient.invalidateQueries({ queryKey: ['job', id] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      toast.success(`Confirmation sent to ${customer.email}`);
-      setConfirmSkipOpen(false);
-    } catch (e) {
-      haptics.error();
-      toast.error(`Failed to send confirmation: ${e.message}`);
-      await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: ['job', id] });
-    } finally {
-      setSendingConfirmation(false);
-    }
-  };
-
-  // Resend for a job already past the quote stage (scheduled or later) whose
-  // confirmation email failed or was never sent — unlike doSendConfirmation,
-  // this doesn't touch job.status since the job may already be dispatched,
-  // on site, or completed.
+  // Resend for a job whose confirmation email failed or was never sent —
+  // the only other confirmation-send path is the "Create & Send
+  // Confirmation" choice at job creation (JobForm.jsx). This one never
+  // touches job.status since the job may already be dispatched, on site,
+  // or completed.
   const resendConfirmation = async () => {
     if (!customer?.email) return;
     setResendingConfirmation(true);
@@ -723,15 +624,6 @@ export default function JobDetail() {
       }
     } finally {
       setCompletingJob(false);
-    }
-  };
-
-  const handleMarkAsSent = () => {
-    if (customer?.email) {
-      doSendQuote(customer.email);
-    } else {
-      setManualEmail('');
-      setQuoteEmailOpen(true);
     }
   };
 
@@ -1128,8 +1020,8 @@ export default function JobDetail() {
                 )
               )}
 
-              {/* Confirmation email needs attention — failed send or never sent, for a job past the quote stage */}
-              {!isClosed && !["quote", "quote_sent"].includes(job.status) && customer?.email &&
+              {/* Confirmation email needs attention — failed send or never sent */}
+              {!isClosed && customer?.email &&
                 (job.confirmation_send_failed || !job.confirmation_sent_at) && (
                 <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
                   <div className="flex items-center gap-2 mb-1">
@@ -1205,135 +1097,21 @@ export default function JobDetail() {
                       )}
                     </div>
                   )}
-                  {!["quote", "quote_sent"].includes(job.status) && (
-                    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className="w-full rounded-xl gap-1.5 h-10 text-sm">
-                          <XCircle className="w-4 h-4" /> Cancel Job
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-sm">
-                        <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
-                        <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
-                        <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
-                      </DialogContent>
-                    </Dialog>
-                  )}
+                  <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full rounded-xl gap-1.5 h-10 text-sm">
+                        <XCircle className="w-4 h-4" /> Cancel Job
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-sm">
+                      <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
+                      <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+                      <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               )}
 
-              {/* Quote section */}
-              {["quote", "quote_sent"].includes(job.status) && (
-                <Card className="p-4 border-sky-200 bg-sky-50 dark:border-sky-700 dark:bg-sky-900/20">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-semibold text-sky-900 dark:text-sky-200">Quote</p>
-                    <Link to={`/jobs/${id}/quote`}>
-                      <Button size="sm" variant="outline" className="rounded-xl text-xs h-8 gap-1">
-                        <FileText className="w-3 h-3" /> View
-                      </Button>
-                    </Link>
-                  </div>
-                  {job.status === "quote_sent" && (
-                    <>
-                      <p className="text-xs text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/30 rounded-lg px-2.5 py-1.5 border border-sky-200 dark:border-sky-700">
-                        ✓ Sent to customer — awaiting approval
-                      </p>
-                      <Button size="sm" variant="outline"
-                        className="w-full rounded-xl gap-1.5 mt-2 border-amber-300 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30"
-                        onClick={() => handleStatusChange("scheduled", { quote_approved_date: new Date().toISOString() })}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Proceed Without Approval
-                      </Button>
-                      <p className="text-[10px] text-muted-foreground text-center mt-1 leading-tight">
-                        Manual override — customer approved by phone or in person
-                      </p>
-                      {customer?.email && (
-                        <Button size="sm" variant="outline"
-                          className="w-full rounded-xl gap-1.5 mt-2 text-muted-foreground"
-                          onClick={() => setConfirmSkipOpen(true)}>
-                          <Send className="w-3.5 h-3.5" /> Send Confirmation Email
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  {job.status === "quote" && (
-                    <>
-                      <Button size="sm" className="w-full rounded-xl gap-1.5 mb-2"
-                        disabled={sendingQuote}
-                        onClick={handleMarkAsSent}>
-                        {sendingQuote
-                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending...</>
-                          : <><Send className="w-3.5 h-3.5" /> Send Quote to Customer</>}
-                      </Button>
-                      <Button size="sm" variant="outline" className="w-full rounded-xl gap-1.5 mb-2"
-                        onClick={() => handleStatusChange("scheduled", { quote_approved_date: new Date().toISOString() })}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve & Schedule
-                      </Button>
-                      {customer?.email && (
-                        <Button size="sm" variant="outline"
-                          className="w-full rounded-xl gap-1.5 text-muted-foreground"
-                          onClick={() => setConfirmSkipOpen(true)}>
-                          <Send className="w-3.5 h-3.5" /> Send Confirmation Email
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </Card>
-              )}
-
-              {/* Confirm skip-to-confirmation modal */}
-              <Dialog open={confirmSkipOpen} onOpenChange={setConfirmSkipOpen}>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader><DialogTitle>Send Appointment Confirmation</DialogTitle></DialogHeader>
-                  <p className="text-sm text-muted-foreground">
-                    Skip the quote and send an appointment confirmation to <strong>{customer?.email}</strong>?
-                    This will mark the job as scheduled.
-                  </p>
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmSkipOpen(false)}>Cancel</Button>
-                    <Button
-                      className="flex-1 rounded-xl gap-1.5"
-                      disabled={sendingConfirmation}
-                      onClick={doSendConfirmation}
-                    >
-                      {sendingConfirmation
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
-                        : <><Send className="w-4 h-4" /> Send Confirmation</>}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              {/* Quote email (no email on file) dialog */}
-              <Dialog open={quoteEmailOpen} onOpenChange={setQuoteEmailOpen}>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader><DialogTitle>Send Quote</DialogTitle></DialogHeader>
-                  <p className="text-sm text-muted-foreground">No email on file for this customer. Enter one to send the quote — it won't be saved to the profile.</p>
-                  <div>
-                    <Label className="text-xs">Customer email</Label>
-                    <Input
-                      type="email"
-                      value={manualEmail}
-                      onChange={e => setManualEmail(e.target.value)}
-                      placeholder="customer@example.com"
-                      className="rounded-xl mt-1"
-                      onKeyDown={e => { if (e.key === 'Enter' && manualEmail.includes('@')) doSendQuote(manualEmail); }}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setQuoteEmailOpen(false)}>Cancel</Button>
-                    <Button
-                      className="flex-1 rounded-xl gap-1.5"
-                      disabled={!manualEmail.includes('@') || sendingQuote}
-                      onClick={() => doSendQuote(manualEmail)}
-                    >
-                      {sendingQuote
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
-                        : <><Send className="w-4 h-4" /> Send Quote</>}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
 
               {/* Complete Job modal */}
               <Dialog open={completeJobOpen} onOpenChange={setCompleteJobOpen}>

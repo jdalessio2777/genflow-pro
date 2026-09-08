@@ -187,12 +187,11 @@ export default function Dashboard() {
   const unpaidInvoices = invoices.filter(i => i.status !== "paid" && i.status !== "draft");
 
   const failedEmailJobs = jobs
-    .filter(j => j.confirmation_send_failed || j.completion_send_failed || j.quote_send_failed)
+    .filter(j => j.confirmation_send_failed || j.completion_send_failed)
     .map(j => {
       const types = [];
       if (j.confirmation_send_failed) types.push("confirmation");
       if (j.completion_send_failed) types.push("completion summary");
-      if (j.quote_send_failed) types.push("quote");
       return { ...j, _failedTypes: types };
     });
 
