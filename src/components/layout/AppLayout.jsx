@@ -9,7 +9,7 @@ import { usePreferences } from "../../hooks/usePreferences";
 // Pages with their own fixed bottom action bar — MobileNav (also fixed-bottom,
 // same z-index) would otherwise render on top of it and cover the buttons
 // with no way to scroll past a fixed element to reach them.
-const HIDE_NAV_PREFIXES = ["/documents/fill/"];
+const HIDE_NAV_PREFIXES = ["/documents/fill/", "/quotes/new"];
 
 export default function AppLayout() {
   const location = useLocation();

@@ -121,16 +121,17 @@ Return ONLY the complete HTML document, nothing else.`;
     if (!htmlContent) { toast.error("Generate the quote first"); return; }
     setSending(true);
     try {
-      await integrationsCore.SendEmail({
+      await integrationsCore.SendEmailWithRetry({
         to: customer.email,
         subject: `Service Quote — ${job?.title} · GenShield`,
         html: htmlContent,
       });
-      updateJob.mutate({ status: "quote_sent", quote_sent_date: new Date().toISOString() });
+      updateJob.mutate({ status: "quote_sent", quote_sent_date: new Date().toISOString(), quote_send_failed: false });
       setSent(true);
       toast.success(`Quote sent to ${customer.email}`);
     } catch (e) {
       toast.error(e.message || "Failed to send quote email");
+      await db.Job.update(id, { quote_send_failed: true }).catch(() => {});
     } finally {
       setSending(false);
     }

@@ -55,16 +55,18 @@ export default function InvoicePDF() {
       if (Object.values(includedDocs).some(Boolean)) subjectParts.push("Service Report");
       const subject = subjectParts.join(" & ") + " — GenShield";
 
-      await integrationsCore.SendEmail({
+      await integrationsCore.SendEmailWithRetry({
         to: customer.email,
         subject,
         html: fullHTML,
       });
 
+      await db.Invoice.update(id, { send_failed: false });
       setSent(true);
       toast.success(`Email sent to ${customer.email}`);
     } catch (e) {
       toast.error(e.message || "Failed to send email");
+      await db.Invoice.update(id, { send_failed: true }).catch(() => {});
     } finally {
       setSending(false);
     }

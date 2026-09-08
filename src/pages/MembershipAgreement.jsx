@@ -240,7 +240,7 @@ export default function MembershipAgreement() {
       const expiryStr = expiry.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       const startStr = start.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       try {
-        await integrationsCore.SendEmail({
+        await integrationsCore.SendEmailWithRetry({
           to: customer.email,
           subject: `Your Protection Plan is Active — ${planName}`,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
@@ -267,8 +267,10 @@ export default function MembershipAgreement() {
             </div>
           </div>`,
         });
+        await db.Customer.update(customer.id, { membership_send_failed: false });
       } catch (e) {
         toast.error(`Membership activated, but confirmation email failed to send: ${e.message}`);
+        await db.Customer.update(customer.id, { membership_send_failed: true }).catch(() => {});
       }
     }
 
