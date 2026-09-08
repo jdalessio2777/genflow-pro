@@ -450,11 +450,13 @@ async function sendReport(buffer, filename, subject, { revenue, expTotal, netPro
 // ─── handler ──────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  // Vercel cron: x-vercel-cron-authorization header is present,
-  //              or Authorization: Bearer <CRON_SECRET> (newer Vercel)
+  // Vercel cron: Authorization: Bearer <CRON_SECRET>, per
+  // https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs
+  // (x-vercel-cron-authorization is just a marker header, not a verified
+  // signature - do not trust it on its own)
   const isVercelCron =
-    !!req.headers['x-vercel-cron-authorization'] ||
-    (process.env.CRON_SECRET && req.headers['authorization'] === `Bearer ${process.env.CRON_SECRET}`);
+    !!process.env.CRON_SECRET &&
+    req.headers['authorization'] === `Bearer ${process.env.CRON_SECRET}`;
 
   // Manual trigger: x-report-secret header must match REPORT_SECRET env var
   const isManual =
