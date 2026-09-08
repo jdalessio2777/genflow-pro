@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, CheckCircle2, ChevronDown, ChevronUp, UserPlus, PhoneCall, X } from "lucide-react";
+import { Plus, CheckCircle2, ChevronDown, ChevronUp, UserPlus, PhoneCall, X, FileText } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
@@ -124,7 +124,65 @@ export default function Inbox() {
     });
   };
 
+  const { data: quotes = [] } = useQuery({
+    queryKey: ["quotes-inbox"],
+    queryFn: () => db.Quote.list("-created_date", 100),
+  });
+
   const newLeadsCount = leads.filter(l => l.status === "new").length;
+  const openQuotesCount = quotes.filter(q => ["draft", "sent"].includes(q.status)).length;
+
+  const QUOTE_STATUS_COLORS = {
+    draft: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+    sent: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
+    approved: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200",
+    declined: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
+    expired: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200",
+  };
+
+  const QuoteCard = ({ quote }) => {
+    const expanded = expandedLeads.has(`quote-${quote.id}`);
+    const name = quote.prospect_name || quote.customer_name || "Unknown";
+    return (
+      <Card className="p-3.5 border-border">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <p className="text-sm font-semibold">{name}</p>
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase ${QUOTE_STATUS_COLORS[quote.status] || "bg-gray-100 text-gray-700"}`}>
+                {quote.status}
+              </span>
+              {!quote.customer_id && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200">PROSPECT</span>
+              )}
+            </div>
+            {quote.prospect_phone && <p className="text-xs text-muted-foreground">{quote.prospect_phone}</p>}
+            {quote.prospect_email && <p className="text-xs text-muted-foreground">{quote.prospect_email}</p>}
+            <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(quote.created_at)}</p>
+          </div>
+          <button onClick={() => toggleExpand(`quote-${quote.id}`)} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5">
+            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {expanded && (
+          <div className="mt-3 space-y-3 border-t pt-3">
+            {quote.notes && (
+              <div className="bg-muted/50 rounded-xl p-2.5">
+                <p className="text-xs font-semibold mb-1 text-muted-foreground">Notes</p>
+                <p className="text-xs text-foreground">{quote.notes}</p>
+              </div>
+            )}
+            <Link to={`/quotes/${quote.id}`}>
+              <Button size="sm" className="h-8 rounded-xl gap-1.5 text-xs">
+                <FileText className="w-3.5 h-3.5" /> View Quote
+              </Button>
+            </Link>
+          </div>
+        )}
+      </Card>
+    );
+  };
 
   const CustomerRow = ({ customer }) => {
     const { daysUntilDue, dueDate } = customer._due;
@@ -243,6 +301,8 @@ export default function Inbox() {
         title="Inbox"
         subtitle={activeTab === "service_due"
           ? `${callList.length} customer${callList.length !== 1 ? "s" : ""} to reach out to`
+          : activeTab === "quotes"
+          ? `${quotes.length} quote${quotes.length !== 1 ? "s" : ""}`
           : `${leads.length} lead${leads.length !== 1 ? "s" : ""}`}
         back="/"
       />
@@ -263,6 +323,17 @@ export default function Inbox() {
             {newLeadsCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
                 {newLeadsCount}
+              </span>
+            )}
+          </button>
+          <button
+            className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "quotes" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+            onClick={() => setActiveTab("quotes")}
+          >
+            Quotes
+            {openQuotesCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-blue-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                {openQuotesCount}
               </span>
             )}
           </button>
@@ -301,6 +372,24 @@ export default function Inbox() {
             ) : (
               <div className="space-y-2">
                 {leads.map(lead => <LeadCard key={lead.id} lead={lead} />)}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === "quotes" && (
+          <>
+            {quotes.length === 0 ? (
+              <Card className="p-8 text-center">
+                <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                <p className="text-sm font-semibold">No quotes yet</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[220px] mx-auto">
+                  Quotes you build and send will show up here
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {quotes.map(quote => <QuoteCard key={quote.id} quote={quote} />)}
               </div>
             )}
           </>

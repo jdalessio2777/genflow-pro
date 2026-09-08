@@ -110,6 +110,8 @@ const TABLE_MAP = {
   ServiceRequest: 'service_requests',
   ShieldReferral: 'shield_referrals',
   MembershipRenewal: 'membership_renewals',
+  Quote: 'quotes',
+  QuoteLineItem: 'quote_line_items',
 };
 
 export const db = Object.fromEntries(

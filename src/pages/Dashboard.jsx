@@ -396,12 +396,12 @@ export default function Dashboard() {
                 <p className="text-sm font-semibold text-green-900 dark:text-green-200">Finance</p>
               </div>
             </Link>
-            <Link to="/documents">
+            <Link to="/quotes/new">
               <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-orange-50 border border-orange-200/60 hover:bg-orange-100/60 transition-colors active:scale-[0.99] dark:bg-orange-900/20 dark:border-orange-700/60 dark:hover:bg-orange-900/30">
                 <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-orange-900">
                   <FileText className="w-4 h-4 text-orange-600 dark:text-orange-300" />
                 </div>
-                <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">Documents</p>
+                <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">New Quote</p>
               </div>
             </Link>
             <Link to="/referrals">

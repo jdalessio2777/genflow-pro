@@ -26,6 +26,8 @@ import Parts from './pages/Parts';
 import Invoices from './pages/Invoices';
 import InvoiceDetail from './pages/InvoiceDetail';
 import Documents from './pages/Documents';
+import QuoteBuilder from './pages/QuoteBuilder';
+import QuoteDetail from './pages/QuoteDetail';
 import DocumentTemplateForm from './pages/DocumentTemplateForm';
 import DocumentFill from './pages/DocumentFill';
 import Catalog from './pages/Catalog';
@@ -142,6 +144,8 @@ const AuthenticatedApp = () => {
         <Route path="/invoices" element={<Invoices />} />
         <Route path="/invoices/:id" element={<InvoiceDetail />} />
         <Route path="/invoices/:id/send" element={<InvoicePDF />} />
+        <Route path="/quotes/new" element={<QuoteBuilder />} />
+        <Route path="/quotes/:id" element={<QuoteDetail />} />
         <Route path="/documents" element={<Documents />} />
         <Route path="/documents/new" element={<DocumentTemplateForm />} />
         <Route path="/documents/:id/edit" element={<DocumentTemplateForm />} />

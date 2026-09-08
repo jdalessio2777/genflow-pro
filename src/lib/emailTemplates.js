@@ -127,7 +127,9 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, di
         <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${customer.name},</p>
         <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
           Thank you for choosing GenShield — we truly appreciate the opportunity to keep your home protected.
-          Please review your service quote below and approve when you're ready. We'll get you scheduled right away.
+          ${approveUrl
+            ? `Please review your service quote below and approve when you're ready. We'll get you scheduled right away.`
+            : `Please review your service quote below. We'll be in touch shortly to go over the details and get you scheduled.`}
         </p>
         ${divider()}
 
@@ -188,11 +190,18 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, di
 
         <!-- CTA -->
         <div style="text-align:center;margin-bottom:8px;">
+          ${approveUrl ? `
           <p style="font-size:15px;color:#374151;margin:0 0 16px;">Ready to move forward? One click to approve:</p>
           <a href="${approveUrl}" style="display:inline-block;background:#CC2200;color:#ffffff;font-size:17px;font-weight:700;padding:16px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.5px;">✓ &nbsp;Approve This Quote</a>
           <p style="font-size:13px;color:#9ca3af;margin:16px 0 4px;">Prefer to talk it through?</p>
           <a href="tel:9737872431" style="font-size:15px;font-weight:700;color:#0D1014;text-decoration:none;">📞 Call us at (973) 787-2431</a>
           <p style="font-size:12px;color:#9ca3af;font-style:italic;margin:12px 0 0;">This quote expires in 7 days. Prices are locked in until then.</p>
+          ` : `
+          <p style="font-size:15px;color:#374151;margin:0 0 8px;">We'll follow up with you shortly to confirm the details.</p>
+          <p style="font-size:13px;color:#9ca3af;margin:0 0 16px;">Have questions in the meantime?</p>
+          <a href="tel:9737872431" style="display:inline-block;background:#CC2200;color:#ffffff;font-size:16px;font-weight:700;padding:14px 32px;border-radius:8px;text-decoration:none;letter-spacing:0.5px;">📞 &nbsp;Call us at (973) 787-2431</a>
+          <p style="font-size:12px;color:#9ca3af;font-style:italic;margin:16px 0 0;">This quote expires in 7 days. Prices are locked in until then.</p>
+          `}
         </div>
 
         ${referralBar()}
