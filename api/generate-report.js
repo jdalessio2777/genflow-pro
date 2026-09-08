@@ -18,17 +18,18 @@ function getPeriodDates(type) {
   const now = new Date();
 
   if (type === 'weekly') {
-    // prior complete Mon–Sun week
+    // prior complete Sun–Sat week (cron fires Sunday morning, right after
+    // the Sun–Sat week that just ended Saturday night)
     const dow = now.getDay(); // 0=Sun
-    const daysToThisMon = dow === 0 ? 6 : dow - 1;
-    const thisMon = new Date(now);
-    thisMon.setDate(now.getDate() - daysToThisMon);
-    thisMon.setHours(0, 0, 0, 0);
+    const daysToThisSun = dow;
+    const thisSun = new Date(now);
+    thisSun.setDate(now.getDate() - daysToThisSun);
+    thisSun.setHours(0, 0, 0, 0);
 
-    const start = new Date(thisMon);
-    start.setDate(thisMon.getDate() - 7);
-    const end = new Date(thisMon);
-    end.setDate(thisMon.getDate() - 1);
+    const start = new Date(thisSun);
+    start.setDate(thisSun.getDate() - 7);
+    const end = new Date(thisSun);
+    end.setDate(thisSun.getDate() - 1);
     end.setHours(23, 59, 59, 999);
     return { start, end };
   }
