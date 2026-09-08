@@ -89,7 +89,7 @@ export default function Jobs() {
   });
 
   const filtered = jobs.filter(j => {
-    if (filter === "active") return ["quote", "quote_sent", "scheduled", "dispatched", "on_site", "in_progress"].includes(j.status);
+    if (filter === "active") return ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status);
     if (filter === "completed") {
       const isCompleted = j.status === "completed" || j.status === "invoiced";
       if (!isCompleted) return false;

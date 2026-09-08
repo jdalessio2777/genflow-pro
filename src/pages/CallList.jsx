@@ -33,7 +33,7 @@ export default function CallList() {
 
   const activeJobCustomerIds = new Set(
     jobs
-      .filter(j => ["quote", "quote_sent", "scheduled", "in_progress"].includes(j.status))
+      .filter(j => ["scheduled", "in_progress"].includes(j.status))
       .map(j => j.customer_id)
   );
 

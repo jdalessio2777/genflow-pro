@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { integrationsCore } from "@/lib/coreIntegrations";
+import { confirmationEmailHTML } from "@/lib/emailTemplates";
+import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName, getUserColor } from "@/lib/userColors";
 import { Button } from "@/components/ui/button";
@@ -12,7 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import PageHeader from "@/components/layout/PageHeader";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, Send, BellOff } from "lucide-react";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
@@ -36,13 +39,14 @@ export default function JobForm() {
   const urlParams = new URLSearchParams(window.location.search);
   const preCustomer = urlParams.get("customer");
   const { user, googleToken } = useAuth();
+  const { use24h } = usePreferences();
 
   const [form, setForm] = useState({
     customer_id: preCustomer || "",
     customer_name: "",
     title: "",
     job_type: "maintenance",
-    status: "quote",
+    status: "scheduled",
     scheduled_date: "",
     estimated_duration: "",
     notes: "",
@@ -96,10 +100,10 @@ export default function JobForm() {
     );
 
   const mutation = useMutation({
-    mutationFn: (data) => isEdit
+    mutationFn: ({ data }) => isEdit
       ? db.Job.update(id, cleanPayload(data))
       : db.Job.create(cleanPayload(data)),
-    onSuccess: async (savedJob) => {
+    onSuccess: async (savedJob, { sendConfirmation }) => {
       if (!isEdit) {
         try {
           await db.Invoice.create({
@@ -125,6 +129,30 @@ export default function JobForm() {
           `,
           triggeredBy: getUserDisplayName(user),
         });
+
+        // The only other confirmation-send path is JobDetail's "Resend
+        // Confirmation Email" banner (fix #4) — nothing else fires this email.
+        if (sendConfirmation) {
+          const jobCustomer = customers.find(c => c.id === savedJob.customer_id);
+          if (!jobCustomer?.email) {
+            toast.error(`No email on file for ${jobCustomer?.name || "this customer"} — confirmation not sent`);
+            await db.Job.update(savedJob.id, { confirmation_send_failed: true }).catch(() => {});
+          } else {
+            try {
+              const techFirstName = (savedJob.assigned_to_name || "").split(" ")[0] || "our technician";
+              await integrationsCore.SendEmailWithRetry({
+                to: jobCustomer.email,
+                subject: `Appointment Confirmed — GenShield Generator Service`,
+                html: confirmationEmailHTML({ customer: jobCustomer, job: savedJob, techFirstName, use24h }),
+              });
+              await db.Job.update(savedJob.id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
+              toast.success(`Confirmation sent to ${jobCustomer.name}`);
+            } catch (e) {
+              toast.error(`Failed to send confirmation email: ${e.message}`);
+              await db.Job.update(savedJob.id, { confirmation_send_failed: true }).catch(() => {});
+            }
+          }
+        }
       }
 
       // Calendar sync — non-fatal, runs after job is saved
@@ -171,11 +199,22 @@ export default function JobForm() {
     setForm(prev => ({ ...prev, customer_id: customerId, customer_name: c?.name || "" }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSave = (e) => {
     e.preventDefault();
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
-    mutation.mutate(form);
+    mutation.mutate({ data: form, sendConfirmation: false });
+  };
+
+  const handleCreate = (sendConfirmation) => {
+    if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
+    if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
+    if (sendConfirmation && !form.scheduled_date) {
+      haptics.error();
+      toast.error('Set a scheduled date/time first, or use "Create & Skip Notification"');
+      return;
+    }
+    mutation.mutate({ data: form, sendConfirmation });
   };
 
   if (loadingJob) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
@@ -184,7 +223,7 @@ export default function JobForm() {
     <div>
       <PageHeader title={isEdit ? "Edit Job" : "New Job"} back={isEdit ? `/jobs/${id}` : "/jobs"} />
 
-      <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      <form onSubmit={isEdit ? handleSave : (e) => e.preventDefault()} className="p-4 space-y-4">
         <Card className="p-4 space-y-4">
           <div>
             <Label className="text-xs">Customer *</Label>
@@ -236,7 +275,7 @@ export default function JobForm() {
               <Select value={form.status} onValueChange={v => update("status", v)}>
                 <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["quote", "quote_sent", "scheduled", "in_progress", "completed", "invoiced", "canceled"].map(s =>
+                  {["scheduled", "in_progress", "completed", "invoiced", "canceled"].map(s =>
                     <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>
                   )}
                 </SelectContent>
@@ -265,12 +304,6 @@ export default function JobForm() {
               </SelectContent>
             </Select>
           </div>
-          {(!isEdit || form.status === "quote" || form.status === "quote_sent") && (
-            <div>
-              <Label className="text-xs">Quote Description</Label>
-              <Textarea value={form.quote_notes || ""} onChange={e => update("quote_notes", e.target.value)} className="rounded-xl mt-1" rows={2} placeholder="Describe the work being quoted..." />
-            </div>
-          )}
           <div>
             <Label className="text-xs">Notes</Label>
             <Textarea value={form.notes} onChange={e => update("notes", e.target.value)} className="rounded-xl mt-1" rows={3} />
@@ -295,10 +328,23 @@ export default function JobForm() {
           </div>
         </Card>
 
-        <Button type="submit" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending}>
-          {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isEdit ? "Save Changes" : "Create Job"}
-        </Button>
+        {isEdit ? (
+          <Button type="submit" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending}>
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save Changes
+          </Button>
+        ) : (
+          <div className="space-y-2">
+            <Button type="button" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending} onClick={() => handleCreate(true)}>
+              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Create & Send Confirmation
+            </Button>
+            <Button type="button" variant="outline" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending} onClick={() => handleCreate(false)}>
+              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <BellOff className="w-4 h-4" />}
+              Create & Skip Notification
+            </Button>
+          </div>
+        )}
       </form>
     </div>
   );

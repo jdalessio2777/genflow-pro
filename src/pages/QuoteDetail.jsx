@@ -55,13 +55,11 @@ export default function QuoteDetail() {
 
   // Approve: create customer (if prospect) -> job -> job_parts/job_labor from the
   // quote's line items, in that order. The job lands in status "scheduled" with
-  // no scheduled_date yet — NOT "quote_sent" (that status + quote_approval_token
-  // belong exclusively to the separate dead/external approval flow and must
-  // never be touched here). Because there's no scheduled_date at creation time,
-  // the confirmation-email auto-send in JobDetail's handleStatusChange would
-  // silently no-op anyway if triggered here — so this flow doesn't attempt one.
-  // Staff pick a real appointment time via the normal job-edit flow, then use
-  // the existing manual "Send Confirmation Email" button when ready.
+  // no scheduled_date yet. This never sends a confirmation email — the quote
+  // email already served that purpose. Staff pick a real appointment time via
+  // the normal job-edit flow; if a confirmation is wanted, JobDetail's "Resend
+  // Confirmation Email" banner (shown for any job with no confirmation sent
+  // yet) covers it.
   const approveMutation = useMutation({
     mutationFn: async () => {
       let finalCustomerId = quote.customer_id;
