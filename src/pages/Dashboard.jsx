@@ -196,6 +196,9 @@ export default function Dashboard() {
       return { ...j, _failedTypes: types };
     });
 
+  const failedInvoices = invoices.filter(i => i.send_failed);
+  const failedMembershipCustomers = allCustomers.filter(c => c.membership_send_failed);
+
   const [alertsOpen, setAlertsOpen] = useState(false);
 
   const hour = new Date().getHours();
@@ -416,7 +419,7 @@ export default function Dashboard() {
         </div>
 
         {/* Collapsible Alerts */}
-        {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || failedEmailJobs.length > 0 || referralSummary.length >= 2) && (
+        {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || failedEmailJobs.length > 0 || failedInvoices.length > 0 || failedMembershipCustomers.length > 0 || referralSummary.length >= 2) && (
           <div>
             <button
               onClick={() => setAlertsOpen(v => !v)}
@@ -424,9 +427,9 @@ export default function Dashboard() {
             >
               <div className="flex items-center gap-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alerts & Insights</p>
-                {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || failedEmailJobs.length > 0) && (
+                {(lowStockParts.length > 0 || expiringMemberships.length > 0 || expiredMemberships.length > 0 || unpaidInvoices.length > 0 || failedEmailJobs.length > 0 || failedInvoices.length > 0 || failedMembershipCustomers.length > 0) && (
                   <span className="text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-                    {lowStockParts.length + expiringMemberships.length + expiredMemberships.length + unpaidInvoices.length + failedEmailJobs.length}
+                    {lowStockParts.length + expiringMemberships.length + expiredMemberships.length + unpaidInvoices.length + failedEmailJobs.length + failedInvoices.length + failedMembershipCustomers.length}
                   </span>
                 )}
               </div>
@@ -455,6 +458,58 @@ export default function Dashboard() {
                             </div>
                             <p className="text-xs text-red-700 dark:text-red-300">
                               {j._failedTypes.join(", ")} email failed after 3 attempts — tap to retry
+                            </p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {failedInvoices.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-red-500" />
+                      Needs Attention — Invoice Email Failed
+                    </p>
+                    <div className="space-y-2">
+                      {failedInvoices.map(i => (
+                        <Link key={i.id} to={`/invoices/${i.id}/send`}>
+                          <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 hover:opacity-80 transition-all dark:border-red-700 dark:bg-red-900/20">
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                              <span className="text-sm font-semibold text-red-800 dark:text-red-200 truncate">
+                                {i.invoice_number || i.customer_name}
+                              </span>
+                            </div>
+                            <p className="text-xs text-red-700 dark:text-red-300">
+                              Email failed to send — tap to retry
+                            </p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {failedMembershipCustomers.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-red-500" />
+                      Needs Attention — Membership Email Failed
+                    </p>
+                    <div className="space-y-2">
+                      {failedMembershipCustomers.map(c => (
+                        <Link key={c.id} to={`/customers/${c.id}`}>
+                          <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 hover:opacity-80 transition-all dark:border-red-700 dark:bg-red-900/20">
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                              <span className="text-sm font-semibold text-red-800 dark:text-red-200 truncate">
+                                {c.name}
+                              </span>
+                            </div>
+                            <p className="text-xs text-red-700 dark:text-red-300">
+                              Protection plan confirmation email failed to send
                             </p>
                           </div>
                         </Link>

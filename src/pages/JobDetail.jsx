@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package } from "lucide-react";
+import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, Send, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import StatusBadge from "@/components/ui/StatusBadge";
 import RewardBadge from "@/components/ui/RewardBadge";
@@ -246,6 +246,7 @@ export default function JobDetail() {
   const [sendingQuote, setSendingQuote] = useState(false);
   const [confirmSkipOpen, setConfirmSkipOpen] = useState(false);
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [sigOpen, setSigOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -518,19 +519,27 @@ export default function JobDetail() {
 
       db.Customer.update(job.customer_id, customerUpdate);
     }
-    if (newStatus === "scheduled" && customer?.email && job.scheduled_date) {
-      try {
-        const techFirstName = (job.assigned_to_name || "").split(" ")[0] || "our technician";
-        await integrationsCore.SendEmailWithRetry({
-          to: customer.email,
-          subject: `Appointment Confirmed — GenShield Generator Service`,
-          html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
-        });
-        await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
-        toast.success(`Confirmation sent to ${customer.name}`);
-      } catch (e) {
-        toast.error(`Failed to send confirmation email: ${e.message}`);
+    if (newStatus === "scheduled" && job.scheduled_date) {
+      if (!customer?.email) {
+        // No email on file isn't a silent no-op — it's a real gap in the
+        // confirmation flow and needs to surface on Dashboard's Needs
+        // Attention alert just like any other failed send.
+        toast.error(`No email on file for ${customer?.name || "this customer"} — confirmation not sent`);
         await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
+      } else {
+        try {
+          const techFirstName = (job.assigned_to_name || "").split(" ")[0] || "our technician";
+          await integrationsCore.SendEmailWithRetry({
+            to: customer.email,
+            subject: `Appointment Confirmed — GenShield Generator Service`,
+            html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
+          });
+          await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
+          toast.success(`Confirmation sent to ${customer.name}`);
+        } catch (e) {
+          toast.error(`Failed to send confirmation email: ${e.message}`);
+          await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
+        }
       }
     }
     const triggeredBy = getUserDisplayName(user);
@@ -626,6 +635,34 @@ export default function JobDetail() {
       queryClient.invalidateQueries({ queryKey: ['job', id] });
     } finally {
       setSendingConfirmation(false);
+    }
+  };
+
+  // Resend for a job already past the quote stage (scheduled or later) whose
+  // confirmation email failed or was never sent — unlike doSendConfirmation,
+  // this doesn't touch job.status since the job may already be dispatched,
+  // on site, or completed.
+  const resendConfirmation = async () => {
+    if (!customer?.email) return;
+    setResendingConfirmation(true);
+    try {
+      const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
+      await integrationsCore.SendEmailWithRetry({
+        to: customer.email,
+        subject: `Appointment Confirmed — GenShield Generator Service`,
+        html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
+      });
+      await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
+      queryClient.invalidateQueries({ queryKey: ['job', id] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      toast.success(`Confirmation sent to ${customer.email}`);
+    } catch (e) {
+      haptics.error();
+      toast.error(`Failed to send confirmation: ${e.message}`);
+      await db.Job.update(id, { confirmation_send_failed: true }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['job', id] });
+    } finally {
+      setResendingConfirmation(false);
     }
   };
 
@@ -1089,6 +1126,26 @@ export default function JobDetail() {
                     </div>
                   </Card>
                 )
+              )}
+
+              {/* Confirmation email needs attention — failed send or never sent, for a job past the quote stage */}
+              {!isClosed && !["quote", "quote_sent"].includes(job.status) && customer?.email &&
+                (job.confirmation_send_failed || !job.confirmation_sent_at) && (
+                <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                    <span className="text-sm font-semibold text-red-800 dark:text-red-200">
+                      {job.confirmation_send_failed ? "Confirmation email failed to send" : "Confirmation email never sent"}
+                    </span>
+                  </div>
+                  <Button size="sm" variant="outline" className="w-full rounded-xl gap-1.5 mt-2 border-red-300 dark:border-red-600 text-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+                    disabled={resendingConfirmation}
+                    onClick={resendConfirmation}>
+                    {resendingConfirmation
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending...</>
+                      : <><RefreshCw className="w-3.5 h-3.5" /> Resend Confirmation Email</>}
+                  </Button>
+                </Card>
               )}
 
               {/* Status action buttons */}
