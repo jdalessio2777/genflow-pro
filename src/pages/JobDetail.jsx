@@ -581,14 +581,10 @@ export default function JobDetail() {
         })),
       ];
 
-      const approvalToken = crypto.randomUUID();
-      await db.Job.update(id, { quote_approval_token: approvalToken });
-
-      const approveUrl = `https://genshieldservice.com/approve?job=${id}&token=${approvalToken}`;
       await integrationsCore.SendEmailWithRetry({
         to: email,
         subject: `Your Service Quote — GenShield Generator Service`,
-        html: quoteEmailHTML({ customer, job, lineItems, subtotal: total, discount: 0, total, approveUrl }),
+        html: quoteEmailHTML({ customer, job, lineItems, subtotal: total, discount: 0, total }),
       });
       updateJob.mutate({ status: 'quote_sent', quote_sent_date: new Date().toISOString(), quote_send_failed: false });
       haptics.light();

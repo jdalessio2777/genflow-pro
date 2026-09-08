@@ -32,7 +32,6 @@ import DocumentTemplateForm from './pages/DocumentTemplateForm';
 import DocumentFill from './pages/DocumentFill';
 import Catalog from './pages/Catalog';
 import QuotePDF from './pages/QuotePDF';
-import QuoteApproval from './pages/QuoteApproval';
 import Schedule from './pages/Schedule';
 import RouteMap from './pages/RouteMap';
 import MembershipAgreement from './pages/MembershipAgreement';
@@ -175,7 +174,6 @@ function App() {
           <OfflineProvider>
             <Routes>
               {/* PUBLIC routes — no auth needed */}
-              <Route path="/approve-quote/:jobId/:token" element={<QuoteApproval />} />
               <Route path="/login" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               {/* All authenticated routes */}
