@@ -187,10 +187,19 @@ export default function QuoteDetail() {
           </div>
         </Card>
 
+        {quote.scope_notes && (
+          <Card className="p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Scope of Work</p>
+            <p className="text-sm text-foreground whitespace-pre-line">{quote.scope_notes}</p>
+            <p className="text-[10px] text-muted-foreground mt-2">Included in the customer's quote email</p>
+          </Card>
+        )}
+
         {quote.notes && (
           <Card className="p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Notes</p>
             <p className="text-sm text-foreground">{quote.notes}</p>
+            <p className="text-[10px] text-muted-foreground mt-2">Internal only — not shown to the customer</p>
           </Card>
         )}
 
