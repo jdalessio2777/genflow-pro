@@ -93,7 +93,7 @@ function footer() {
     </table>`
 }
 
-export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, discount = 0, total = 0, approveUrl }) {
+export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, discount = 0, total = 0, approveUrl, scopeNotes }) {
   const quoteNum = (job.id || '').slice(0, 8).toUpperCase()
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -187,6 +187,13 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, di
             <td style="padding:14px 16px;font-size:20px;font-weight:700;text-align:right;color:#0D1014;">${fmt(total)}</td>
           </tr>
         </table>
+
+        ${scopeNotes ? `
+        <!-- Scope of work -->
+        <div style="background:#f8f8f8;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+          <p style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Scope of Work</p>
+          <p style="font-size:13px;color:#374151;line-height:1.6;margin:0;">${scopeNotes}</p>
+        </div>` : ''}
 
         <!-- CTA -->
         <div style="text-align:center;margin-bottom:8px;">

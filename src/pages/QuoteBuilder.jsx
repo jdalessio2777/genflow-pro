@@ -35,6 +35,7 @@ export default function QuoteBuilder() {
   const [partSearch, setPartSearch] = useState("");
   const [customLine, setCustomLine] = useState({ description: "", amount: "" });
   const [notes, setNotes] = useState("");
+  const [scopeNotes, setScopeNotes] = useState("");
   const [sending, setSending] = useState(false);
 
   const { data: customers = [] } = useQuery({
@@ -104,6 +105,7 @@ export default function QuoteBuilder() {
         prospect_address: customerId ? null : prospect.address,
         status: "draft",
         notes: notes || null,
+        scope_notes: scopeNotes.trim() || null,
       });
 
       // 2. Attach line items
@@ -142,6 +144,7 @@ export default function QuoteBuilder() {
           subtotal: total,
           discount: 0,
           total,
+          scopeNotes: scopeNotes.trim() || null,
           // approveUrl intentionally omitted — no approval link in this flow
         }),
       });
@@ -360,10 +363,22 @@ export default function QuoteBuilder() {
           )}
         </Card>
 
+        {/* ── Scope of Work (customer-facing) ── */}
+        <Card className="p-4 space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Scope of Work</p>
+          <Textarea
+            value={scopeNotes}
+            onChange={e => setScopeNotes(e.target.value)}
+            placeholder="Add notes about the scope of this job (optional) — this is included in the quote email to the customer"
+            className="rounded-xl resize-none"
+            rows={3}
+          />
+        </Card>
+
         {/* ── Notes ── */}
         <Card className="p-4 space-y-2">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Notes (internal)</p>
-          <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Scope of work, site conditions, anything worth remembering..." className="rounded-xl resize-none" rows={3} />
+          <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Site conditions, access notes, anything worth remembering — not shown to the customer..." className="rounded-xl resize-none" rows={3} />
         </Card>
       </div>
 
