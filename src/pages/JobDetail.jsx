@@ -630,7 +630,12 @@ export default function JobDetail() {
   const buildInvoiceData = () => {
     const { partsTotal, laborTotal, taxAmount, total } = computeJobFinancials(parts, labor);
     const lineItems = [
-      ...parts.map(p => ({ type: "part", description: p.name, quantity: p.quantity, unit_price: p.price, total: p.total_price })),
+      // charge_for_part: false parts are $0 by design (not billed) — never
+      // surface them on the customer-facing invoice/email/PDF, which all
+      // render off this stored line_items snapshot. Internal views (Job
+      // Detail's Parts/Work tab) render live `parts` state directly, not
+      // this snapshot, so they're unaffected and still show everything.
+      ...parts.filter(p => p.charge_for_part !== false).map(p => ({ type: "part", description: p.name, quantity: p.quantity, unit_price: p.price, total: p.total_price })),
       ...labor.map(l => ({ type: "labor", description: l.description, quantity: l.is_flat_rate ? 1 : l.hours, unit_price: l.is_flat_rate ? l.flat_rate_amount : l.rate, total: l.total_price })),
     ];
     return { parts_total: partsTotal, labor_total: laborTotal, total, tax_amount: taxAmount, tax_rate: TAX_RATE, line_items: lineItems, notes: invoiceNotes, customer_signature: job.customer_signature || null };
