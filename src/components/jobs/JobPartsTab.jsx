@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
-import { firstManagedPatch } from "@/lib/utils/partsManaged";
+import { firstManagedPatch, suggestedSalePrice } from "@/lib/utils/partsManaged";
 import { toast } from "sonner";
 
 const PART_CATEGORIES = [
@@ -47,6 +47,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
   const [editingPriceValue, setEditingPriceValue] = useState("");
   const [overriddenPriceIds, setOverriddenPriceIds] = useState(new Set());
   const [updateCatalogPrice, setUpdateCatalogPrice] = useState(false);
+  const [saleTouchedInConfirm, setSaleTouchedInConfirm] = useState(false);
   const [form, setForm] = useState({
     name: "",
     part_number: "",
@@ -54,6 +55,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     cost: 0,
     price: 0,
     catalogPrice: null,
+    catalogCost: null,
     quantity: 1,
     charge_for_part: true,
     save_to_catalog: true,
@@ -67,7 +69,8 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
       setOpen(false);
       setPartsFolder(null);
       setUpdateCatalogPrice(false);
-      setForm({ name: "", part_number: "", description: "", cost: 0, price: 0, catalogPrice: null, quantity: 1, charge_for_part: true, save_to_catalog: true, category: "other" });
+      setSaleTouchedInConfirm(false);
+      setForm({ name: "", part_number: "", description: "", cost: 0, price: 0, catalogPrice: null, catalogCost: null, quantity: 1, charge_for_part: true, save_to_catalog: true, category: "other" });
       toast.success("Part added");
     },
     onError: (err) => toast.error("Failed to add part: " + err.message),
@@ -173,11 +176,16 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
       }
     }
 
-    // Tech explicitly opted to carry a manually-typed price forward to future jobs
-    if (updateCatalogPrice && form.part_id && form.price !== form.catalogPrice) {
+    // Tech explicitly opted to carry a manually-typed cost/price forward to future jobs
+    if (updateCatalogPrice && form.part_id && (form.price !== form.catalogPrice || form.cost !== form.catalogCost)) {
       const catalogPartForPrice = catalogParts.find(p => p.id === form.part_id) || {};
-      db.Part.update(form.part_id, { default_price: form.price, ...firstManagedPatch(catalogPartForPrice) })
-        .then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
+      const catalogPatch = {};
+      if (form.price !== form.catalogPrice) catalogPatch.default_price = form.price;
+      if (form.cost !== form.catalogCost) catalogPatch.cost = form.cost;
+      db.Part.update(form.part_id, {
+        ...catalogPatch,
+        ...(catalogPatch.default_price !== undefined ? firstManagedPatch(catalogPartForPrice) : {}),
+      }).then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
     }
 
     // Usage log for the weekly "what got used" report — one row per part
@@ -202,7 +210,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Cost: {formatCurrency(totalCost)} → Charge: {formatCurrency(totalPrice)}</p>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPartsFolder(null); setUpdateCatalogPrice(false); setForm({ name: "", part_number: "", description: "", cost: 0, price: 0, catalogPrice: null, quantity: 1, charge_for_part: true, save_to_catalog: true, category: "other" }); } }}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPartsFolder(null); setUpdateCatalogPrice(false); setSaleTouchedInConfirm(false); setForm({ name: "", part_number: "", description: "", cost: 0, price: 0, catalogPrice: null, catalogCost: null, quantity: 1, charge_for_part: true, save_to_catalog: true, category: "other" }); } }}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-xl gap-1 text-xs h-8">
               <Plus className="w-3 h-3" /> Add Part
@@ -282,8 +290,9 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                     <p className="text-sm text-muted-foreground text-center py-4">No {partsFolder.label} in catalog</p>
                   ) : catParts.map(p => (
                     <button key={p.id} onClick={() => {
-                      setForm(f => ({ ...f, name: p.name, part_number: p.part_number || "", cost: p.cost, price: p.default_price || 0, catalogPrice: p.default_price || 0, part_id: p.id, charge_for_part: (p.default_price || 0) > 0 }));
+                      setForm(f => ({ ...f, name: p.name, part_number: p.part_number || "", cost: p.cost, price: p.default_price || 0, catalogPrice: p.default_price || 0, catalogCost: p.cost || 0, part_id: p.id, charge_for_part: (p.default_price || 0) > 0 }));
                       setUpdateCatalogPrice(false);
+                      setSaleTouchedInConfirm(false);
                       setPartsFolder({ key: "confirm", label: "confirm", part: p });
                     }} className="w-full text-left">
                       <Card className="p-3 hover:border-primary/30 hover:bg-primary/5 transition-all active:scale-[0.99]">
@@ -395,14 +404,39 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
               <div className="space-y-3">
                 <Card className="p-3 bg-muted/30">
                   <p className="text-sm font-semibold">{form.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Selected from catalog{form.cost > 0 ? ` · your cost ${formatCurrency(form.cost)}/ea` : ""}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Selected from catalog</p>
                 </Card>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div><Label className="text-xs">Qty</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({...f, quantity: parseInt(e.target.value) || 1}))} className="mt-1" /></div>
-                  <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
+                  <div>
+                    <Label className="text-xs">Cost</Label>
+                    <Input
+                      type="number" step="0.01" value={form.cost} onFocus={e => e.target.select()}
+                      onChange={e => {
+                        const newCost = parseFloat(e.target.value) || 0;
+                        const catalogPart = catalogParts.find(p => p.id === form.part_id);
+                        const eligible = !!form.part_id && !catalogPart?.first_managed_at && !((form.catalogPrice || 0) > 0);
+                        setForm(f => ({
+                          ...f,
+                          cost: newCost,
+                          ...(eligible && !saleTouchedInConfirm ? { price: suggestedSalePrice(newCost) } : {}),
+                        }));
+                      }}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Price</Label>
+                    <Input
+                      type="number" step="0.01" value={form.price} onFocus={e => e.target.select()}
+                      onChange={e => { setSaleTouchedInConfirm(true); setForm(f => ({...f, price: parseFloat(e.target.value) || 0})); }}
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
+                {!!form.part_id && !catalogParts.find(p => p.id === form.part_id)?.first_managed_at && !((form.catalogPrice || 0) > 0) && !saleTouchedInConfirm && form.cost > 0 && (
+                  <p className="text-[10px] text-blue-600 dark:text-blue-400 -mt-1">Price auto-suggested at cost ×1.35 — edit freely before adding</p>
+                )}
                 <button
                   type="button"
                   disabled={!(form.price > 0)}
@@ -423,12 +457,16 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                 {isMember && form.charge_for_part && form.price > 0 && (
                  <p className="text-xs text-emerald-600 font-medium">🛡️ Member price: {formatCurrency(Math.round(form.price * memberDiscountRate * 100) / 100)} ({Math.round((1-memberDiscountRate)*100)}% off)</p>
                 )}
-                {form.part_id && form.price > 0 && form.price !== form.catalogPrice && (
+                {form.part_id && ((form.price > 0 && form.price !== form.catalogPrice) || form.cost !== form.catalogCost) && (
                   <button type="button" onClick={() => setUpdateCatalogPrice(v => !v)}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors ${updateCatalogPrice ? "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-300" : "border-border bg-muted/30 text-muted-foreground"}`}>
                     <div className="text-left">
-                      <p className="text-xs font-medium">Update catalog price to {formatCurrency(form.price)} for future jobs</p>
-                      <p className="text-[10px] opacity-75">Catalog currently shows {formatCurrency(form.catalogPrice)}</p>
+                      <p className="text-xs font-medium">
+                        Update catalog {form.cost !== form.catalogCost && form.price !== form.catalogPrice ? "cost & price" : form.cost !== form.catalogCost ? "cost" : "price"} for future jobs
+                      </p>
+                      <p className="text-[10px] opacity-75">
+                        Catalog currently shows {formatCurrency(form.catalogCost)} cost / {formatCurrency(form.catalogPrice)} price
+                      </p>
                     </div>
                     <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 shrink-0 ml-2 ${updateCatalogPrice ? "bg-blue-500" : "bg-muted-foreground/30"}`}>
                       <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${updateCatalogPrice ? "translate-x-5" : "translate-x-0"}`} />
