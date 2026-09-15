@@ -179,6 +179,20 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
       db.Part.update(form.part_id, { default_price: form.price, ...firstManagedPatch(catalogPartForPrice) })
         .then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
     }
+
+    // Usage log for the weekly "what got used" report — one row per part
+    // added to a job, whether or not it's charged. Nothing to log against a
+    // fully custom part that was never saved to (or sourced from) the catalog.
+    const usageLogPartId = savedPartId || form.part_id;
+    if (usageLogPartId) {
+      db.PartsUsageLog.create({
+        part_id: usageLogPartId,
+        job_id: jobId,
+        quantity: form.quantity,
+      }).catch(() => {
+        // non-critical — never block adding the part to the job over a logging failure
+      });
+    }
   };
 
   const totalCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
