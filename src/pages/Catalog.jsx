@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent } from "lucide-react";
+import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent, Pencil, Check } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
+import { firstManagedPatch, suggestedSalePrice, isManaged } from "@/lib/utils/partsManaged";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -97,7 +98,7 @@ const TOP_FOLDERS = [
 function PartsCategoryList({ parts, onSelectCategory }) {
   const queryClient = useQueryClient();
   const knownKeys = ALL_CATALOG_PART_KEYS;
-  const reorderParts = parts.filter(p => p.reorder_flagged);
+  const reorderParts = parts.filter(p => p.reorder_flagged && isManaged(p));
   return (
     <div className="space-y-2">
       {reorderParts.length > 0 && (
@@ -114,7 +115,7 @@ function PartsCategoryList({ parts, onSelectCategory }) {
                 </div>
                 <button
                   onClick={() => {
-                    db.Part.update(part.id, { reorder_flagged: false, in_stock: 1 })
+                    db.Part.update(part.id, { reorder_flagged: false, in_stock: 1, ...firstManagedPatch(part) })
                       .then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
                   }}
                   className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-orange-600 text-white shrink-0 active:scale-95"
@@ -159,6 +160,11 @@ function PartsItemList({ category, parts }) {
   const { confirmDelete } = usePreferences();
   const [bulkEdit, setBulkEdit] = useState(false);
   const [bulkValues, setBulkValues] = useState({});
+  const [editingPriceId, setEditingPriceId] = useState(null);
+  const [editingCostValue, setEditingCostValue] = useState("");
+  const [editingSaleValue, setEditingSaleValue] = useState("");
+  const [saleTouched, setSaleTouched] = useState(false);
+  const [autoSuggestEligible, setAutoSuggestEligible] = useState(false);
 
   const knownKeys = ALL_CATALOG_PART_KEYS;
   const items = category.key === "other"
@@ -191,7 +197,52 @@ function PartsItemList({ category, parts }) {
     const raw = bulkValues[part.id];
     const newStock = Math.max(0, parseInt(raw, 10) || 0);
     if (newStock === (part.in_stock ?? 0)) return;
-    reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 } });
+    reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0, ...firstManagedPatch(part) } });
+  };
+
+  const startEditingPrice = (part) => {
+    setEditingPriceId(part.id);
+    setEditingCostValue(String(part.cost ?? 0));
+    setEditingSaleValue(String(part.default_price ?? 0));
+    setSaleTouched(false);
+    // Captured once, from the part as it stood BEFORE this edit — a part
+    // already priced or already managed never gets the auto-suggest, even
+    // if the user clears the cost field mid-edit.
+    setAutoSuggestEligible(!part.first_managed_at && !(part.default_price > 0));
+  };
+
+  const cancelEditingPrice = () => {
+    setEditingPriceId(null);
+    setEditingCostValue("");
+    setEditingSaleValue("");
+    setSaleTouched(false);
+    setAutoSuggestEligible(false);
+  };
+
+  const onEditCostChange = (value) => {
+    setEditingCostValue(value);
+    if (autoSuggestEligible && !saleTouched) {
+      setEditingSaleValue(String(suggestedSalePrice(parseFloat(value) || 0)));
+    }
+  };
+
+  const onEditSaleChange = (value) => {
+    setEditingSaleValue(value);
+    setSaleTouched(true);
+  };
+
+  const commitPriceEdit = (part) => {
+    const newCost = parseFloat(editingCostValue);
+    const newSale = parseFloat(editingSaleValue);
+    if (isNaN(newCost) || newCost < 0 || isNaN(newSale) || newSale < 0) {
+      toast.error("Enter valid cost and price");
+      return;
+    }
+    updateMutation.mutate({
+      id: part.id,
+      data: { cost: newCost, default_price: newSale, ...(newSale > 0 ? firstManagedPatch(part) : {}) },
+    });
+    cancelEditingPrice();
   };
 
   return (
@@ -221,7 +272,7 @@ function PartsItemList({ category, parts }) {
                 <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.default_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, default_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
                 <div><Label className="text-xs">In Stock</Label><Input type="number" value={form.in_stock} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, in_stock: parseInt(e.target.value) || 0}))} className="mt-1" /></div>
               </div>
-              <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, category: category.key }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Part</Button>
+              <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, category: category.key, ...((form.default_price > 0 || form.in_stock > 0) ? { first_managed_at: new Date().toISOString() } : {}) }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Part</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -240,8 +291,49 @@ function PartsItemList({ category, parts }) {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="text-right mr-1">
-                      <p className="text-sm font-semibold">{formatCurrency(part.default_price)}</p>
-                      <p className="text-xs text-muted-foreground">cost {formatCurrency(part.cost)}</p>
+                      {editingPriceId === part.id ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-muted-foreground">cost</span>
+                            <Input
+                              type="number" step="0.01" min="0"
+                              value={editingCostValue}
+                              onFocus={e => e.target.select()}
+                              onChange={e => onEditCostChange(e.target.value)}
+                              className="h-6 w-16 text-xs text-right px-1.5"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-muted-foreground">price</span>
+                            <Input
+                              type="number" step="0.01" min="0"
+                              value={editingSaleValue}
+                              onFocus={e => e.target.select()}
+                              onChange={e => onEditSaleChange(e.target.value)}
+                              className="h-6 w-16 text-xs text-right px-1.5"
+                            />
+                          </div>
+                          {autoSuggestEligible && !saleTouched && parseFloat(editingCostValue) > 0 && (
+                            <p className="text-[9px] text-blue-600 dark:text-blue-400">×1.35 suggested</p>
+                          )}
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-green-600 hover:bg-green-50" onClick={() => commitPriceEdit(part)}>
+                              <Check className="w-3 h-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={cancelEditingPrice}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => startEditingPrice(part)} className="text-right group">
+                          <p className="text-sm font-semibold group-hover:underline">{formatCurrency(part.default_price)}</p>
+                          <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
+                            cost {formatCurrency(part.cost)} <Pencil className="w-2.5 h-2.5 opacity-50" />
+                          </p>
+                        </button>
+                      )}
                     </div>
                     {bulkEdit ? (
                       <div className="flex flex-col items-center min-w-[64px]">
@@ -260,12 +352,12 @@ function PartsItemList({ category, parts }) {
                       </div>
                     ) : (
                       <div className="flex items-center gap-1">
-                        <button onClick={() => { const newStock = Math.max(0, (part.in_stock || 0) - 1); reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 ? true : (part.reorder_flagged || false) } }); }} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">−</button>
+                        <button onClick={() => { const newStock = Math.max(0, (part.in_stock || 0) - 1); reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 ? true : (part.reorder_flagged || false), ...firstManagedPatch(part) } }); }} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">−</button>
                         <div className="flex flex-col items-center min-w-[36px]">
                           <span className={`text-sm font-bold ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-foreground"}`}>{part.in_stock ?? 0}</span>
                           <span className="text-[9px] text-muted-foreground leading-none">{isOut ? "OUT" : isLow ? "LOW" : "in stock"}</span>
                         </div>
-                        <button onClick={() => updateMutation.mutate({ id: part.id, data: { in_stock: (part.in_stock || 0) + 1 } })} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">+</button>
+                        <button onClick={() => updateMutation.mutate({ id: part.id, data: { in_stock: (part.in_stock || 0) + 1, ...firstManagedPatch(part) } })} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">+</button>
                       </div>
                     )}
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>

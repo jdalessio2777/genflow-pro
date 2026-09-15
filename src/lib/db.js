@@ -112,6 +112,7 @@ const TABLE_MAP = {
   MembershipRenewal: 'membership_renewals',
   Quote: 'quotes',
   QuoteLineItem: 'quote_line_items',
+  PartsUsageLog: 'parts_usage_log',
 };
 
 export const db = Object.fromEntries(
