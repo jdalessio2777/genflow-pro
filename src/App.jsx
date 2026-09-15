@@ -16,7 +16,6 @@ import CustomerDetail from './pages/CustomerDetail';
 import Jobs from './pages/Jobs';
 import JobForm from './pages/JobForm';
 import JobDetail from './pages/JobDetail';
-import Parts from './pages/Parts';
 import Invoices from './pages/Invoices';
 import InvoiceDetail from './pages/InvoiceDetail';
 import Documents from './pages/Documents';
@@ -69,7 +68,6 @@ const AuthenticatedApp = () => {
         <Route path="/jobs/new" element={<JobForm />} />
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/jobs/:id/edit" element={<JobForm />} />
-        <Route path="/parts" element={<Parts />} />
         <Route path="/invoices" element={<Invoices />} />
         <Route path="/invoices/:id" element={<InvoiceDetail />} />
         <Route path="/invoices/:id/send" element={<InvoicePDF />} />

@@ -157,6 +157,8 @@ function PartsItemList({ category, parts }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", part_number: "", cost: 0, default_price: 0, in_stock: 0 });
   const { confirmDelete } = usePreferences();
+  const [bulkEdit, setBulkEdit] = useState(false);
+  const [bulkValues, setBulkValues] = useState({});
 
   const knownKeys = ALL_CATALOG_PART_KEYS;
   const items = category.key === "other"
@@ -180,9 +182,31 @@ function PartsItemList({ category, parts }) {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }); toast.success("Part removed"); },
   });
 
+  const enterBulkEdit = () => {
+    setBulkValues(Object.fromEntries(items.map(p => [p.id, String(p.in_stock ?? 0)])));
+    setBulkEdit(true);
+  };
+
+  const commitBulkValue = (part) => {
+    const raw = bulkValues[part.id];
+    const newStock = Math.max(0, parseInt(raw, 10) || 0);
+    if (newStock === (part.in_stock ?? 0)) return;
+    reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 } });
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-2">
+        {items.length > 0 ? (
+          <Button
+            variant={bulkEdit ? "default" : "outline"}
+            size="sm"
+            className="rounded-xl gap-1.5 text-xs"
+            onClick={() => (bulkEdit ? setBulkEdit(false) : enterBulkEdit())}
+          >
+            {bulkEdit ? "Done" : "Bulk Count Entry"}
+          </Button>
+        ) : <div />}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-xl gap-1.5"><Plus className="w-4 h-4" /> Add Part</Button>
@@ -219,14 +243,31 @@ function PartsItemList({ category, parts }) {
                       <p className="text-sm font-semibold">{formatCurrency(part.default_price)}</p>
                       <p className="text-xs text-muted-foreground">cost {formatCurrency(part.cost)}</p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => { const newStock = Math.max(0, (part.in_stock || 0) - 1); reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 ? true : (part.reorder_flagged || false) } }); }} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">−</button>
-                      <div className="flex flex-col items-center min-w-[36px]">
-                        <span className={`text-sm font-bold ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-foreground"}`}>{part.in_stock ?? 0}</span>
-                        <span className="text-[9px] text-muted-foreground leading-none">{isOut ? "OUT" : isLow ? "LOW" : "in stock"}</span>
+                    {bulkEdit ? (
+                      <div className="flex flex-col items-center min-w-[64px]">
+                        <Input
+                          type="number"
+                          min="0"
+                          inputMode="numeric"
+                          value={bulkValues[part.id] ?? ""}
+                          onFocus={e => e.target.select()}
+                          onChange={e => setBulkValues(v => ({ ...v, [part.id]: e.target.value }))}
+                          onBlur={() => commitBulkValue(part)}
+                          onKeyDown={e => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+                          className="h-8 w-16 text-center text-sm font-bold px-1"
+                        />
+                        <span className="text-[9px] text-muted-foreground leading-none mt-0.5">{isOut ? "OUT" : isLow ? "LOW" : "count"}</span>
                       </div>
-                      <button onClick={() => updateMutation.mutate({ id: part.id, data: { in_stock: (part.in_stock || 0) + 1 } })} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">+</button>
-                    </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => { const newStock = Math.max(0, (part.in_stock || 0) - 1); reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 ? true : (part.reorder_flagged || false) } }); }} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">−</button>
+                        <div className="flex flex-col items-center min-w-[36px]">
+                          <span className={`text-sm font-bold ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-foreground"}`}>{part.in_stock ?? 0}</span>
+                          <span className="text-[9px] text-muted-foreground leading-none">{isOut ? "OUT" : isLow ? "LOW" : "in stock"}</span>
+                        </div>
+                        <button onClick={() => updateMutation.mutate({ id: part.id, data: { in_stock: (part.in_stock || 0) + 1 } })} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">+</button>
+                      </div>
+                    )}
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </Button>
@@ -774,7 +815,7 @@ export default function Catalog() {
             )}
           </div>
         )}
-        {section === "parts" && partsCategory && <PartsItemList category={partsCategory} parts={parts} />}
+        {section === "parts" && partsCategory && <PartsItemList key={partsCategory.key} category={partsCategory} parts={parts} />}
         {section === "labor_rates" && <LaborRatesList />}
         {section === "flat_rates" && !subFolder && <FlatRatesFolderList onSelectFolder={(f) => navigate('/catalog?section=flat_rates&sub=' + f.key)} />}
         {section === "flat_rates" && subFolder && <FlatRatesItemList folder={subFolder} />}
