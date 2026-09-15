@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
+import { firstManagedPatch } from "@/lib/utils/partsManaged";
 import { toast } from "sonner";
 
 const PART_CATEGORIES = [
@@ -135,6 +136,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
           default_price: form.price || 0,
           category: form.category,
           in_stock: 0,
+          ...(form.price > 0 ? { first_managed_at: new Date().toISOString() } : {}),
         });
         savedPartId = newPart?.id || null;
         queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
@@ -173,7 +175,8 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
 
     // Tech explicitly opted to carry a manually-typed price forward to future jobs
     if (updateCatalogPrice && form.part_id && form.price !== form.catalogPrice) {
-      db.Part.update(form.part_id, { default_price: form.price })
+      const catalogPartForPrice = catalogParts.find(p => p.id === form.part_id) || {};
+      db.Part.update(form.part_id, { default_price: form.price, ...firstManagedPatch(catalogPartForPrice) })
         .then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
     }
   };
