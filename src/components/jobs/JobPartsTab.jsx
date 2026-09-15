@@ -290,7 +290,11 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                     <p className="text-sm text-muted-foreground text-center py-4">No {partsFolder.label} in catalog</p>
                   ) : catParts.map(p => (
                     <button key={p.id} onClick={() => {
-                      setForm(f => ({ ...f, name: p.name, part_number: p.part_number || "", cost: p.cost, price: p.default_price || 0, catalogPrice: p.default_price || 0, catalogCost: p.cost || 0, part_id: p.id, charge_for_part: (p.default_price || 0) > 0 }));
+                      // save_to_catalog defaults true (for the Custom Part flow) — a
+                      // part picked FROM the catalog is already in the catalog, so
+                      // this must be off or handleAdd() creates a duplicate part row
+                      // and points the job at the duplicate instead of the real one.
+                      setForm(f => ({ ...f, name: p.name, part_number: p.part_number || "", cost: p.cost, price: p.default_price || 0, catalogPrice: p.default_price || 0, catalogCost: p.cost || 0, part_id: p.id, charge_for_part: (p.default_price || 0) > 0, save_to_catalog: false }));
                       setUpdateCatalogPrice(false);
                       setSaleTouchedInConfirm(false);
                       setPartsFolder({ key: "confirm", label: "confirm", part: p });

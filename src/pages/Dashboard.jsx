@@ -11,6 +11,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { formatTime } from "@/lib/formatTime";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
+import { isManaged } from "@/lib/utils/partsManaged";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 
@@ -141,7 +142,7 @@ export default function Dashboard() {
     queryFn: () => db.Part.list("name"),
   });
   const lowStockParts = parts.filter(p =>
-    (p.in_stock !== undefined && p.in_stock !== null && p.in_stock <= 2) || p.reorder_flagged
+    isManaged(p) && ((p.in_stock !== undefined && p.in_stock !== null && p.in_stock <= 2) || p.reorder_flagged)
   );
 
   function getServiceStatus(customer) {

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent, Pencil, Check } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
-import { firstManagedPatch, suggestedSalePrice } from "@/lib/utils/partsManaged";
+import { firstManagedPatch, suggestedSalePrice, isManaged } from "@/lib/utils/partsManaged";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -98,7 +98,7 @@ const TOP_FOLDERS = [
 function PartsCategoryList({ parts, onSelectCategory }) {
   const queryClient = useQueryClient();
   const knownKeys = ALL_CATALOG_PART_KEYS;
-  const reorderParts = parts.filter(p => p.reorder_flagged);
+  const reorderParts = parts.filter(p => p.reorder_flagged && isManaged(p));
   return (
     <div className="space-y-2">
       {reorderParts.length > 0 && (
