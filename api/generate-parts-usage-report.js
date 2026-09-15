@@ -131,7 +131,8 @@ export default async function handler(req, res) {
 
     const html = buildHTML(usage, label);
     const result = await sendEmail({
-      from: 'GenShield Reports <contact@genshieldservice.com>',
+      // No `from` override — falls through to sendEmail.js's DEFAULT_FROM
+      // (office@genshieldservice.com), matching this report's original spec.
       to: 'contact@genshieldservice.com',
       subject: `GenShield Weekly Parts Usage — ${label}`,
       html,
