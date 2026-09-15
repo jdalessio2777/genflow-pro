@@ -16,6 +16,10 @@
     {
       "path": "/api/check-renewals",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/generate-parts-usage-report",
+      "schedule": "0 0 * * 1"
     }
   ]
 }
