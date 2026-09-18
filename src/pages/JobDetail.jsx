@@ -18,7 +18,7 @@ import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
 import { TAX_RATE, computeJobFinancials } from "@/lib/utils/jobFinancials";
-import { formatTime } from "@/lib/formatTime";
+import { formatTime, toDatetimeLocalValue } from "@/lib/formatTime";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
@@ -476,7 +476,7 @@ export default function JobDetail() {
     const intervalMonths = customer?.service_interval === "6_months" ? 6 : customer?.service_interval === "24_months" ? 24 : 12;
     const suggested = new Date();
     suggested.setMonth(suggested.getMonth() + intervalMonths);
-    setNextDate(suggested.toISOString().slice(0, 16));
+    setNextDate(toDatetimeLocalValue(suggested));
     setScheduleNextOpen(true);
   };
 

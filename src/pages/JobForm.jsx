@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { usePreferences } from "@/hooks/usePreferences";
+import { toDatetimeLocalValue } from "@/lib/formatTime";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName, getUserColor } from "@/lib/userColors";
 import { Button } from "@/components/ui/button";
@@ -284,7 +285,12 @@ export default function JobForm() {
           )}
           <div>
             <Label className="text-xs">Scheduled Date/Time</Label>
-            <Input type="datetime-local" value={form.scheduled_date?.slice(0, 16) || ""} onChange={e => update("scheduled_date", e.target.value)} className="rounded-xl mt-1" />
+            <Input
+              type="datetime-local"
+              value={toDatetimeLocalValue(form.scheduled_date)}
+              onChange={e => update("scheduled_date", e.target.value ? new Date(e.target.value).toISOString() : "")}
+              className="rounded-xl mt-1"
+            />
           </div>
           <div>
             <Label className="text-xs">Estimated Duration</Label>
