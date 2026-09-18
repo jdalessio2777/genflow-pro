@@ -113,6 +113,7 @@ export default function Inbox() {
     if (lead.name) params.set("name", lead.name);
     if (lead.phone) params.set("phone", lead.phone);
     if (lead.email) params.set("email", lead.email);
+    if (lead.address) params.set("address", lead.address);
     navigate(`/customers/new?${params.toString()}`);
   };
 

@@ -25,7 +25,7 @@ export default function CustomerForm() {
 
   const [form, setForm] = useState(() => ({
     name: searchParams.get("name") || "", email: searchParams.get("email") || "",
-    phone: searchParams.get("phone") || "", address: "",
+    phone: searchParams.get("phone") || "", address: searchParams.get("address") || "",
     property_notes: "", generator_model: "", generator_serial: "",
     generator_install_date: "", service_interval: "", notes: "", status: "active",
     membership_plan: "", membership_start: "", membership_expiry: "",
