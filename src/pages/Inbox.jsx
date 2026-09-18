@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { db, markServiceRequestContacted } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
@@ -90,13 +90,18 @@ export default function Inbox() {
     onError: (err) => toast.error(err.message),
   });
 
+  const markContactedMutation = useMutation({
+    mutationFn: markServiceRequestContacted,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-requests-inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["service-requests-count"] });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const markContacted = (id) => {
-    try {
-      updateLeadMutation.mutate({ id, updates: { status: "contacted", contacted_at: new Date().toISOString() } });
-      toast.success("Marked as contacted");
-    } catch (err) {
-      toast.error(err.message);
-    }
+    markContactedMutation.mutate(id);
+    toast.success("Marked as contacted");
   };
 
   const dismissLead = (id) => {
@@ -114,6 +119,7 @@ export default function Inbox() {
     if (lead.phone) params.set("phone", lead.phone);
     if (lead.email) params.set("email", lead.email);
     if (lead.address) params.set("address", lead.address);
+    params.set("lead_id", lead.id);
     navigate(`/customers/new?${params.toString()}`);
   };
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { db, markServiceRequestContacted } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
@@ -22,6 +22,7 @@ export default function CustomerForm() {
   const queryClient = useQueryClient();
   const isEdit = !!id;
   const { user } = useAuth();
+  const leadId = searchParams.get("lead_id");
 
   const [form, setForm] = useState(() => ({
     name: searchParams.get("name") || "", email: searchParams.get("email") || "",
@@ -108,6 +109,11 @@ export default function CustomerForm() {
           `,
           triggeredBy: getUserDisplayName(user),
         });
+        if (leadId) {
+          markServiceRequestContacted(leadId)
+            .then(() => queryClient.invalidateQueries({ queryKey: ["service-requests-inbox"] }))
+            .catch((err) => console.warn("Failed to mark lead as contacted:", err));
+        }
         navigate(`/customers/${result.id}`);
       } else {
         navigate(`/customers/${id}`);

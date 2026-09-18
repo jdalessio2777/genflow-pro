@@ -118,3 +118,15 @@ const TABLE_MAP = {
 export const db = Object.fromEntries(
   Object.entries(TABLE_MAP).map(([entityName, table]) => [entityName, createEntityApi(table)])
 );
+
+// The one mechanism for marking a service_requests lead as handled — used
+// both by Inbox's manual "Mark Contacted" button and by CustomerForm when a
+// lead is successfully converted into a customer, so there is exactly one
+// place that defines what "contacted" means for a lead.
+export async function markServiceRequestContacted(id) {
+  const { error } = await supabase
+    .from('service_requests')
+    .update({ status: 'contacted', contacted_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
