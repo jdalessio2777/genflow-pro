@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
@@ -18,30 +18,45 @@ import { toast } from "sonner";
 export default function CustomerForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const isEdit = !!id;
   const { user } = useAuth();
 
-  const [form, setForm] = useState({
-    name: "", email: "", phone: "", address: "",
+  const [form, setForm] = useState(() => ({
+    name: searchParams.get("name") || "", email: searchParams.get("email") || "",
+    phone: searchParams.get("phone") || "", address: "",
     property_notes: "", generator_model: "", generator_serial: "",
     generator_install_date: "", service_interval: "", notes: "", status: "active",
     membership_plan: "", membership_start: "", membership_expiry: "",
     membership_signed: false, credit_card_on_file: false, repeat_note: "", referred_by: "",
-  });
+  }));
+  // True once the real customer record has actually been applied to `form`
+  // (set in the effect below). Kept as defense-in-depth so Save can't fire
+  // against blank name/phone/email/address fields even if the query's data
+  // is momentarily stale/undefined after mount.
+  const [customerLoaded, setCustomerLoaded] = useState(!isEdit);
 
-  const { isLoading: loadingCustomer } = useQuery({
+  const { data: customerData, isLoading: loadingCustomer } = useQuery({
     queryKey: ["customer", id],
     queryFn: async () => {
       const customers = await db.Customer.filter({ id });
-      if (customers.length > 0) {
-        const c = customers[0];
-        setForm(prev => ({ ...prev, ...c, referred_by: c.referral_source || "" }));
-      }
       return customers[0];
     },
     enabled: isEdit,
   });
+
+  // Derive form state from settled query data rather than as a side effect
+  // inside queryFn — queryFn only re-runs on refetch, but `data` reflects the
+  // cache immediately (including on a warm cache from another view of this
+  // same customer), so this closes the gap where the form could render with
+  // its blank initial state while a stale-but-loaded cache entry was present.
+  useEffect(() => {
+    if (customerData) {
+      setForm(prev => ({ ...prev, ...customerData, referred_by: customerData.referral_source || "" }));
+      setCustomerLoaded(true);
+    }
+  }, [customerData]);
 
   const cleanPayload = (data) => {
     const allowedFields = [
@@ -104,6 +119,7 @@ export default function CustomerForm() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!customerLoaded) { toast.error("Still loading customer data — please wait a moment and try again"); return; }
     if (!form.name.trim()) { toast.error("Name is required"); return; }
     mutation.mutate(form);
   };
@@ -202,7 +218,7 @@ export default function CustomerForm() {
           </div>
         </Card>
 
-        <Button type="submit" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending}>
+        <Button type="submit" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending || !customerLoaded}>
           {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {isEdit ? "Save Changes" : "Create Customer"}
         </Button>
