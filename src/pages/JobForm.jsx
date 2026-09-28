@@ -321,7 +321,7 @@ export default function JobForm() {
               onChange={e => update("customer_description", e.target.value)}
               className="rounded-xl mt-1"
               rows={3}
-              placeholder="e.g. Annual maintenance: oil & filter change, spark plugs, battery load test"
+              placeholder="What we'll be doing, in plain language for the customer (e.g. oil & filter change, battery load test)"
             />
             <p className="text-xs text-muted-foreground mt-1">Optional — included in the appointment confirmation email</p>
           </div>
