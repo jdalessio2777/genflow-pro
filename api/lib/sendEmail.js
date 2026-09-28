@@ -1,6 +1,9 @@
 const DEFAULT_FROM = 'GenShield <office@genshieldservice.com>';
 const DEFAULT_REPLY_TO = 'contact@genshieldservice.com';
 const BCC_ADDRESSES = ['contact@genshieldservice.com', 'derek.j.sainz@gmail.com'];
+// QA test sends go only to the owner's personal inbox; skip the staff BCC
+// when that is the sole recipient so test runs don't copy contact@/Derek.
+const QA_RECIPIENT = 'jdalessio2777@gmail.com';
 
 // Every customer-facing send gets a BCC copy at each of BCC_ADDRESSES. Pass
 // internal: true for sends that already go to a team/internal address (team
@@ -9,7 +12,8 @@ const BCC_ADDRESSES = ['contact@genshieldservice.com', 'derek.j.sainz@gmail.com'
 // BCC'd on a copy it's already getting directly.
 export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, replyTo = DEFAULT_REPLY_TO, attachments, internal = false }) {
   const toList = (Array.isArray(to) ? to : [to]).map(a => a?.toLowerCase());
-  const bcc = internal ? [] : BCC_ADDRESSES.filter(addr => !toList.includes(addr));
+  const isQaSend = toList.length === 1 && toList[0] === QA_RECIPIENT;
+  const bcc = internal || isQaSend ? [] : BCC_ADDRESSES.filter(addr => !toList.includes(addr));
 
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
