@@ -13,6 +13,7 @@
 //    email already said PAID). Stripe webhook never sends — the UI paths call
 //    this after marking paid and the claim makes concurrent calls a no-op.
 //  - resend:     explicit manual resend from the UI (same content as completion).
+import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from './lib/sendEmail.js';
 import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './lib/jobSummary.js';
@@ -22,6 +23,8 @@ import { invoiceTotalCents } from '../src/lib/utils/invoiceTotals.js';
 // Dates in the email body render in the business's timezone, same as the
 // browser-rendered emails did before (Vercel functions run in UTC).
 process.env.TZ = 'America/New_York';
+
+const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
 const KINDS = new Set(['completion', 'receipt', 'resend']);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -165,9 +168,16 @@ export default async function handler(req, res) {
       if (invoice) await db.from('invoices').update({ emailed_at: now, emailed_to: customer.email }).eq('id', invoice.id).then(() => {}, () => {});
     }
 
+    // Filenames + SHA-256 only (never content): lets staff/QA confirm exactly
+    // what was sent, e.g. by regenerating from the same DB state and
+    // comparing hashes (the builders are deterministic).
     return res.status(200).json({
       ok: true, id: result?.id, kind, to: customer.email,
-      attachments: email.attachments.map(a => a.filename), total_bytes: email.totalBytes,
+      attachments: email.attachments.map(a => a.filename),
+      attachment_sha256: email.attachments.map(a => sha256(Buffer.from(a.content, 'base64'))),
+      html_sha256: sha256(Buffer.from(email.html, 'utf8')),
+      subject: email.subject,
+      total_bytes: email.totalBytes,
     });
   } catch (err) {
     console.error('[send-job-summary]', err?.message || err);
