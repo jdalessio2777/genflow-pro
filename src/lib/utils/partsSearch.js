@@ -23,16 +23,28 @@ export function matchesPart(part, query) {
   return tokens.every(t => name.includes(t) || pn.includes(t));
 }
 
+// True when some word of the name starts with the query ("oil" hits
+// "Low Oil Switch" and "Kit-Oil Float" but not "Coil").
+function nameWordStartsWith(rawName, whole) {
+  const words = String(rawName ?? "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    if (words.slice(i).join("").startsWith(whole)) return true;
+  }
+  return false;
+}
+
 // Lower is better: exact part number, part-number prefix, name prefix,
-// name/number contains, then token-only match.
+// a name word starting with the query, name/number contains, then
+// token-only match.
 function rankPart(part, whole) {
   const pn = normalizePartText(part?.part_number);
   const name = normalizePartText(part?.name);
   if (pn && pn === whole) return 0;
   if (pn && pn.startsWith(whole)) return 1;
   if (name.startsWith(whole)) return 2;
-  if (name.includes(whole) || pn.includes(whole)) return 3;
-  return 4;
+  if (nameWordStartsWith(part?.name, whole)) return 3;
+  if (name.includes(whole) || pn.includes(whole)) return 4;
+  return 5;
 }
 
 // Filter + rank a parts list. Returns { results (capped at `limit`), total }.

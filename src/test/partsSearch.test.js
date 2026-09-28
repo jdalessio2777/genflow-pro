@@ -76,6 +76,14 @@ describe('searchParts', () => {
     ]
     expect(searchParts(parts, 'rc12yc').results.map(p => p.id)).toEqual(['b', 'a'])
   })
+  it('ranks whole-word name matches above mid-word ones', () => {
+    const parts = [
+      { id: 'coil', name: 'Coil ATS Standby', part_number: '0E6154A' },
+      { id: 'low', name: 'Low Oil Press Switch', part_number: '0L2917D' },
+      { id: 'kit', name: 'Kit-Oil Float Assy', part_number: 'A1' },
+    ]
+    expect(searchParts(parts, 'oil').results.map(p => p.id)).toEqual(['kit', 'low', 'coil'])
+  })
   it('caps rendered results but reports full total', () => {
     const many = Array.from({ length: 120 }, (_, i) => ({ id: String(i), name: `Filter ${i}`, part_number: `F-${i}` }))
     const { results, total } = searchParts(many, 'filter', 50)
