@@ -165,6 +165,12 @@ describe('buildJobSummaryEmail', () => {
     expect(invoiceForEmail({ invoice: unpaid, parts, labor })).toBe(unpaid)
   })
 
+  it('raw DB rows (created_at only) still render the invoice date', async () => {
+    const { created_date, ...raw } = paidInvoice
+    const email = await buildJobSummaryEmail({ kind: 'completion', job, customer, invoice: { ...raw, created_at: created_date }, parts, labor, documents: [] })
+    expect(email.html).toMatch(/June (9|10), 2026/)
+  })
+
   it('buildSubject falls back when there is no invoice', () => {
     expect(buildSubject({ kind: 'completion', invoice: null, checklistCount: 0 })).toBe('Service Summary — GenShield')
   })

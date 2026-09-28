@@ -18,7 +18,11 @@ export const MAX_EMAIL_BYTES = 30 * 1024 * 1024;
 // "No charge" parts.
 export function invoiceForEmail({ invoice, parts = [], labor = [], notes }) {
   if (!invoice) return null;
-  let inv = invoice;
+  // Raw Supabase rows have created_at; the templates (written for the client's
+  // normalized rows, src/lib/db.js) read created_date.
+  let inv = invoice.created_date == null && invoice.created_at != null
+    ? { ...invoice, created_date: invoice.created_at }
+    : invoice;
   if (inv.status !== 'paid') {
     const f = computeJobFinancials(parts, labor);
     const freshCents = Math.round(f.total * 100);
