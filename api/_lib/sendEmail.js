@@ -10,7 +10,10 @@ const QA_RECIPIENT = 'jdalessio2777@gmail.com';
 // notifications, financial reports) so they don't get a redundant copy of
 // themselves. Any address already a direct recipient is skipped so it isn't
 // BCC'd on a copy it's already getting directly.
-export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, replyTo = DEFAULT_REPLY_TO, attachments, internal = false }) {
+// idempotencyKey (optional): forwarded as Resend's Idempotency-Key header so a
+// retried request with the same key + payload returns the original send
+// instead of emailing twice (Resend keeps keys for 24h).
+export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, replyTo = DEFAULT_REPLY_TO, attachments, internal = false, idempotencyKey }) {
   const toList = (Array.isArray(to) ? to : [to]).map(a => a?.toLowerCase());
   const isQaSend = toList.length === 1 && toList[0] === QA_RECIPIENT;
   const bcc = internal || isQaSend ? [] : BCC_ADDRESSES.filter(addr => !toList.includes(addr));
@@ -20,6 +23,7 @@ export async function sendEmail({ to, subject, html, from = DEFAULT_FROM, replyT
     headers: {
       Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
     body: JSON.stringify({
       from,

@@ -1,13 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-
-const ALLOWED_EMAILS = new Set([
-  'jeremy.dalessio@genshieldservice.com',
-  'alex.russo@genshieldservice.com',
-  'derek.j.sainz@gmail.com',
-  'seanmch12@gmail.com',
-  'genflow-qa-test@genshieldservice.com',
-]);
+import { ALLOWED_EMAILS } from '@/lib/allowedUsers';
 
 const AuthContext = createContext();
 

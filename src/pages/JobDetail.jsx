@@ -31,7 +31,10 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
-import { confirmationEmailHTML, invoiceSummaryHTML, checklistSummaryHTML, combineEmailSections } from "@/lib/emailTemplates";
+import { confirmationEmailHTML } from "@/lib/emailTemplates";
+import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
+import { buildInvoiceLineItems, isZeroDollarJob } from "@/lib/utils/invoiceTotals";
+import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -260,13 +263,13 @@ export default function JobDetail() {
   const [editingPartPriceId, setEditingPartPriceId] = useState(null);
   const [editingPartPriceValue, setEditingPartPriceValue] = useState("");
   const [pendingPlan, setPendingPlan] = useState(null);
-  const [showAgreementSign, setShowAgreementSign] = useState(false);
   const [customerExpanded, setCustomerExpanded] = useState(false);
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
   const [completionSnapshot, setCompletionSnapshot] = useState(null);
-  const [sendInvoiceOnComplete, setSendInvoiceOnComplete] = useState(false);
-  const [completeDocIds, setCompleteDocIds] = useState({});
+  const [emailOnComplete, setEmailOnComplete] = useState(true);
   const [completingJob, setCompletingJob] = useState(false);
+  const [resendOpen, setResendOpen] = useState(false);
+  const [resendingSummary, setResendingSummary] = useState(false);
   useSwipeBack("/jobs");
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
@@ -275,12 +278,12 @@ export default function JobDetail() {
     queryFn: async () => { const r = await db.Job.filter({ id }); return r[0]; },
   });
 
-  const { data: parts = [] } = useQuery({
+  const { data: parts = [], isSuccess: partsLoaded } = useQuery({
     queryKey: ["job-parts", id],
     queryFn: () => db.JobPart.filter({ job_id: id }),
   });
 
-  const { data: labor = [] } = useQuery({
+  const { data: labor = [], isSuccess: laborLoaded } = useQuery({
     queryKey: ["job-labor", id],
     queryFn: () => db.JobLabor.filter({ job_id: id }),
   });
@@ -288,6 +291,16 @@ export default function JobDetail() {
   const { data: documents = [] } = useQuery({
     queryKey: ["job-docs", id],
     queryFn: () => db.JobDocument.filter({ job_id: id }),
+  });
+
+  // Maintenance agreement signed during THIS job (job_agreements, migration
+  // 0022). Its PDF rides on the completion email.
+  const { data: jobAgreement = null } = useQuery({
+    queryKey: ["job-agreement", id],
+    queryFn: async () => {
+      try { const r = await db.JobAgreement.filter({ job_id: id }); return r[0] || null; }
+      catch { return null; }
+    },
   });
 
   const { data: catalogParts = [] } = useQuery({
@@ -569,55 +582,90 @@ export default function JobDetail() {
 
   const completedDocuments = documents.filter(d => d.status === "completed");
 
+  // Agreement added to this job but not yet signed on it — must be signed
+  // BEFORE Complete Job so its PDF can ride on the single completion email.
+  // An already-active member (agreement line = renewal/upgrade) isn't blocked.
+  const isActiveMember = !!(customer?.membership_signed && (!customer?.membership_expiry || new Date(customer.membership_expiry) > new Date()));
+  const agreementLine = labor.find(l => l.requires_agreement);
+  const agreementUnsigned = !!agreementLine && !jobAgreement && !isActiveMember;
+  const goSignAgreement = () => {
+    const plan = AGREEMENT_TYPE_TO_PLAN[agreementLine?.requires_agreement] || "annual";
+    navigate(`/customers/${job.customer_id}/membership?from_job=${id}&plan=${plan}`);
+  };
+
   const openCompleteJob = () => {
     if (job?.requires_document) {
       const hasCompleted = documents.some(d => d.status === "completed");
       if (!hasCompleted) { haptics.error(); toast.error("Complete at least one document before finishing this job"); return; }
+    }
+    if (agreementUnsigned) {
+      haptics.error();
+      toast.error("Customer must sign the Service Agreement before completing this job (or remove it from the job).", {
+        action: { label: "Sign now", onClick: goSignAgreement },
+      });
+      return;
     }
     const hoursOnSite = elapsedSeconds / 3600;
     setCompletionSnapshot({
       time_on_site_seconds: elapsedSeconds,
       time_on_site_hours: Math.round(hoursOnSite * 4) / 4,
     });
-    setSendInvoiceOnComplete(!!existingInvoice);
-    setCompleteDocIds({});
+    setEmailOnComplete(true);
     setCompleteJobOpen(true);
   };
 
+  const patchInvoiceCache = (updated) => {
+    queryClient.setQueryData(["job-invoice", id], (old) =>
+      Array.isArray(old) ? old.map(inv => (inv.id === updated.id ? updated : inv)) : [updated]
+    );
+    queryClient.invalidateQueries({ queryKey: ["job-invoice", id] });
+    queryClient.invalidateQueries({ queryKey: ["invoice", updated.id] });
+    queryClient.invalidateQueries({ queryKey: ["invoices"] });
+  };
+
+  // Complete Job: bring the invoice snapshot up to date from fresh DB rows
+  // ($0.00 exactly -> close it as paid / payment_method 'no_charge'), mark the
+  // job completed, then send the ONE completion email (server-built: invoice
+  // inline + checklist/agreement PDFs). No other customer email is sent here.
   const doCompleteJob = async () => {
     setCompletingJob(true);
     try {
-      const anyDocSelected = completedDocuments.some(d => completeDocIds[d.id]);
-      const anySelected = sendInvoiceOnComplete || anyDocSelected;
-      if (customer?.email && anySelected) {
+      const [freshParts, freshLabor] = await Promise.all([
+        db.JobPart.filter({ job_id: id }),
+        db.JobLabor.filter({ job_id: id }),
+      ]);
+      const fin = computeJobFinancials(freshParts, freshLabor);
+      const zero = isZeroDollarJob(fin);
+      if (existingInvoice && existingInvoice.status !== "paid") {
+        const data = buildInvoiceData(freshParts, freshLabor);
+        const patch = zero
+          ? { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString() }
+          : data;
         try {
-          const bodyParts = [];
-          if (sendInvoiceOnComplete && existingInvoice) bodyParts.push(invoiceSummaryHTML({ invoice: existingInvoice, customer }));
-          completedDocuments.forEach(doc => { if (completeDocIds[doc.id]) bodyParts.push(checklistSummaryHTML(doc)); });
-          const subjectParts = [];
-          if (sendInvoiceOnComplete && existingInvoice) subjectParts.push(`Invoice ${existingInvoice.invoice_number}`);
-          if (anyDocSelected) subjectParts.push("Service Report");
-          const subject = subjectParts.join(" & ") + " — GenShield";
-          await integrationsCore.SendEmailWithRetry({
-            to: customer.email,
-            subject,
-            html: combineEmailSections(bodyParts),
-          });
-          await db.Job.update(id, { completion_send_failed: false });
-          toast.success(`Summary sent to ${customer.email}`);
+          patchInvoiceCache(await db.Invoice.update(existingInvoice.id, patch));
         } catch (e) {
           haptics.error();
-          toast.error(`Failed to send summary email: ${e.message}`);
-          await db.Job.update(id, { completion_send_failed: true }).catch(() => {});
+          toast.error(`Couldn't update the invoice: ${e.message}`);
+          return;
         }
       }
 
       setCompleteJobOpen(false);
       await handleStatusChange("completed", completionSnapshot || {});
 
-      if (hasPendingAgreement) {
-        setTimeout(() => setShowAgreementSign(true), 500);
-      } else if (["maintenance", "battery_replacement"].includes(job.job_type)) {
+      if (customer?.email && emailOnComplete) {
+        try {
+          const r = await sendJobSummaryEmail({ jobId: id, kind: "completion" });
+          if (r?.skipped === "already_sent") toast.info("Summary email was already sent for this job");
+          else if (!r?.skipped) toast.success(`Summary sent to ${customer.email}`);
+        } catch (e) {
+          haptics.error();
+          toast.error(`Failed to send summary email: ${e.message}`);
+        }
+        queryClient.invalidateQueries({ queryKey: ["job", id] });
+      }
+
+      if (["maintenance", "battery_replacement"].includes(job.job_type)) {
         maybeOpenScheduleNext();
       } else {
         navigate("/jobs");
@@ -627,17 +675,32 @@ export default function JobDetail() {
     }
   };
 
-  const buildInvoiceData = () => {
-    const { partsTotal, laborTotal, taxAmount, total } = computeJobFinancials(parts, labor);
-    const lineItems = [
-      // charge_for_part: false parts are $0 by design (not billed) — never
-      // surface them on the customer-facing invoice/email/PDF, which all
-      // render off this stored line_items snapshot. Internal views (Job
-      // Detail's Parts/Work tab) render live `parts` state directly, not
-      // this snapshot, so they're unaffected and still show everything.
-      ...parts.filter(p => p.charge_for_part !== false).map(p => ({ type: "part", description: p.name, quantity: p.quantity, unit_price: p.price, total: p.total_price })),
-      ...labor.map(l => ({ type: "labor", description: l.description, quantity: l.is_flat_rate ? 1 : l.hours, unit_price: l.is_flat_rate ? l.flat_rate_amount : l.rate, total: l.total_price })),
-    ];
+  // Explicit manual resend only (never part of the normal completion flow).
+  const doResendSummary = async () => {
+    setResendingSummary(true);
+    try {
+      const r = await sendJobSummaryEmail({ jobId: id, kind: "resend", nonce: newResendNonce() });
+      if (r?.skipped === "no_email") toast.error("No email on file for this customer");
+      else toast.success(`Summary re-sent to ${customer?.email}`);
+      setResendOpen(false);
+    } catch (e) {
+      haptics.error();
+      toast.error(`Failed to resend: ${e.message}`);
+    } finally {
+      setResendingSummary(false);
+      queryClient.invalidateQueries({ queryKey: ["job", id] });
+    }
+  };
+
+  const buildInvoiceData = (p = parts, l = labor) => {
+    const { partsTotal, laborTotal, taxAmount, total } = computeJobFinancials(p, l);
+    // charge_for_part: false parts are $0 by design (not billed) — hidden on
+    // the customer-facing invoice/email, which render off this stored
+    // line_items snapshot. Exception: on an exactly-$0 invoice they're listed
+    // as "No charge" so a free visit's summary isn't an empty table.
+    // Internal views (Job Detail's Parts/Work tab) render live `parts` state
+    // directly, not this snapshot, so they're unaffected.
+    const lineItems = buildInvoiceLineItems(p, l, { includeNoChargeParts: isZeroDollarJob({ total }) });
     return { parts_total: partsTotal, labor_total: laborTotal, total, tax_amount: taxAmount, tax_rate: TAX_RATE, line_items: lineItems, notes: invoiceNotes, customer_signature: job.customer_signature || null };
   };
 
@@ -647,41 +710,26 @@ export default function JobDetail() {
   // Finalize/Collect Payment. Keep it in sync automatically, matching the
   // stored-invoice-cache pattern from the payment stale-data fix. Skip once
   // paid — a paid invoice's total shouldn't retroactively change.
+  // Line items are compared too (not just totals): a job that stays at $0
+  // (or where a change doesn't move the totals) otherwise never gets its
+  // line_items written and the invoice renders as an empty table. That
+  // line-items-only resync is limited to jobs that aren't completed yet, so
+  // opening an old completed job never rewrites its invoice.
   useEffect(() => {
     if (!job || !existingInvoice || existingInvoice.status === "paid") return;
+    if (!partsLoaded || !laborLoaded) return;
     const fresh = buildInvoiceData();
-    const unchanged =
+    const totalsUnchanged =
       Math.abs((existingInvoice.parts_total || 0) - fresh.parts_total) < 0.005 &&
       Math.abs((existingInvoice.labor_total || 0) - fresh.labor_total) < 0.005 &&
       Math.abs((existingInvoice.tax_amount || 0) - fresh.tax_amount) < 0.005;
-    if (unchanged) return;
+    const jobOpen = !["completed", "invoiced", "canceled"].includes(job.status);
+    const itemsUnchanged = !jobOpen ||
+      JSON.stringify(existingInvoice.line_items || []) === JSON.stringify(fresh.line_items);
+    if (totalsUnchanged && itemsUnchanged) return;
 
-    db.Invoice.update(existingInvoice.id, fresh).then((updated) => {
-      queryClient.setQueryData(["job-invoice", id], (old) =>
-        Array.isArray(old) ? old.map(inv => (inv.id === updated.id ? updated : inv)) : [updated]
-      );
-      queryClient.invalidateQueries({ queryKey: ["job-invoice", id] });
-      queryClient.invalidateQueries({ queryKey: ["invoice", existingInvoice.id] });
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-    });
-  }, [parts, labor, existingInvoice?.id, existingInvoice?.status]);
-
-  const handleFinalizeInvoice = async () => {
-    const invoiceData = { ...buildInvoiceData(), job_id: id, customer_id: job.customer_id, customer_name: job.customer_name };
-    let inv;
-    if (existingInvoice) {
-      await db.Invoice.update(existingInvoice.id, invoiceData);
-      inv = existingInvoice;
-    } else {
-      inv = await db.Invoice.create({ ...invoiceData, invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft" });
-    }
-    await db.Job.update(id, { status: "invoiced" });
-    queryClient.invalidateQueries({ queryKey: ["job", id] });
-    queryClient.invalidateQueries({ queryKey: ["job-invoice", id] });
-    queryClient.invalidateQueries({ queryKey: ["invoices"] });
-    toast.success("Invoice finalized");
-    navigate(`/invoices/${inv.id}`, { state: { fromJobId: id } });
-  };
+    db.Invoice.update(existingInvoice.id, fresh).then(patchInvoiceCache);
+  }, [parts, labor, existingInvoice?.id, existingInvoice?.status, partsLoaded, laborLoaded]);
 
   const handleCollectPayment = async () => {
     const invoiceData = buildInvoiceData();
@@ -696,7 +744,6 @@ export default function JobDetail() {
       navigate(`/invoices/${inv.id}`, { state: { fromJobId: id } });
     }
   };
-
   const addServiceAgreement = async (type) => {
     const FALLBACK = {
       annual_air_cooled: {
@@ -750,6 +797,8 @@ export default function JobDetail() {
   const memberDiscountRate = isSemiMember ? 0.85 : isMember ? 0.90 : 1.0;
   const hasPendingAgreement = labor.some(l => l.requires_agreement);
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
+  // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
+  const isNoChargeJob = partsLoaded && laborLoaded && isZeroDollarJob(computeJobFinancials(parts, labor));
   const isActive = ["dispatched", "on_site"].includes(job.status);
   const headerBg = job.status === "on_site" ? "bg-amber-500" : job.status === "dispatched" ? "bg-cyan-600" : isClosed ? "bg-gray-600" : "bg-primary";
   const headerDot = job.status === "on_site" ? "bg-amber-300" : "bg-cyan-300";
@@ -1002,13 +1051,21 @@ export default function JobDetail() {
                 onNotesChange={handleNotesChange}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
-                onCollectPayment={!isClosed ? handleCollectPayment : undefined}
+                onCollectPayment={!isClosed && !isNoChargeJob ? handleCollectPayment : undefined}
                 isSaving={updateJob.isPending}
               />
 
               {/* Service Agreement status card */}
               {hasPendingAgreement && (
-                customer?.membership_signed ? (
+                jobAgreement ? (
+                  <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
+                    <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
+                      ✅ SERVICE AGREEMENT SIGNED ON THIS JOB
+                    </p>
+                    <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{jobAgreement.plan_name}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed contract (PDF) is emailed with the job summary at completion</p>
+                  </Card>
+                ) : customer?.membership_signed ? (
                   <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
                     <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
                       ✅ SERVICE AGREEMENT ACTIVE
@@ -1025,7 +1082,7 @@ export default function JobDetail() {
                         <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">{formatCurrency(pendingAgreementLine?.flat_rate_amount)}/yr · Customer signature required</p>
                       </div>
                       <Button size="sm" className="rounded-xl h-8 text-xs bg-indigo-600 hover:bg-indigo-700 shrink-0 ml-2"
-                        onClick={() => navigate(`/customers/${job.customer_id}/membership?from_job=${id}`)}>
+                        onClick={goSignAgreement}>
                         Sign
                       </Button>
                     </div>
@@ -1086,27 +1143,50 @@ export default function JobDetail() {
                   )}
                   {job.status === "completed" && (
                     <div className="space-y-2">
+                      {/* Legacy: agreement left unsigned on an already-completed job.
+                          Signed standalone (not from_job) so the customer still
+                          gets the "Protection Plan Active" email with it. */}
                       {hasPendingAgreement && !customer?.membership_signed && (
                         <Button className="w-full rounded-xl gap-1.5 h-11 bg-indigo-600 hover:bg-indigo-700"
-                          onClick={() => setShowAgreementSign(true)}>
+                          onClick={() => navigate(`/customers/${job.customer_id}/membership`)}>
                           🛡️ Customer Sign Protection Agreement
                         </Button>
                       )}
-                      {existingInvoice?.status === "paid" ? (
+                      {existingInvoice?.status === "paid" && existingInvoice?.payment_method === "no_charge" ? (
+                        <Card className="p-3 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
+                          <p className="text-sm font-semibold text-green-800 dark:text-green-200 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4" /> No charge — {formatCurrency(0)}
+                          </p>
+                        </Card>
+                      ) : existingInvoice?.status === "paid" ? (
                         <Card className="p-3 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
                           <p className="text-sm font-semibold text-green-800 dark:text-green-200 flex items-center gap-1.5">
                             <CheckCircle2 className="w-4 h-4" /> Paid — {formatCurrency(existingInvoice.total)}
                           </p>
                         </Card>
+                      ) : isNoChargeJob ? (
+                        <Card className="p-3 bg-muted/40">
+                          <p className="text-sm font-semibold flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4" /> No charge — {formatCurrency(0)}
+                          </p>
+                        </Card>
                       ) : (
-                        <>
-                          <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment}>
-                            <DollarSign className="w-4 h-4" /> Collect Payment Now
-                          </Button>
-                          <Button variant="outline" className="w-full rounded-xl gap-1.5 h-11" onClick={handleFinalizeInvoice}>
-                            <Receipt className="w-4 h-4" /> Finalize & Send Invoice
-                          </Button>
-                        </>
+                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment}>
+                          <DollarSign className="w-4 h-4" /> Collect Payment Now
+                        </Button>
+                      )}
+                      {customer?.email && job.completion_send_failed && (
+                        <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                            <span className="text-sm font-semibold text-red-800 dark:text-red-200">Job summary email failed to send</span>
+                          </div>
+                        </Card>
+                      )}
+                      {customer?.email && (
+                        <Button variant="outline" className="w-full rounded-xl gap-1.5 h-10 text-sm" onClick={() => setResendOpen(true)}>
+                          <RefreshCw className="w-4 h-4" /> Resend Summary Email
+                        </Button>
                       )}
                     </div>
                   )}
@@ -1125,65 +1205,70 @@ export default function JobDetail() {
                 </div>
               )}
 
+              {/* Manual resend of the job summary email (explicit action only) */}
+              <Dialog open={resendOpen} onOpenChange={setResendOpen}>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader><DialogTitle>Resend Summary Email?</DialogTitle></DialogHeader>
+                  <p className="text-sm text-muted-foreground">
+                    The customer already received the job summary automatically when the job was completed.
+                    This sends another copy (invoice{completedDocuments.length > 0 ? " + checklist PDFs" : ""}{jobAgreement ? " + signed agreement" : ""}) to {customer?.email}.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setResendOpen(false)}>Cancel</Button>
+                    <Button className="flex-1 rounded-xl gap-1.5" disabled={resendingSummary} onClick={doResendSummary}>
+                      {resendingSummary ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : "Resend"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* Complete Job modal */}
               <Dialog open={completeJobOpen} onOpenChange={setCompleteJobOpen}>
                 <DialogContent className="max-w-sm">
                   <DialogHeader><DialogTitle>Complete Job</DialogTitle></DialogHeader>
 
-                  {existingInvoice && existingInvoice.status !== "paid" && (
+                  {isNoChargeJob ? (
+                    <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
+                      <p className="text-xs font-semibold">No charge — {formatCurrency(0)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect. The invoice will be closed as no charge.</p>
+                    </div>
+                  ) : existingInvoice && existingInvoice.status !== "paid" && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5">
                       <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">⚠ Invoice is still unpaid</p>
                       <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">You can complete the job and collect payment later.</p>
                     </div>
                   )}
 
-                  {(existingInvoice || completedDocuments.length > 0) ? (
+                  {customer?.email ? (
                     <div className="space-y-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">What to send</p>
-
-                      {existingInvoice && (
-                        <button
-                          onClick={() => setSendInvoiceOnComplete(v => !v)}
-                          className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${sendInvoiceOnComplete ? "border-primary bg-primary/5" : "border-border bg-card"}`}
-                        >
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${sendInvoiceOnComplete ? "border-primary bg-primary" : "border-muted-foreground"}`}>
-                            {sendInvoiceOnComplete && <CheckCircle2 className="w-3 h-3 text-white" />}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold">Invoice</p>
-                            <p className="text-xs text-muted-foreground">
-                              {existingInvoice.invoice_number} · {formatCurrency((existingInvoice.parts_total || 0) + (existingInvoice.labor_total || 0) + (existingInvoice.tax_amount || 0) + (existingInvoice.surcharge_amount || 0))}
-                            </p>
-                          </div>
-                        </button>
-                      )}
-
-                      {completedDocuments.map(doc => (
-                        <button
-                          key={doc.id}
-                          onClick={() => setCompleteDocIds(prev => ({ ...prev, [doc.id]: !prev[doc.id] }))}
-                          className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${completeDocIds[doc.id] ? "border-primary bg-primary/5" : "border-border bg-card"}`}
-                        >
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${completeDocIds[doc.id] ? "border-primary bg-primary" : "border-muted-foreground"}`}>
-                            {completeDocIds[doc.id] && <CheckCircle2 className="w-3 h-3 text-white" />}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <p className="text-sm font-semibold truncate">{doc.template_name}</p>
-                            </div>
-                            <p className="text-xs text-muted-foreground ml-5">Completed service checklist</p>
-                          </div>
-                        </button>
-                      ))}
-
-                      {!customer?.email && (
-                        <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
+                      <button
+                        onClick={() => setEmailOnComplete(v => !v)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${emailOnComplete ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+                      >
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${emailOnComplete ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                          {emailOnComplete && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold">Email job summary</p>
+                          <p className="text-xs text-muted-foreground truncate">{customer.email}</p>
+                        </div>
+                      </button>
+                      {emailOnComplete && (
+                        <ul className="text-xs text-muted-foreground space-y-1 px-1">
+                          {existingInvoice && (
+                            <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} (in the email)</li>
+                          )}
+                          {completedDocuments.map(doc => (
+                            <li key={doc.id} className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{doc.template_name}</span> (PDF)</li>
+                          ))}
+                          {jobAgreement && (
+                            <li className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 shrink-0" /> Signed Maintenance Agreement (PDF)</li>
+                          )}
+                        </ul>
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Nothing to send — the job will be marked complete.</p>
+                    <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
                   )}
 
                   <div className="flex gap-2 mt-2">

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { sendEmail } from './lib/sendEmail.js';
+import { sendEmail } from './_lib/sendEmail.js';
 
 // ─── period helper ─────────────────────────────────────────────────────────
 // "Past 7 days" is a literal rolling window ending at send time — NOT the

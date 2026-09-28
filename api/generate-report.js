@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import ExcelJS from 'exceljs';
-import { sendEmail } from './lib/sendEmail.js';
+import { sendEmail } from './_lib/sendEmail.js';
 
 const EXPENSE_CATEGORIES = [
   'Parts & Supplies', 'Fuel', 'Tools & Equipment', 'Insurance',

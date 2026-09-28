@@ -1,3 +1,5 @@
+import { isZeroDollarInvoice } from './utils/invoiceTotals.js'
+
 function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -33,7 +35,7 @@ function fmtJobType(raw) {
 }
 
 function fmtPaymentMethod(method) {
-  const labels = { cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo', stripe: 'Card', stripe_app: 'Card', other: 'Other' }
+  const labels = { cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo', stripe: 'Card', stripe_app: 'Card', other: 'Other', no_charge: 'No charge' }
   if (!method) return ''
   return labels[method] || (method.charAt(0).toUpperCase() + method.slice(1))
 }
@@ -476,6 +478,13 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
 // job-completion screen — one implementation for the same email-body building blocks
 // so the two entry points can never drift out of sync.
 export function invoiceSummaryHTML({ invoice, customer }) {
+  // $0.00 invoices (exact, integer cents — see isZeroDollarInvoice) get their
+  // own rendering with no paid/unpaid/payment-due language. Every invoice
+  // > $0 (and every negative-total invoice) falls through to the original
+  // rendering below, which is intentionally left byte-for-byte unchanged
+  // (guarded by src/test/invoiceSummary.test.js golden fixtures).
+  if (isZeroDollarInvoice(invoice)) return zeroDollarInvoiceSummaryHTML({ invoice, customer });
+
   const lineItemsHTML = (invoice.line_items || []).map((item, i) => `
     <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
       <td style="padding:9px 12px;font-size:13px;">${item.description}</td>
@@ -630,4 +639,136 @@ export function checklistSummaryHTML(doc) {
 // one send-ready email body, separated by a thin divider between sections.
 export function combineEmailSections(bodyParts) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;color:#1a1a1a;background:white;padding:28px;max-width:700px;margin:0 auto;}</style></head><body>${bodyParts.join('<div style="height:1px;background:#e5e7eb;margin:28px 0;"></div>')}<div style="margin-top:28px;text-align:center;border-top:1px solid #eee;padding-top:14px;"><p style="font-size:11px;color:#aaa;">GenShield · Thank you for your business</p></div></body></html>`;
+}
+
+// $0.00 invoice: same invoice layout (header, bill-to, generator, line items,
+// totals, notes, signature) but no PAID / PAYMENT DUE line or box anywhere.
+// Line items flagged no_charge (charge_for_part:false parts) show "No charge".
+function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
+  const lineItemsHTML = (invoice.line_items || []).map((item, i) => `
+    <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
+      <td style="padding:9px 12px;font-size:13px;">${escapeHtml(item.description)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:center;">${escapeHtml(item.quantity)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:right;">${item.no_charge ? "—" : fmt(item.unit_price)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600;">${item.no_charge ? "No charge" : fmt(item.total)}</td>
+    </tr>`).join("");
+
+  const emptyRow = `<tr><td colspan="4" style="padding:9px 12px;font-size:13px;color:#6b7280;">Service visit — no billable items</td></tr>`;
+
+  const signatureHTML = invoice.customer_signature
+    ? `<div style="margin-top:20px;border-top:1px solid #ddd;padding-top:14px;">
+         <p style="font-size:11px;color:#888;margin:0 0 8px 0;">CUSTOMER SIGNATURE</p>
+         <img src="${escapeHtml(invoice.customer_signature)}" style="max-height:56px;border:1px solid #eee;border-radius:6px;padding:4px;" />
+       </div>`
+    : "";
+
+  return `<div>
+    <div style="background:#0D1014;color:white;padding:22px 24px;border-radius:8px;margin-bottom:20px;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="vertical-align:top;">
+            <h1 style="font-size:20px;font-weight:bold;margin:0 0 3px 0;letter-spacing:1px;">GEN<span style="color:#E03010;">SHIELD</span></h1>
+            <p style="font-size:12px;color:#A8B4C4;margin:0;">Professional Generator Service &amp; Maintenance</p>
+          </td>
+          <td style="vertical-align:top;text-align:right;">
+            <p style="font-size:16px;font-weight:bold;color:#CC2200;margin:0;">INVOICE</p>
+            <p style="font-size:12px;margin:3px 0 0 0;">${escapeHtml(invoice.invoice_number)}</p>
+            <p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>
+          </td>
+        </tr>
+      </table>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+      <tr>
+        <td style="width:50%;vertical-align:top;padding:0 8px 0 0;">
+          <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
+            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
+            <p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${escapeHtml(customer?.name || invoice.customer_name)}</p>
+            ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${escapeHtml(customer.address)}</p>` : ""}
+            ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${escapeHtml(customer.phone)}</p>` : ""}
+          </div>
+        </td>
+        <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">
+          <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
+            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">GENERATOR</p>
+            <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${escapeHtml(customer?.generator_model || "—")}</p>
+            ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0;">S/N: ${escapeHtml(customer.generator_serial)}</p>` : ""}
+          </div>
+        </td>
+      </tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+      <thead>
+        <tr style="background:#0D1014;color:white;">
+          <th style="padding:9px 12px;text-align:left;font-size:12px;">Description</th>
+          <th style="padding:9px 12px;text-align:center;font-size:12px;">Qty</th>
+          <th style="padding:9px 12px;text-align:right;font-size:12px;">Rate</th>
+          <th style="padding:9px 12px;text-align:right;font-size:12px;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${lineItemsHTML || emptyRow}</tbody>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      <tr>
+        <td></td>
+        <td style="width:220px;min-width:220px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">Parts</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.parts_total)}</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">Labor</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.labor_total)}</td>
+            </tr>
+            <tr>
+              <td style="padding:9px 0 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;">Total</td>
+              <td style="padding:9px 0 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;text-align:right;color:#0D1014;">${fmt(0)}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+    ${invoice.notes ? `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(invoice.notes)}</p></div>` : ""}
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      <tr>
+        <td align="center" style="padding:4px 0 0;">
+          <p style="font-size:13px;font-weight:bold;color:#0D1014;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.5px;">How did we do?</p>
+          <table cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td align="center" bgcolor="#CC2200" style="border-radius:6px;background:#CC2200;">
+                <a href="https://g.page/r/CTZ_-W7KWjXzEAE/review" target="_blank" style="display:inline-block;padding:12px 28px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:6px;">★ Leave us a Google Review</a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+    ${signatureHTML}
+  </div>`;
+}
+
+// Short greeting + "what's attached" line placed above the inline invoice in
+// the single job-completion email (and the pay-later receipt).
+export function jobSummaryIntroHTML({ customer, kind = "completion", attachmentLabels = [] }) {
+  const first = String(customer?.name || "").trim().split(/\s+/)[0] || "there";
+  const lead = kind === "receipt"
+    ? "We received your payment — thank you! Your paid invoice is below."
+    : "Thank you for choosing GenShield. Here is the summary of your service.";
+  const attached = attachmentLabels.length
+    ? `<p style="font-size:13px;color:#555;margin:8px 0 0 0;">Attached (PDF): ${attachmentLabels.map(escapeHtml).join(", ")}.</p>`
+    : "";
+  return `<div style="margin-bottom:20px;">
+    <p style="font-size:14px;color:#1a1a1a;margin:0 0 6px 0;">Hi ${escapeHtml(first)},</p>
+    <p style="font-size:13px;color:#444;margin:0;">${lead}</p>
+    ${attached}
+  </div>`;
+}
+
+// The one customer email sent at job completion / payment: greeting +
+// attachment line + invoice inline. PDFs ride as attachments, not in the body.
+export function jobSummaryEmailHTML({ invoice, customer, kind = "completion", attachmentLabels = [] }) {
+  const intro = jobSummaryIntroHTML({ customer, kind, attachmentLabels });
+  const body = invoice ? invoiceSummaryHTML({ invoice, customer }) : "";
+  return combineEmailSections([intro + body]);
 }
