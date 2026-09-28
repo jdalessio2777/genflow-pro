@@ -19,6 +19,8 @@ import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import StripePaymentModal from "@/components/payments/StripePaymentModal";
 import CheckNumberDialog from "@/components/payments/CheckNumberDialog";
+import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
+import { isZeroDollarInvoice } from "@/lib/utils/invoiceTotals";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -31,6 +33,7 @@ export default function InvoiceDetail() {
   const [stripeAppOpened, setStripeAppOpened] = useState(false);
   const [stripeAppTxnId, setStripeAppTxnId] = useState("");
   const [showCheckNumberDialog, setShowCheckNumberDialog] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
@@ -80,6 +83,35 @@ export default function InvoiceDetail() {
     onError: (e) => { haptics.error(); toast.error("Failed to delete: " + e.message); },
   });
 
+  // Pay-later receipt: exactly one, decided + deduped server-side (only if
+  // the job's completion email already went out unpaid; atomic claim on
+  // invoices.receipt_sent_at so this and any other payment path can't both
+  // send). The Stripe webhook never emails.
+  const sendReceiptIfNeeded = async () => {
+    if (!invoice?.job_id) return;
+    try {
+      const r = await sendJobSummaryEmail({ jobId: invoice.job_id, kind: "receipt" });
+      if (r?.id && !r.skipped) toast.success(`Receipt emailed to ${r.to}`);
+    } catch (e) {
+      toast.error(`Payment recorded, but the receipt email failed: ${e.message}`);
+    }
+  };
+
+  // Explicit manual resend of the job summary (invoice + PDFs).
+  const resendJobSummary = async () => {
+    setResending(true);
+    try {
+      const r = await sendJobSummaryEmail({ jobId: invoice.job_id, kind: "resend", nonce: newResendNonce() });
+      if (r?.skipped === "no_email") toast.error("No email on file for this customer");
+      else toast.success(`Email re-sent to ${r.to}`);
+    } catch (e) {
+      haptics.error();
+      toast.error(`Failed to resend: ${e.message}`);
+    } finally {
+      setResending(false);
+    }
+  };
+
   const markSent = () => { updateMutation.mutate({ status: "sent" }); toast.success("Invoice marked as sent"); };
   const markPaid = (method, reference) => {
     updateMutation.mutate(
@@ -88,6 +120,7 @@ export default function InvoiceDetail() {
         onSuccess: () => {
           haptics.success();
           toast.success("Invoice marked as paid");
+          sendReceiptIfNeeded();
           notifyTeam({
             subject: `Invoice Paid — ${invoice.customer_name} · $${(invoice.total || 0).toFixed(2)}`,
             body: `
@@ -122,6 +155,7 @@ export default function InvoiceDetail() {
         onSuccess: () => {
           haptics.success();
           toast.success("Payment successful");
+          sendReceiptIfNeeded();
           notifyTeam({
             subject: `Invoice Paid (Stripe) — ${invoice.customer_name} · $${((invoice.total || 0) + surchargeAmount).toFixed(2)}`,
             body: `
@@ -174,6 +208,7 @@ export default function InvoiceDetail() {
         onSuccess: () => {
           haptics.success();
           toast.success("Invoice marked as paid");
+          sendReceiptIfNeeded();
           notifyTeam({
             subject: `Invoice Paid (Stripe App) — ${invoice.customer_name} · $${owedTotal.toFixed(2)}`,
             body: `
@@ -196,6 +231,11 @@ export default function InvoiceDetail() {
 
   if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   if (!invoice) return <div className="p-4 text-center">Invoice not found</div>;
+
+  // Exactly $0.00 (integer cents): nothing to collect — hide every payment
+  // option. Negative and > $0 invoices are unaffected.
+  const isNoCharge = isZeroDollarInvoice(invoice);
+  const canCollect = (invoice.status === "draft" || invoice.status === "sent") && !isNoCharge;
 
   return (
     <div>
@@ -274,9 +314,40 @@ export default function InvoiceDetail() {
         </Card>
 
         {/* Actions */}
-        <Button className="w-full rounded-xl gap-2 h-11" onClick={() => navigate(`/invoices/${id}/send`)}>
-          <Send className="w-4 h-4" /> Send to Customer
-        </Button>
+        {invoice.job_id ? (
+          // Job invoices are emailed automatically at job completion (and a
+          // receipt if paid later) — this is an explicit manual resend only.
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="w-full rounded-xl gap-2 h-11" disabled={resending}>
+                {resending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Resend Email to Customer
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Resend job summary email?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The customer is emailed automatically when the job is completed. This sends another copy of the invoice and any checklist / agreement PDFs.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={resendJobSummary}>Resend</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : (
+          <Button className="w-full rounded-xl gap-2 h-11" onClick={() => navigate(`/invoices/${id}/send`)}>
+            <Send className="w-4 h-4" /> Send to Customer
+          </Button>
+        )}
+
+        {isNoCharge && invoice.status !== "paid" && (
+          <Card className="p-4 bg-muted/40">
+            <p className="text-sm font-semibold">No charge — {formatCurrency(0)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect on this invoice.</p>
+          </Card>
+        )}
 
         {invoice.status === "draft" && (
           <Button variant="outline" className="w-full rounded-xl gap-2 h-11" onClick={markSent}>
@@ -284,7 +355,7 @@ export default function InvoiceDetail() {
           </Button>
         )}
 
-        {(invoice.status === "draft" || invoice.status === "sent") && (
+        {canCollect && (
           <Card className="p-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40">
             <div className="flex items-center gap-3 mb-3">
               <div className="rounded-xl bg-blue-100 dark:bg-blue-900/60 p-2 shrink-0">
@@ -306,7 +377,7 @@ export default function InvoiceDetail() {
           </Card>
         )}
 
-        {(invoice.status === "draft" || invoice.status === "sent") && (
+        {canCollect && (
           <Card className="p-4 border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/40">
             <div className="flex items-center gap-3 mb-3">
               <div className="rounded-xl bg-indigo-100 dark:bg-indigo-900/60 p-2 shrink-0">
@@ -364,7 +435,7 @@ export default function InvoiceDetail() {
           </Card>
         )}
 
-        {(invoice.status === "draft" || invoice.status === "sent") && (
+        {canCollect && (
           <Card className="p-4 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
             <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-3 uppercase tracking-wider">Record Payment (Manual)</p>
             <div className="grid grid-cols-3 gap-2">
