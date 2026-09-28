@@ -49,10 +49,18 @@ export async function buildChecklistPdf({ doc, customer, job }) {
   const valueX = PAGE.margin + labelW + 12;
   const valueW = L.contentWidth - labelW - 20;
   let stripe = 0;
+  const isVisible = (f) => f.type === 'checkbox' || !(values[f.id] === undefined || values[f.id] === null || values[f.id] === '');
+  // A section header is only printed if at least one field under it prints.
+  const sectionHasRows = (idx) => {
+    for (let j = idx + 1; j < fields.length && fields[j].type !== 'section_header'; j++) if (isVisible(fields[j])) return true;
+    return false;
+  };
 
-  for (const field of fields) {
+  for (const [idx, field] of fields.entries()) {
     if (field.type === 'section_header') {
+      if (!sectionHasRows(idx)) continue;
       L.y -= 6;
+      L.ensure(20 + 2 + lh * 2 + 8); // keep the header with its first row
       L.sectionBar(field.label || '');
       stripe = 0;
       continue;
