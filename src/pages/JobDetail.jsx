@@ -793,6 +793,9 @@ export default function JobDetail() {
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
   const isClosed = ["invoiced", "canceled"].includes(job.status);
+  // Completed jobs are done: no editing the job itself or canceling it.
+  // (Payment, resend summary, photos and notes stay available as before.)
+  const canEditOrCancel = !isClosed && job.status !== "completed";
   const isMember = !!(customer?.membership_plan && customer?.membership_signed);
   const isSemiMember = !!(customer?.membership_plan === "semi_annual" && customer?.membership_signed);
   const memberDiscountRate = isSemiMember ? 0.85 : isMember ? 0.90 : 1.0;
@@ -853,7 +856,7 @@ export default function JobDetail() {
                 <p className="text-white/70 text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
               </div>
             )}
-            {!isClosed && (
+            {canEditOrCancel && (
               <Link to={`/jobs/${id}/edit`}>
                 <button className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center">
                   <Pencil className="w-4 h-4 text-white" />
@@ -1200,18 +1203,20 @@ export default function JobDetail() {
                       )}
                     </div>
                   )}
-                  <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full rounded-xl gap-1.5 h-10 text-sm">
-                        <XCircle className="w-4 h-4" /> Cancel Job
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
-                      <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
-                      <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
-                    </DialogContent>
-                  </Dialog>
+                  {canEditOrCancel && (
+                    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full rounded-xl gap-1.5 h-10 text-sm">
+                          <XCircle className="w-4 h-4" /> Cancel Job
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-sm">
+                        <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
+                        <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+                        <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </div>
               )}
 
