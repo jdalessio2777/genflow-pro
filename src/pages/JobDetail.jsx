@@ -1082,7 +1082,7 @@ export default function JobDetail() {
                 onNotesChange={handleNotesChange}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
-                onCollectPayment={!isClosed && !isNoChargeJob ? handleCollectPayment : undefined}
+                onCollectPayment={!isClosed && !isNoChargeJob && existingInvoice?.status !== "paid" ? handleCollectPayment : undefined}
                 isSaving={updateJob.isPending}
               />
 
