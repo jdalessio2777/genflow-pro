@@ -14,6 +14,8 @@ import { formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import { PLANS, TERMS, UNIT_TYPE_LABEL } from "@/lib/agreementTerms";
+import { initSignatureCanvas } from "@/lib/signatureCanvas";
+import SignatureGuideOverlay from "@/components/ui/SignatureGuideOverlay";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -29,33 +31,9 @@ function SignatureCanvas({ onSave }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const initCanvas = (canvas) => {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    // Draw baseline guide at 75% height
-    const baseY = Math.round(canvas.height * 0.75);
-    ctx.save();
-    ctx.strokeStyle = "#d1d5db";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(20, baseY);
-    ctx.lineTo(canvas.width - 20, baseY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "14px sans-serif";
-    ctx.fillText("Sign here →", 22, baseY - 6);
-    ctx.restore();
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2.5;
-  };
+  // Background + pen only; the "Sign here" guide is a DOM overlay so it
+  // never ends up in the exported PNG.
+  const initCanvas = (canvas) => initSignatureCanvas(canvas);
 
   const canvasCallbackRef = (canvas) => {
     if (canvas && canvas !== canvasRef.current) {
@@ -107,14 +85,17 @@ function SignatureCanvas({ onSave }) {
       >
         <p style={{ color: "#ffffff", fontSize: "1rem", fontWeight: 600, letterSpacing: "0.02em" }}>Customer Signature</p>
 
-        <canvas
-          ref={canvasCallbackRef}
-          width={cw}
-          height={ch}
-          style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
-          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-        />
+        <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
+          <canvas
+            ref={canvasCallbackRef}
+            width={cw}
+            height={ch}
+            style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
+            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+          />
+          <SignatureGuideOverlay />
+        </div>
 
         {isPortrait && (
           <p style={{ color: "#9ca3af", fontSize: "0.75rem" }}>Rotate device for more space</p>
