@@ -1246,18 +1246,39 @@ export default function JobDetail() {
               </div>
 
               {/* Work search */}
-              <div className="relative px-4 mt-2">
-                <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder={
-                    workSubTab === "parts" ? "Search parts..."
-                    : workSubTab === "labor" ? "Search labor rates..."
-                    : "Search flat rates..."
-                  }
-                  value={workSearch}
-                  onChange={e => setWorkSearch(e.target.value)}
-                  className="pl-9 rounded-xl h-9 text-sm"
-                />
+              {/* Parts: filters this job's parts AND searches the whole catalog
+                  (name or part #) — JobPartsTab renders tap-to-add matches. */}
+              <div className="sticky top-0 z-10 bg-background px-4 pt-2 pb-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="search"
+                    enterKeyHint="search"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    placeholder={
+                      workSubTab === "parts" ? "Search parts — name or part #"
+                      : workSubTab === "labor" ? "Search labor rates..."
+                      : "Search flat rates..."
+                    }
+                    aria-label={workSubTab === "parts" ? "Search parts" : workSubTab === "labor" ? "Search labor rates" : "Search flat rates"}
+                    value={workSearch}
+                    onChange={e => setWorkSearch(e.target.value)}
+                    className="pl-9 pr-11 rounded-xl h-11 text-sm [&::-webkit-search-cancel-button]:hidden"
+                  />
+                  {workSearch && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => setWorkSearch("")}
+                      className="absolute right-0 top-0 h-11 w-11 flex items-center justify-center text-muted-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="p-4 space-y-2">
