@@ -7,6 +7,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
+import { jobFromApprovedQuote } from "@/lib/quoteToJob";
 
 const STATUS_STYLES = {
   draft: "bg-gray-100 text-gray-700",
@@ -76,15 +77,7 @@ export default function QuoteDetail() {
         customerName = newCustomer.name;
       }
 
-      const job = await db.Job.create({
-        customer_id: finalCustomerId,
-        customer_name: customerName,
-        title: `Quote Follow-up — ${customerName}`,
-        job_type: "quote",
-        status: "scheduled",
-        notes: quote.notes || null,
-        quote_notes: quote.notes || null,
-      });
+      const job = await db.Job.create(jobFromApprovedQuote(quote, { customerId: finalCustomerId, customerName }));
 
       await Promise.all(lineItems.map(l => {
         if (l.type === "part") {
