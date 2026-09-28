@@ -243,6 +243,17 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
   const arrivalTime = job.scheduled_date ? fmtTime(job.scheduled_date, use24h) : '—'
   const generatorInfo = [customer.generator_model, customer.generator_serial].filter(Boolean).join(' · ')
   const techName = techFirstName || 'our technician'
+  const customerDescription = job.customer_description?.trim()
+    ? `<!-- About Your Service -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+          <tr style="background:#0D1014;">
+            <td style="padding:13px 20px;font-size:13px;font-weight:600;color:#E8ECF2;text-align:left;">📝 &nbsp;About Your Service</td>
+          </tr>
+          <tr>
+            <td style="padding:14px 20px;font-size:13px;color:#374151;line-height:1.7;">${multilineHtml(job.customer_description)}</td>
+          </tr>
+        </table>`
+    : ''
 
   return `<!DOCTYPE html>
 <html>
@@ -307,6 +318,8 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
             </tr>
           </tbody>
         </table>
+
+        ${customerDescription}
 
         <!-- What to Expect -->
         <div style="background:#f9fafb;border-radius:8px;padding:20px 24px;margin-bottom:20px;">

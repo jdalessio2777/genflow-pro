@@ -51,6 +51,7 @@ export default function JobForm() {
     scheduled_date: "",
     estimated_duration: "",
     notes: "",
+    customer_description: "",
     generator_notes: "",
     quote_notes: "",
     requires_document: false,
@@ -89,7 +90,7 @@ export default function JobForm() {
 
   const JOB_FIELDS = new Set([
     'customer_id', 'customer_name', 'title', 'job_type', 'status',
-    'scheduled_date', 'notes', 'generator_notes', 'quote_notes',
+    'scheduled_date', 'notes', 'customer_description', 'generator_notes', 'quote_notes',
     'requires_document', 'assigned_to_name', 'calendar_event_id', 'last_synced_at',
   ]);
   const nullableFields = ['scheduled_date', 'last_synced_at'];
@@ -97,7 +98,10 @@ export default function JobForm() {
     Object.fromEntries(
       Object.entries(data)
         .filter(([k]) => JOB_FIELDS.has(k))
-        .map(([k, v]) => [k, nullableFields.includes(k) && v === '' ? null : v])
+        .map(([k, v]) => {
+          if (k === 'customer_description') return [k, (v ?? '').trim() || null];
+          return [k, nullableFields.includes(k) && v === '' ? null : v];
+        })
     );
 
   const mutation = useMutation({
@@ -311,7 +315,18 @@ export default function JobForm() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">Notes</Label>
+            <Label className="text-xs">Job Description (customer-facing)</Label>
+            <Textarea
+              value={form.customer_description || ""}
+              onChange={e => update("customer_description", e.target.value)}
+              className="rounded-xl mt-1"
+              rows={3}
+              placeholder="What we'll be doing, in plain language for the customer (e.g. oil & filter change, battery load test)"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Optional — included in the appointment confirmation email</p>
+          </div>
+          <div>
+            <Label className="text-xs">Internal Notes (not shown to customer)</Label>
             <Textarea value={form.notes} onChange={e => update("notes", e.target.value)} className="rounded-xl mt-1" rows={3} />
           </div>
           <div>

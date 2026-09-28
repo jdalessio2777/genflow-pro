@@ -852,6 +852,14 @@ export default function JobDetail() {
                     <StatusBadge status={job.job_type} className="mt-5 shrink-0" />
                   )}
                 </div>
+                {job.customer_description?.trim() && (
+                  <div className="mx-3.5 mb-3.5 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 dark:bg-emerald-900/20 dark:border-emerald-700">
+                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider mb-1">Job Description · Customer-facing</p>
+                    <p className="text-xs text-emerald-800 dark:text-emerald-200 leading-relaxed whitespace-pre-line">
+                      {job.customer_description.trim()}
+                    </p>
+                  </div>
+                )}
                 {(job.quote_notes || job.notes) && (
                   <div className="mx-3.5 mb-3.5 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5 dark:bg-sky-900/20 dark:border-sky-700">
                     <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider mb-1">Summary</p>
