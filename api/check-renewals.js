@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { renewalEmailHTML, renewalEmailSubject } from '../src/lib/emailTemplates/renewalEmail.js';
 import { sendEmail } from './_lib/sendEmail.js';
+import { isAuthorizedCron, isAuthorizedManual } from './_lib/cronAuth.js';
 
 const INTERNAL_EMAIL = 'contact@genshieldservice.com';
 
@@ -39,12 +40,13 @@ function internalAlertHTML({ customer, days }) {
 }
 
 export default async function handler(req, res) {
-  const isVercelCron =
-    !!req.headers['x-vercel-cron-authorization'] ||
-    (process.env.CRON_SECRET && req.headers['authorization'] === `Bearer ${process.env.CRON_SECRET}`);
-  const isManual =
-    !!process.env.REPORT_SECRET &&
-    req.headers['x-report-secret'] === process.env.REPORT_SECRET;
+  // Same rule as generate-report.js: Vercel cron auth requires the real
+  // CRON_SECRET bearer token (x-vercel-cron-authorization alone is just a
+  // marker header, not a verified signature — anyone can send it). Manual
+  // trigger via x-report-secret. Both fail closed if their secret is unset.
+  // This check runs before any DB client is created or email is sent.
+  const isVercelCron = isAuthorizedCron(req.headers);
+  const isManual = isAuthorizedManual(req.headers);
 
   if (!isVercelCron && !isManual) {
     return res.status(401).json({ error: 'Unauthorized' });
