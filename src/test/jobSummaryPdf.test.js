@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import { buildChecklistPdf, checklistFilename } from '../../api/lib/pdf/checklistPdf.js'
-import { buildAgreementPdf, agreementFilename } from '../../api/lib/pdf/agreementPdf.js'
-import { sanitizeFor } from '../../api/lib/pdf/common.js'
-import { buildJobSummaryEmail, invoiceForEmail, buildSubject, MAX_EMAIL_BYTES } from '../../api/lib/jobSummary.js'
+import { buildChecklistPdf, checklistFilename } from '../../api/_lib/pdf/checklistPdf.js'
+import { buildAgreementPdf, agreementFilename } from '../../api/_lib/pdf/agreementPdf.js'
+import { sanitizeFor } from '../../api/_lib/pdf/common.js'
+import { buildJobSummaryEmail, invoiceForEmail, buildSubject, MAX_EMAIL_BYTES } from '../../api/_lib/jobSummary.js'
 import { PLANS, TERMS } from '@/lib/agreementTerms'
 
 const PNG_1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='

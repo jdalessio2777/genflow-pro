@@ -1,4 +1,4 @@
-import { sendEmail } from './lib/sendEmail.js';
+import { sendEmail } from './_lib/sendEmail.js';
 
 async function readJsonBody(req) {
   return new Promise((resolve, reject) => {

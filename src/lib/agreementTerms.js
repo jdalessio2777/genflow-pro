@@ -1,6 +1,6 @@
 // Plan + terms text for the Generator Maintenance (Protection Plan) Agreement.
 // Plain ESM shared by the signing page (src/pages/MembershipAgreement.jsx) and
-// the server-side agreement PDF (api/lib/pdf). A copy of the plan/terms as
+// the server-side agreement PDF (api/_lib/pdf). A copy of the plan/terms as
 // signed is also snapshotted into job_agreements.snapshot at signing time.
 export const PLANS = {
   annual: {

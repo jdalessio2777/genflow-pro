@@ -15,8 +15,8 @@
 //  - resend:     explicit manual resend from the UI (same content as completion).
 import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { sendEmail } from './lib/sendEmail.js';
-import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './lib/jobSummary.js';
+import { sendEmail } from './_lib/sendEmail.js';
+import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './_lib/jobSummary.js';
 import { isAllowedEmail } from '../src/lib/allowedUsers.js';
 import { invoiceTotalCents } from '../src/lib/utils/invoiceTotals.js';
 

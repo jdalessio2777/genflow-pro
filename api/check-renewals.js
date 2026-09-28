@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { renewalEmailHTML, renewalEmailSubject } from '../src/lib/emailTemplates/renewalEmail.js';
-import { sendEmail } from './lib/sendEmail.js';
+import { sendEmail } from './_lib/sendEmail.js';
 
 const INTERNAL_EMAIL = 'contact@genshieldservice.com';
 
