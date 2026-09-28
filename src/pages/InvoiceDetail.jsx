@@ -279,7 +279,7 @@ export default function InvoiceDetail() {
           <div className="text-sm space-y-1">
             <p className="flex items-center gap-1.5 flex-wrap"><span className="text-muted-foreground">Customer:</span> <Link to={`/customers/${invoice.customer_id}`} className="text-primary">{invoice.customer_name}</Link><RewardBadge show={invoiceCustomer?.pending_reward} /></p>
             <p><span className="text-muted-foreground">Date:</span> {formatDate(invoice.created_date)}</p>
-            {invoice.paid_date && <p><span className="text-muted-foreground">Paid:</span> {formatDate(invoice.paid_date)} ({invoice.payment_method}{invoice.payment_reference ? ` #${invoice.payment_reference}` : ""})</p>}
+            {invoice.paid_date && <p><span className="text-muted-foreground">Paid:</span> {formatDate(invoice.paid_date)} ({invoice.payment_method === "no_charge" ? "No charge" : invoice.payment_method}{invoice.payment_reference ? ` #${invoice.payment_reference}` : ""})</p>}
           </div>
         </Card>
 

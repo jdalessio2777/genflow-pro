@@ -1091,7 +1091,7 @@ export default function JobDetail() {
               )}
 
               {/* Confirmation email needs attention — failed send or never sent */}
-              {!isClosed && customer?.email &&
+              {!isClosed && job.status !== "completed" && customer?.email &&
                 (job.confirmation_send_failed || !job.confirmation_sent_at) && (
                 <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
                   <div className="flex items-center gap-2 mb-1">
