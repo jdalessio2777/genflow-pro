@@ -33,7 +33,7 @@ import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyT
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
-import { buildInvoiceLineItems, isZeroDollarJob } from "@/lib/utils/invoiceTotals";
+import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 
 function SignatureCanvas({ onSave }) {
@@ -271,6 +271,8 @@ export default function JobDetail() {
   const [completingJob, setCompletingJob] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
   const [resendingSummary, setResendingSummary] = useState(false);
+  const [closeNoChargeOpen, setCloseNoChargeOpen] = useState(false);
+  const [closingNoCharge, setClosingNoCharge] = useState(false);
   useSwipeBack("/jobs");
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
@@ -676,6 +678,38 @@ export default function JobDetail() {
     }
   };
 
+  // Legacy stuck $0 jobs (completed before $0 invoices were auto-closed):
+  // close the $0 invoice as paid / no_charge exactly like the completion path
+  // does — rebuilt line items, paid_date now — but send NOTHING. Re-checks the
+  // $0.00 guard against fresh DB rows + the stored invoice before writing.
+  const doCloseNoCharge = async () => {
+    setClosingNoCharge(true);
+    try {
+      const [freshParts, freshLabor, freshInvoices] = await Promise.all([
+        db.JobPart.filter({ job_id: id }),
+        db.JobLabor.filter({ job_id: id }),
+        db.Invoice.filter({ job_id: id }),
+      ]);
+      const inv = freshInvoices.find(i => i.id === existingInvoice?.id);
+      const fin = computeJobFinancials(freshParts, freshLabor);
+      if (!canCloseAsNoCharge({ jobStatus: job.status, invoice: inv, financials: fin })) {
+        haptics.error();
+        toast.error("This job's invoice isn't exactly $0.00 (or is already closed) — not changed.");
+        return;
+      }
+      const data = buildInvoiceData(freshParts, freshLabor);
+      const patch = { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString() };
+      patchInvoiceCache(await db.Invoice.update(inv.id, patch));
+      setCloseNoChargeOpen(false);
+      toast.success("Closed as no charge — no email sent");
+    } catch (e) {
+      haptics.error();
+      toast.error(`Couldn't close the invoice: ${e.message}`);
+    } finally {
+      setClosingNoCharge(false);
+    }
+  };
+
   // Explicit manual resend only (never part of the normal completion flow).
   const doResendSummary = async () => {
     setResendingSummary(true);
@@ -803,6 +837,10 @@ export default function JobDetail() {
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
   // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
   const isNoChargeJob = partsLoaded && laborLoaded && isZeroDollarJob(computeJobFinancials(parts, labor));
+  // Legacy stuck $0 job (completed, $0 invoice never closed) -> offer a
+  // no-email close. Same strict $0.00-in-cents guard is re-run on click.
+  const showCloseNoCharge = partsLoaded && laborLoaded &&
+    canCloseAsNoCharge({ jobStatus: job.status, invoice: existingInvoice, financials: computeJobFinancials(parts, labor) });
   const isActive = ["dispatched", "on_site"].includes(job.status);
   const headerBg = job.status === "on_site" ? "bg-amber-500" : job.status === "dispatched" ? "bg-cyan-600" : isClosed ? "bg-gray-600" : "bg-primary";
   const headerDot = job.status === "on_site" ? "bg-amber-300" : "bg-cyan-300";
@@ -1178,11 +1216,21 @@ export default function JobDetail() {
                           </p>
                         </Card>
                       ) : isNoChargeJob ? (
-                        <Card className="p-3 bg-muted/40">
-                          <p className="text-sm font-semibold flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4" /> No charge — {formatCurrency(0)}
-                          </p>
-                        </Card>
+                        <>
+                          <Card className="p-3 bg-muted/40">
+                            <p className="text-sm font-semibold flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4" /> No charge — {formatCurrency(0)}
+                            </p>
+                            {showCloseNoCharge && (
+                              <p className="text-xs text-muted-foreground mt-0.5">Invoice is still open. Close it as no charge, or resend the summary email.</p>
+                            )}
+                          </Card>
+                          {showCloseNoCharge && (
+                            <Button className="w-full rounded-xl gap-1.5 h-11" onClick={() => setCloseNoChargeOpen(true)}>
+                              <CheckCircle2 className="w-4 h-4" /> Close as No Charge (no email)
+                            </Button>
+                          )}
+                        </>
                       ) : (
                         <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment}>
                           <DollarSign className="w-4 h-4" /> Collect Payment Now
@@ -1219,6 +1267,23 @@ export default function JobDetail() {
                   )}
                 </div>
               )}
+
+              {/* Legacy $0 job: close invoice as no charge, no email */}
+              <Dialog open={closeNoChargeOpen} onOpenChange={setCloseNoChargeOpen}>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader><DialogTitle>Close as No Charge?</DialogTitle></DialogHeader>
+                  <p className="text-sm text-muted-foreground">
+                    Marks this job's {formatCurrency(0)} invoice{existingInvoice?.invoice_number ? ` ${existingInvoice.invoice_number}` : ""} as closed — no charge.
+                    <strong className="text-foreground"> No email is sent to the customer.</strong>
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCloseNoChargeOpen(false)}>Cancel</Button>
+                    <Button className="flex-1 rounded-xl gap-1.5" disabled={closingNoCharge} onClick={doCloseNoCharge}>
+                      {closingNoCharge ? <><Loader2 className="w-4 h-4 animate-spin" /> Closing...</> : "Close, No Email"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* Manual resend of the job summary email (explicit action only) */}
               <Dialog open={resendOpen} onOpenChange={setResendOpen}>

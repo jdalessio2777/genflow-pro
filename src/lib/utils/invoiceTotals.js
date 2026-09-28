@@ -27,6 +27,20 @@ export function isZeroDollarJob(financials) {
   return cents === 0;
 }
 
+// Legacy "stuck" $0 job: completed before $0 invoices were auto-closed, so its
+// $0 invoice is still draft/unpaid. Staff may close it as no charge WITHOUT
+// sending any email. Strict: job completed, invoice not paid, and BOTH the
+// stored invoice (its components and its `total` column) and the live job
+// rows are exactly 0 cents. Negative totals never qualify.
+export function canCloseAsNoCharge({ jobStatus, invoice, financials }) {
+  if (jobStatus !== "completed") return false;
+  if (!invoice || invoice.status === "paid") return false;
+  if (!financials) return false;
+  if (!isZeroDollarInvoice(invoice)) return false;
+  if (Math.round(Number(invoice.total || 0) * 100) !== 0) return false;
+  return isZeroDollarJob(financials);
+}
+
 // Customer-facing invoice line items from job_parts/job_labor rows.
 // charge_for_part:false parts are normally hidden from the customer (they're
 // $0 by design). On a $0 invoice they ARE shown, flagged no_charge so the
