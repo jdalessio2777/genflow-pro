@@ -264,6 +264,7 @@ export default function JobDetail() {
   const [editingPartPriceValue, setEditingPartPriceValue] = useState("");
   const [pendingPlan, setPendingPlan] = useState(null);
   const [customerExpanded, setCustomerExpanded] = useState(false);
+  const [titleExpanded, setTitleExpanded] = useState(false);
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
   const [completionSnapshot, setCompletionSnapshot] = useState(null);
   const [emailOnComplete, setEmailOnComplete] = useState(true);
@@ -809,15 +810,15 @@ export default function JobDetail() {
 
       {/* ── COLORED ACTIVE JOB HEADER ── */}
       <div className={`${headerBg} px-4 pt-3 pb-3 shrink-0`}>
-        <div className="flex items-center justify-between max-w-lg mx-auto">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between gap-2 max-w-lg mx-auto min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
               onClick={() => navigate("/jobs")}
               className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-white" />
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 {isActive && <div className={`w-1.5 h-1.5 rounded-full ${headerDot} animate-pulse shrink-0`} />}
                 <span className="text-white/80 text-xs font-bold uppercase tracking-wider">
@@ -829,9 +830,18 @@ export default function JobDetail() {
                    job.status?.replace(/_/g, " ")}
                 </span>
               </div>
-              <p className="text-white font-bold text-base leading-tight truncate">{job.title}</p>
-              <div className="flex items-center gap-1.5">
-                <p className="text-white/75 text-xs">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+              {/* Long titles: clamp to 2 lines on phones; tap to show the full
+                  title (also in the title attribute / Overview). */}
+              <p
+                data-testid="job-header-title"
+                title={job.title}
+                onClick={() => setTitleExpanded(v => !v)}
+                className={`text-white font-bold text-base leading-tight break-words cursor-pointer ${titleExpanded ? "" : "line-clamp-2"}`}
+              >
+                {job.title}
+              </p>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <p className="text-white/75 text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
                 <RewardBadge show={customer?.pending_reward} />
               </div>
             </div>
