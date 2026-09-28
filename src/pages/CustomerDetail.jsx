@@ -11,6 +11,7 @@ import RewardBadge from "@/components/ui/RewardBadge";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate, formatPhone } from "@/lib/utils/format";
+import { serviceHistoryNotesHtml, serviceHistoryTitleHtml } from "@/lib/serviceHistory";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
@@ -80,13 +81,13 @@ export default function CustomerDetail() {
         : completedJobs.map((job, i) => `
             <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
               <td style="padding:10px 12px;font-size:13px;">${formatDate(job.completed_date || job.created_date)}</td>
-              <td style="padding:10px 12px;font-size:13px;font-weight:600;">${job.title}</td>
+              <td style="padding:10px 12px;font-size:13px;font-weight:600;">${serviceHistoryTitleHtml(job)}</td>
               <td style="padding:10px 12px;font-size:13px;text-align:center;">
                 <span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${job.status === "invoiced" ? "#dcfce7" : "#f0fdf4"};color:#166534;">
                   ${job.status === "invoiced" ? "Invoiced" : "Completed"}
                 </span>
               </td>
-              <td style="padding:10px 12px;font-size:12px;color:#555;">${job.generator_notes || job.notes || "—"}</td>
+              <td style="padding:10px 12px;font-size:12px;color:#555;">${serviceHistoryNotesHtml(job)}</td>
             </tr>`).join("");
 
       const totalJobs = completedJobs.length;
