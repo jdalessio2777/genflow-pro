@@ -188,6 +188,55 @@ describe('confirmationEmailHTML', () => {
     const html = confirmationEmailHTML({ ...baseArgs, techFirstName: '' })
     expect(html).toContain('our technician')
   })
+
+  describe('customer_description ("About Your Service")', () => {
+    const withDesc = (customer_description) =>
+      confirmationEmailHTML({ ...baseArgs, job: { ...mockJob, customer_description } })
+
+    it('renders the section when a description is present', () => {
+      const html = withDesc('Annual maintenance and battery load test')
+      expect(html).toContain('About Your Service')
+      expect(html).toContain('Annual maintenance and battery load test')
+    })
+
+    it('uses a table-based layout (no flexbox/grid) for the section', () => {
+      const html = withDesc('Annual maintenance')
+      const start = html.indexOf('<!-- About Your Service -->')
+      const end = html.indexOf('<!-- What to Expect -->')
+      const section = html.slice(start, end)
+      expect(start).toBeGreaterThan(-1)
+      expect(section).toMatch(/<table[\s>]/)
+      expect(section).not.toMatch(/display:\s*(flex|grid)/)
+    })
+
+    it.each([
+      ['undefined', undefined],
+      ['null', null],
+      ['empty string', ''],
+      ['whitespace only', '   \n\t  \n '],
+    ])('omits the section entirely when description is %s', (_label, value) => {
+      const html = withDesc(value)
+      expect(html).not.toContain('About Your Service')
+      expect(html).not.toContain('<!-- About Your Service -->')
+    })
+
+    it('omits the section when the job has no customer_description key', () => {
+      const html = confirmationEmailHTML(baseArgs)
+      expect(html).not.toContain('About Your Service')
+    })
+
+    it('HTML-escapes the description', () => {
+      const html = withDesc(`<script>alert("x")</script> & 'quotes'`)
+      expect(html).not.toContain('<script>alert')
+      expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;quotes&#39;')
+    })
+
+    it('converts newlines to <br> and trims surrounding whitespace', () => {
+      const html = withDesc('  Line one\nLine two\r\nLine three  ')
+      expect(html).toContain('Line one<br>Line two<br>Line three')
+      expect(html).not.toContain('  Line one')
+    })
+  })
 })
 
 // ─── completionEmailHTML ──────────────────────────────────────────────────────
