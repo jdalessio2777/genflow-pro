@@ -5,8 +5,15 @@ import { supabase } from '@/lib/supabaseClient';
 // picks the recipient and dedupes (atomic DB claim + Resend Idempotency-Key),
 // so retrying here can never double-send.
 //   kind: 'completion' | 'receipt' | 'resend'
-export async function sendJobSummaryEmail({ jobId, kind = 'completion', nonce }, delays = [3000, 10000]) {
-  const body = JSON.stringify({ job_id: jobId, kind, ...(nonce ? { nonce } : {}) });
+//   documentIds: completed job_documents ids to attach (omit = all)
+//   includeAgreement: attach the job's signed agreement PDF (default true)
+export async function sendJobSummaryEmail({ jobId, kind = 'completion', nonce, documentIds, includeAgreement }, delays = [3000, 10000]) {
+  const body = JSON.stringify({
+    job_id: jobId, kind,
+    ...(nonce ? { nonce } : {}),
+    ...(Array.isArray(documentIds) ? { document_ids: documentIds } : {}),
+    ...(includeAgreement === false ? { include_agreement: false } : {}),
+  });
   let lastError;
   for (let attempt = 0; attempt <= delays.length; attempt++) {
     try {

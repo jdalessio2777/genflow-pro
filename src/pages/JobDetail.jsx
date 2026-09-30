@@ -147,6 +147,29 @@ function SignatureCanvas({ onSave }) {
 }
 
 
+// One attachment row in the Complete Job dialog: checkbox-style toggle,
+// ON = attach this PDF to the completion email.
+function AttachmentToggle({ label, on, onToggle }) {
+  return (
+    <li>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={on}
+        onClick={onToggle}
+        className="w-full flex items-center gap-2 py-1 text-left"
+      >
+        <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${on ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+          {on && <Check className="w-3 h-3 text-white" />}
+        </span>
+        <FileText className="w-3.5 h-3.5 shrink-0" />
+        <span className={`truncate ${on ? "" : "line-through opacity-60"}`}>{label}</span>
+        <span className="shrink-0">(PDF)</span>
+      </button>
+    </li>
+  );
+}
+
 function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
   const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
 
@@ -248,6 +271,9 @@ export default function JobDetail() {
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
   const [completionSnapshot, setCompletionSnapshot] = useState(null);
   const [emailOnComplete, setEmailOnComplete] = useState(true);
+  // Per-attachment toggles in the Complete Job dialog (all ON by default).
+  const [excludedDocIds, setExcludedDocIds] = useState([]);
+  const [includeAgreementPdf, setIncludeAgreementPdf] = useState(true);
   const [completingJob, setCompletingJob] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
   const [resendingSummary, setResendingSummary] = useState(false);
@@ -594,6 +620,8 @@ export default function JobDetail() {
       time_on_site_hours: Math.round(hoursOnSite * 4) / 4,
     });
     setEmailOnComplete(true);
+    setExcludedDocIds([]);
+    setIncludeAgreementPdf(true);
     setCompleteJobOpen(true);
   };
 
@@ -656,7 +684,11 @@ export default function JobDetail() {
 
       if (customer?.email && emailOnComplete) {
         try {
-          const r = await sendJobSummaryEmail({ jobId: id, kind: "completion" });
+          const r = await sendJobSummaryEmail({
+            jobId: id, kind: "completion",
+            documentIds: completedDocuments.filter(d => !excludedDocIds.includes(d.id)).map(d => d.id),
+            includeAgreement: includeAgreementPdf,
+          });
           if (r?.skipped === "already_sent") toast.info("Summary email was already sent for this job");
           else if (!r?.skipped) toast.success(`Summary sent to ${customer.email}`);
         } catch (e) {
@@ -1338,10 +1370,15 @@ export default function JobDetail() {
                             <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} (in the email)</li>
                           )}
                           {completedDocuments.map(doc => (
-                            <li key={doc.id} className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{doc.template_name}</span> (PDF)</li>
+                            <AttachmentToggle
+                              key={doc.id}
+                              label={doc.template_name || "Service checklist"}
+                              on={!excludedDocIds.includes(doc.id)}
+                              onToggle={() => setExcludedDocIds(ids => ids.includes(doc.id) ? ids.filter(x => x !== doc.id) : [...ids, doc.id])}
+                            />
                           ))}
                           {jobAgreement && (
-                            <li className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 shrink-0" /> Signed Maintenance Agreement (PDF)</li>
+                            <AttachmentToggle label="Signed Maintenance Agreement" on={includeAgreementPdf} onToggle={() => setIncludeAgreementPdf(v => !v)} />
                           )}
                         </ul>
                       )}
