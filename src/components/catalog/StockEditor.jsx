@@ -16,12 +16,12 @@ import {
  * commit point. States: unsaved (amber), saving, saved (green), error (red).
  *
  * onSave(newStock) must return a promise that rejects on failure.
+ * onDirtyChange(isDirty) lets the list guard navigation while a draft is unsaved.
  */
-export default function StockEditor({ part, onSave }) {
+export default function StockEditor({ part, onSave, onDirtyChange }) {
   const saved = part.in_stock ?? 0;
   const [draft, setDraft] = useState(String(saved));
   const [status, setStatus] = useState("idle"); // idle | saving | saved | error
-  const [errorMsg, setErrorMsg] = useState("");
   const lastSavedRef = useRef(saved);
   const focusValueRef = useRef(String(saved));
 
@@ -37,6 +37,12 @@ export default function StockEditor({ part, onSave }) {
   }, [saved]);
 
   const dirty = isStockDraftDirty(draft, saved);
+
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
+  useEffect(() => { onDirtyChangeRef.current?.(dirty); }, [dirty]);
+  // Unmounting drops the draft, so it no longer counts as unsaved.
+  useEffect(() => () => onDirtyChangeRef.current?.(false), []);
   const saving = status === "saving";
   const isOut = saved <= 0;
   const isLow = saved <= 2;
@@ -50,15 +56,15 @@ export default function StockEditor({ part, onSave }) {
     const n = parseStockDraft(draft);
     if (n === null || saving) return;
     setStatus("saving");
-    setErrorMsg("");
     try {
       await onSave(n);
       lastSavedRef.current = n;
       setDraft(String(n));
       setStatus("saved");
     } catch (err) {
+      // Raw error stays in the console; the user sees a plain message.
+      console.error("Stock save failed", part.id, err);
       setStatus("error");
-      setErrorMsg(err?.message || "Could not save");
     }
   };
 
@@ -84,9 +90,6 @@ export default function StockEditor({ part, onSave }) {
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1" aria-live="polite">
           {statusEl}
-          {status === "error" && errorMsg && (
-            <p className="text-[10px] text-red-600/80 truncate">{errorMsg}</p>
-          )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Button

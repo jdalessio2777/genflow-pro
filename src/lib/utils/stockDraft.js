@@ -40,6 +40,15 @@ export function isStockDraftDirty(draft, saved) {
   return n !== null && n !== (Number(saved) || 0);
 }
 
+// Bulk Count Entry commit-on-blur: blank/invalid reverts to the saved count
+// with no write; an explicit number (including 0) is written if it changed.
+export function resolveBulkCommit(draft, saved) {
+  const savedN = Math.max(0, Number(saved) || 0);
+  const n = parseStockDraft(draft);
+  if (n === null) return { display: String(savedN), write: null };
+  return { display: String(n), write: n === savedN ? null : n };
+}
+
 // DB patch for a manual stock change. Keeps parity with the pre-existing
 // Catalog paths:
 //  - day-to-day (+/- steppers, now draft + Save): reorder_flagged set true

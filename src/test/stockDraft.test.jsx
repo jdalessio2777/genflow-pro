@@ -8,6 +8,7 @@ import {
   stepStockDraft,
   isStockDraftDirty,
   stockUpdatePatch,
+  resolveBulkCommit,
 } from '@/lib/utils/stockDraft'
 import StockEditor from '@/components/catalog/StockEditor'
 
@@ -142,6 +143,7 @@ describe('StockEditor', () => {
     fireEvent.change(input(), { target: { value: '9' } })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save' })) })
     expect(screen.getByRole('alert').textContent).toMatch(/Not saved/)
+    expect(screen.queryByText(/network down/)).toBeNull()
     expect(input().value).toBe('9')
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
   })
@@ -150,5 +152,29 @@ describe('StockEditor', () => {
     const { rerender } = render(<StockEditor part={part} onSave={vi.fn()} />)
     rerender(<StockEditor part={{ ...part, in_stock: 2 }} onSave={vi.fn()} />)
     expect(input().value).toBe('2')
+  })
+
+  it('reports dirty on edit, clean on revert, and clean on unmount', () => {
+    const onDirty = vi.fn()
+    const { unmount } = render(<StockEditor part={part} onSave={vi.fn()} onDirtyChange={onDirty} />)
+    fireEvent.click(screen.getByLabelText('Increase stock'))
+    expect(onDirty).toHaveBeenLastCalledWith(true)
+    fireEvent.click(screen.getByLabelText('Decrease stock'))
+    expect(onDirty).toHaveBeenLastCalledWith(false)
+    fireEvent.click(screen.getByLabelText('Increase stock'))
+    unmount()
+    expect(onDirty).toHaveBeenLastCalledWith(false)
+  })
+})
+
+describe('resolveBulkCommit', () => {
+  it('blank / invalid reverts to saved with no write', () => {
+    expect(resolveBulkCommit('', 7)).toEqual({ display: '7', write: null })
+    expect(resolveBulkCommit(undefined, 0)).toEqual({ display: '0', write: null })
+  })
+  it('explicit 0 writes 0; unchanged value does not write', () => {
+    expect(resolveBulkCommit('0', 7)).toEqual({ display: '0', write: 0 })
+    expect(resolveBulkCommit('7', 7)).toEqual({ display: '7', write: null })
+    expect(resolveBulkCommit('023', 7)).toEqual({ display: '23', write: 23 })
   })
 })
