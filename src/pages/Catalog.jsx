@@ -13,6 +13,11 @@ import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
 import { firstManagedPatch, suggestedSalePrice, isManaged } from "@/lib/utils/partsManaged";
+import { resolveBulkCommit, stockUpdatePatch } from "@/lib/utils/stockDraft";
+import StockCountInput from "@/components/catalog/StockCountInput";
+import StockEditor from "@/components/catalog/StockEditor";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -165,6 +170,16 @@ function PartsItemList({ category, parts }) {
   const [editingSaleValue, setEditingSaleValue] = useState("");
   const [saleTouched, setSaleTouched] = useState(false);
   const [autoSuggestEligible, setAutoSuggestEligible] = useState(false);
+  // Part ids whose day-to-day stock draft differs from the DB value.
+  const [dirtyStockIds, setDirtyStockIds] = useState(() => new Set());
+  const markStockDirty = (id, isDirty) => setDirtyStockIds(prev => {
+    if (prev.has(id) === isDirty) return prev;
+    const next = new Set(prev);
+    if (isDirty) next.add(id); else next.delete(id);
+    return next;
+  });
+  const unsavedCount = dirtyStockIds.size;
+  const stockGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const knownKeys = ALL_CATALOG_PART_KEYS;
   const items = category.key === "other"
@@ -194,10 +209,28 @@ function PartsItemList({ category, parts }) {
   };
 
   const commitBulkValue = (part) => {
-    const raw = bulkValues[part.id];
-    const newStock = Math.max(0, parseInt(raw, 10) || 0);
-    if (newStock === (part.in_stock ?? 0)) return;
-    reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0, ...firstManagedPatch(part) } });
+    // Blank/invalid reverts to the saved count with no write (same rule as
+    // the day-to-day field). An explicit 0 still saves 0. A positive count
+    // clears the reorder flag (Bulk Count Entry semantics).
+    const { display, write: newStock } = resolveBulkCommit(bulkValues[part.id], part.in_stock);
+    setBulkValues(v => ({ ...v, [part.id]: display }));
+    if (newStock === null) return;
+    reorderMutation.mutate({ id: part.id, data: stockUpdatePatch(part, newStock, { clearReorderWhenStocked: true }) });
+  };
+
+  // Day-to-day stock Save (StockEditor). Resolves/rejects so the editor can
+  // show Saved / error state. Patch keeps parity with the old +/- steppers.
+  const saveStock = async (part, newStock) => {
+    try {
+      const row = await db.Part.update(part.id, stockUpdatePatch(part, newStock));
+      queryClient.setQueryData(["parts-catalog"], (old) =>
+        Array.isArray(old) ? old.map(p => (p.id === part.id ? normalizePart({ ...p, ...row }) : p)) : old);
+      queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    } catch (err) {
+      console.error("Stock save failed", part.id, err);
+      toast.error(`Stock not saved for "${part.name}"`);
+      throw err;
+    }
   };
 
   const startEditingPrice = (part) => {
@@ -253,7 +286,7 @@ function PartsItemList({ category, parts }) {
             variant={bulkEdit ? "default" : "outline"}
             size="sm"
             className="rounded-xl gap-1.5 text-xs"
-            onClick={() => (bulkEdit ? setBulkEdit(false) : enterBulkEdit())}
+            onClick={() => (bulkEdit ? setBulkEdit(false) : stockGuard.confirmThen(enterBulkEdit))}
           >
             {bulkEdit ? "Done" : "Bulk Count Entry"}
           </Button>
@@ -335,29 +368,15 @@ function PartsItemList({ category, parts }) {
                         </button>
                       )}
                     </div>
-                    {bulkEdit ? (
+                    {bulkEdit && (
                       <div className="flex flex-col items-center min-w-[64px]">
-                        <Input
-                          type="number"
-                          min="0"
-                          inputMode="numeric"
+                        <StockCountInput
+                          aria-label={`Count for ${part.name}`}
                           value={bulkValues[part.id] ?? ""}
-                          onFocus={e => e.target.select()}
-                          onChange={e => setBulkValues(v => ({ ...v, [part.id]: e.target.value }))}
+                          onChange={val => setBulkValues(v => ({ ...v, [part.id]: val }))}
                           onBlur={() => commitBulkValue(part)}
-                          onKeyDown={e => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
-                          className="h-8 w-16 text-center text-sm font-bold px-1"
                         />
                         <span className="text-[9px] text-muted-foreground leading-none mt-0.5">{isOut ? "OUT" : isLow ? "LOW" : "count"}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => { const newStock = Math.max(0, (part.in_stock || 0) - 1); reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 ? true : (part.reorder_flagged || false), ...firstManagedPatch(part) } }); }} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">−</button>
-                        <div className="flex flex-col items-center min-w-[36px]">
-                          <span className={`text-sm font-bold ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-foreground"}`}>{part.in_stock ?? 0}</span>
-                          <span className="text-[9px] text-muted-foreground leading-none">{isOut ? "OUT" : isLow ? "LOW" : "in stock"}</span>
-                        </div>
-                        <button onClick={() => updateMutation.mutate({ id: part.id, data: { in_stock: (part.in_stock || 0) + 1, ...firstManagedPatch(part) } })} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">+</button>
                       </div>
                     )}
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>
@@ -365,11 +384,26 @@ function PartsItemList({ category, parts }) {
                     </Button>
                   </div>
                 </div>
+                {!bulkEdit && <StockEditor part={part} onSave={(n) => saveStock(part, n)} onDirtyChange={(d) => markStockDirty(part.id, d)} />}
               </Card>
             );
           })}
         </div>
       )}
+      <AlertDialog open={stockGuard.blocked} onOpenChange={(o) => { if (!o) stockGuard.stay(); }}>
+        <AlertDialogContent className="max-w-sm rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>You have unsaved stock changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {unsavedCount === 1 ? "1 part has" : `${unsavedCount} parts have`} a stock count that hasn't been saved. Leaving will discard {unsavedCount === 1 ? "it" : "them"}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="h-11 rounded-xl" onClick={stockGuard.stay}>Stay</AlertDialogCancel>
+            <AlertDialogAction className="h-11 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={stockGuard.leave}>Discard and leave</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
