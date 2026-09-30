@@ -33,8 +33,10 @@ import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyT
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
-import { buildInvoiceLineItems, isZeroDollarJob } from "@/lib/utils/invoiceTotals";
+import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
+import { initSignatureCanvas } from "@/lib/signatureCanvas";
+import SignatureGuideOverlay from "@/components/ui/SignatureGuideOverlay";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -51,34 +53,9 @@ function SignatureCanvas({ onSave }) {
     return () => cancelAnimationFrame(t);
   }, []);
 
-  const initCanvas = (canvas) => {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    // Draw baseline guide at 75% height
-    const baseY = Math.round(canvas.height * 0.75);
-    ctx.save();
-    ctx.strokeStyle = "#d1d5db";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(20, baseY);
-    ctx.lineTo(canvas.width - 20, baseY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "14px sans-serif";
-    ctx.fillText("Sign here →", 22, baseY - 6);
-    ctx.restore();
-    // Reset stroke style for drawing
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2.5;
-  };
+  // Background + pen only; the "Sign here" guide is a DOM overlay so it
+  // never ends up in the exported PNG.
+  const initCanvas = (canvas) => initSignatureCanvas(canvas);
 
   const canvasCallbackRef = (canvas) => {
     if (canvas && canvas !== canvasRef.current) {
@@ -132,14 +109,17 @@ function SignatureCanvas({ onSave }) {
         <p style={{ color: "#ffffff", fontSize: "1rem", fontWeight: 600, letterSpacing: "0.02em" }}>Customer Signature</p>
 
         {/* Canvas */}
-        <canvas
-          ref={canvasCallbackRef}
-          width={cw}
-          height={ch}
-          style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
-          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-        />
+        <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
+          <canvas
+            ref={canvasCallbackRef}
+            width={cw}
+            height={ch}
+            style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
+            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+          />
+          <SignatureGuideOverlay />
+        </div>
 
         {/* Portrait hint */}
         {isPortrait && (
@@ -166,6 +146,29 @@ function SignatureCanvas({ onSave }) {
   );
 }
 
+
+// One attachment row in the Complete Job dialog: checkbox-style toggle,
+// ON = attach this PDF to the completion email.
+function AttachmentToggle({ label, on, onToggle }) {
+  return (
+    <li>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={on}
+        onClick={onToggle}
+        className="w-full flex items-center gap-2 py-1 text-left"
+      >
+        <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${on ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+          {on && <Check className="w-3 h-3 text-white" />}
+        </span>
+        <FileText className="w-3.5 h-3.5 shrink-0" />
+        <span className={`truncate ${on ? "" : "line-through opacity-60"}`}>{label}</span>
+        <span className="shrink-0">(PDF)</span>
+      </button>
+    </li>
+  );
+}
 
 function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
   const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
@@ -264,12 +267,18 @@ export default function JobDetail() {
   const [editingPartPriceValue, setEditingPartPriceValue] = useState("");
   const [pendingPlan, setPendingPlan] = useState(null);
   const [customerExpanded, setCustomerExpanded] = useState(false);
+  const [titleExpanded, setTitleExpanded] = useState(false);
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
   const [completionSnapshot, setCompletionSnapshot] = useState(null);
   const [emailOnComplete, setEmailOnComplete] = useState(true);
+  // Per-attachment toggles in the Complete Job dialog (all ON by default).
+  const [excludedDocIds, setExcludedDocIds] = useState([]);
+  const [includeAgreementPdf, setIncludeAgreementPdf] = useState(true);
   const [completingJob, setCompletingJob] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
   const [resendingSummary, setResendingSummary] = useState(false);
+  const [closeNoChargeOpen, setCloseNoChargeOpen] = useState(false);
+  const [closingNoCharge, setClosingNoCharge] = useState(false);
   useSwipeBack("/jobs");
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
@@ -611,6 +620,8 @@ export default function JobDetail() {
       time_on_site_hours: Math.round(hoursOnSite * 4) / 4,
     });
     setEmailOnComplete(true);
+    setExcludedDocIds([]);
+    setIncludeAgreementPdf(true);
     setCompleteJobOpen(true);
   };
 
@@ -627,9 +638,27 @@ export default function JobDetail() {
   // ($0.00 exactly -> close it as paid / payment_method 'no_charge'), mark the
   // job completed, then send the ONE completion email (server-built: invoice
   // inline + checklist/agreement PDFs). No other customer email is sent here.
+  // The server builds the summary email from jobs.invoice_notes, but the
+  // Invoice Summary textarea autosaves with a 1.2s debounce. Write any
+  // pending text synchronously before an email is requested so the last
+  // keystrokes are never missing.
+  const flushInvoiceNotes = async () => {
+    debouncedSaveNotes.cancel();
+    if ((job?.invoice_notes || "") === invoiceNotes) return;
+    await db.Job.update(id, { invoice_notes: invoiceNotes });
+    queryClient.invalidateQueries({ queryKey: ["job", id] });
+  };
+
   const doCompleteJob = async () => {
     setCompletingJob(true);
     try {
+      try {
+        await flushInvoiceNotes();
+      } catch (e) {
+        haptics.error();
+        toast.error(`Couldn't save the invoice summary: ${e.message}`);
+        return;
+      }
       const [freshParts, freshLabor] = await Promise.all([
         db.JobPart.filter({ job_id: id }),
         db.JobLabor.filter({ job_id: id }),
@@ -655,7 +684,11 @@ export default function JobDetail() {
 
       if (customer?.email && emailOnComplete) {
         try {
-          const r = await sendJobSummaryEmail({ jobId: id, kind: "completion" });
+          const r = await sendJobSummaryEmail({
+            jobId: id, kind: "completion",
+            documentIds: completedDocuments.filter(d => !excludedDocIds.includes(d.id)).map(d => d.id),
+            includeAgreement: includeAgreementPdf,
+          });
           if (r?.skipped === "already_sent") toast.info("Summary email was already sent for this job");
           else if (!r?.skipped) toast.success(`Summary sent to ${customer.email}`);
         } catch (e) {
@@ -675,10 +708,43 @@ export default function JobDetail() {
     }
   };
 
+  // Legacy stuck $0 jobs (completed before $0 invoices were auto-closed):
+  // close the $0 invoice as paid / no_charge exactly like the completion path
+  // does — rebuilt line items, paid_date now — but send NOTHING. Re-checks the
+  // $0.00 guard against fresh DB rows + the stored invoice before writing.
+  const doCloseNoCharge = async () => {
+    setClosingNoCharge(true);
+    try {
+      const [freshParts, freshLabor, freshInvoices] = await Promise.all([
+        db.JobPart.filter({ job_id: id }),
+        db.JobLabor.filter({ job_id: id }),
+        db.Invoice.filter({ job_id: id }),
+      ]);
+      const inv = freshInvoices.find(i => i.id === existingInvoice?.id);
+      const fin = computeJobFinancials(freshParts, freshLabor);
+      if (!canCloseAsNoCharge({ jobStatus: job.status, invoice: inv, financials: fin })) {
+        haptics.error();
+        toast.error("This job's invoice isn't exactly $0.00 (or is already closed) — not changed.");
+        return;
+      }
+      const data = buildInvoiceData(freshParts, freshLabor);
+      const patch = { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString() };
+      patchInvoiceCache(await db.Invoice.update(inv.id, patch));
+      setCloseNoChargeOpen(false);
+      toast.success("Closed as no charge — no email sent");
+    } catch (e) {
+      haptics.error();
+      toast.error(`Couldn't close the invoice: ${e.message}`);
+    } finally {
+      setClosingNoCharge(false);
+    }
+  };
+
   // Explicit manual resend only (never part of the normal completion flow).
   const doResendSummary = async () => {
     setResendingSummary(true);
     try {
+      await flushInvoiceNotes();
       const r = await sendJobSummaryEmail({ jobId: id, kind: "resend", nonce: newResendNonce() });
       if (r?.skipped === "no_email") toast.error("No email on file for this customer");
       else toast.success(`Summary re-sent to ${customer?.email}`);
@@ -792,6 +858,9 @@ export default function JobDetail() {
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
   const isClosed = ["invoiced", "canceled"].includes(job.status);
+  // Completed jobs are done: no editing the job itself or canceling it.
+  // (Payment, resend summary, photos and notes stay available as before.)
+  const canEditOrCancel = !isClosed && job.status !== "completed";
   const isMember = !!(customer?.membership_plan && customer?.membership_signed);
   const isSemiMember = !!(customer?.membership_plan === "semi_annual" && customer?.membership_signed);
   const memberDiscountRate = isSemiMember ? 0.85 : isMember ? 0.90 : 1.0;
@@ -799,6 +868,10 @@ export default function JobDetail() {
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
   // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
   const isNoChargeJob = partsLoaded && laborLoaded && isZeroDollarJob(computeJobFinancials(parts, labor));
+  // Legacy stuck $0 job (completed, $0 invoice never closed) -> offer a
+  // no-email close. Same strict $0.00-in-cents guard is re-run on click.
+  const showCloseNoCharge = partsLoaded && laborLoaded &&
+    canCloseAsNoCharge({ jobStatus: job.status, invoice: existingInvoice, financials: computeJobFinancials(parts, labor) });
   const isActive = ["dispatched", "on_site"].includes(job.status);
   const headerBg = job.status === "on_site" ? "bg-amber-500" : job.status === "dispatched" ? "bg-cyan-600" : isClosed ? "bg-gray-600" : "bg-primary";
   const headerDot = job.status === "on_site" ? "bg-amber-300" : "bg-cyan-300";
@@ -809,15 +882,15 @@ export default function JobDetail() {
 
       {/* ── COLORED ACTIVE JOB HEADER ── */}
       <div className={`${headerBg} px-4 pt-3 pb-3 shrink-0`}>
-        <div className="flex items-center justify-between max-w-lg mx-auto">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between gap-2 max-w-lg mx-auto min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
               onClick={() => navigate("/jobs")}
               className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-white" />
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 {isActive && <div className={`w-1.5 h-1.5 rounded-full ${headerDot} animate-pulse shrink-0`} />}
                 <span className="text-white/80 text-xs font-bold uppercase tracking-wider">
@@ -829,9 +902,18 @@ export default function JobDetail() {
                    job.status?.replace(/_/g, " ")}
                 </span>
               </div>
-              <p className="text-white font-bold text-base leading-tight truncate">{job.title}</p>
-              <div className="flex items-center gap-1.5">
-                <p className="text-white/75 text-xs">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+              {/* Long titles: clamp to 2 lines on phones; tap to show the full
+                  title (also in the title attribute / Overview). */}
+              <p
+                data-testid="job-header-title"
+                title={job.title}
+                onClick={() => setTitleExpanded(v => !v)}
+                className={`text-white font-bold text-base leading-tight break-words cursor-pointer ${titleExpanded ? "" : "line-clamp-2"}`}
+              >
+                {job.title}
+              </p>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <p className="text-white/75 text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
                 <RewardBadge show={customer?.pending_reward} />
               </div>
             </div>
@@ -843,7 +925,7 @@ export default function JobDetail() {
                 <p className="text-white/70 text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
               </div>
             )}
-            {!isClosed && (
+            {canEditOrCancel && (
               <Link to={`/jobs/${id}/edit`}>
                 <button className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center">
                   <Pencil className="w-4 h-4 text-white" />
@@ -1051,7 +1133,7 @@ export default function JobDetail() {
                 onNotesChange={handleNotesChange}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
-                onCollectPayment={!isClosed && !isNoChargeJob ? handleCollectPayment : undefined}
+                onCollectPayment={!isClosed && !isNoChargeJob && existingInvoice?.status !== "paid" ? handleCollectPayment : undefined}
                 isSaving={updateJob.isPending}
               />
 
@@ -1165,11 +1247,21 @@ export default function JobDetail() {
                           </p>
                         </Card>
                       ) : isNoChargeJob ? (
-                        <Card className="p-3 bg-muted/40">
-                          <p className="text-sm font-semibold flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4" /> No charge — {formatCurrency(0)}
-                          </p>
-                        </Card>
+                        <>
+                          <Card className="p-3 bg-muted/40">
+                            <p className="text-sm font-semibold flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4" /> No charge — {formatCurrency(0)}
+                            </p>
+                            {showCloseNoCharge && (
+                              <p className="text-xs text-muted-foreground mt-0.5">Invoice is still open. Close it as no charge, or resend the summary email.</p>
+                            )}
+                          </Card>
+                          {showCloseNoCharge && (
+                            <Button className="w-full rounded-xl gap-1.5 h-11" onClick={() => setCloseNoChargeOpen(true)}>
+                              <CheckCircle2 className="w-4 h-4" /> Close as No Charge (no email)
+                            </Button>
+                          )}
+                        </>
                       ) : (
                         <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment}>
                           <DollarSign className="w-4 h-4" /> Collect Payment Now
@@ -1190,20 +1282,39 @@ export default function JobDetail() {
                       )}
                     </div>
                   )}
-                  <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full rounded-xl gap-1.5 h-10 text-sm">
-                        <XCircle className="w-4 h-4" /> Cancel Job
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
-                      <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
-                      <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
-                    </DialogContent>
-                  </Dialog>
+                  {canEditOrCancel && (
+                    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full rounded-xl gap-1.5 h-10 text-sm">
+                          <XCircle className="w-4 h-4" /> Cancel Job
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-sm">
+                        <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
+                        <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+                        <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </div>
               )}
+
+              {/* Legacy $0 job: close invoice as no charge, no email */}
+              <Dialog open={closeNoChargeOpen} onOpenChange={setCloseNoChargeOpen}>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader><DialogTitle>Close as No Charge?</DialogTitle></DialogHeader>
+                  <p className="text-sm text-muted-foreground">
+                    Marks this job's {formatCurrency(0)} invoice{existingInvoice?.invoice_number ? ` ${existingInvoice.invoice_number}` : ""} as closed — no charge.
+                    <strong className="text-foreground"> No email is sent to the customer.</strong>
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCloseNoChargeOpen(false)}>Cancel</Button>
+                    <Button className="flex-1 rounded-xl gap-1.5" disabled={closingNoCharge} onClick={doCloseNoCharge}>
+                      {closingNoCharge ? <><Loader2 className="w-4 h-4 animate-spin" /> Closing...</> : "Close, No Email"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* Manual resend of the job summary email (explicit action only) */}
               <Dialog open={resendOpen} onOpenChange={setResendOpen}>
@@ -1259,10 +1370,15 @@ export default function JobDetail() {
                             <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} (in the email)</li>
                           )}
                           {completedDocuments.map(doc => (
-                            <li key={doc.id} className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{doc.template_name}</span> (PDF)</li>
+                            <AttachmentToggle
+                              key={doc.id}
+                              label={doc.template_name || "Service checklist"}
+                              on={!excludedDocIds.includes(doc.id)}
+                              onToggle={() => setExcludedDocIds(ids => ids.includes(doc.id) ? ids.filter(x => x !== doc.id) : [...ids, doc.id])}
+                            />
                           ))}
                           {jobAgreement && (
-                            <li className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 shrink-0" /> Signed Maintenance Agreement (PDF)</li>
+                            <AttachmentToggle label="Signed Maintenance Agreement" on={includeAgreementPdf} onToggle={() => setIncludeAgreementPdf(v => !v)} />
                           )}
                         </ul>
                       )}

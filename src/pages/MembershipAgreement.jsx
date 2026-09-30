@@ -14,6 +14,8 @@ import { formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import { PLANS, TERMS, UNIT_TYPE_LABEL } from "@/lib/agreementTerms";
+import { initSignatureCanvas } from "@/lib/signatureCanvas";
+import SignatureGuideOverlay from "@/components/ui/SignatureGuideOverlay";
 
 function SignatureCanvas({ onSave }) {
   const canvasRef = useRef(null);
@@ -29,33 +31,9 @@ function SignatureCanvas({ onSave }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const initCanvas = (canvas) => {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    // Draw baseline guide at 75% height
-    const baseY = Math.round(canvas.height * 0.75);
-    ctx.save();
-    ctx.strokeStyle = "#d1d5db";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(20, baseY);
-    ctx.lineTo(canvas.width - 20, baseY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "14px sans-serif";
-    ctx.fillText("Sign here →", 22, baseY - 6);
-    ctx.restore();
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2.5;
-  };
+  // Background + pen only; the "Sign here" guide is a DOM overlay so it
+  // never ends up in the exported PNG.
+  const initCanvas = (canvas) => initSignatureCanvas(canvas);
 
   const canvasCallbackRef = (canvas) => {
     if (canvas && canvas !== canvasRef.current) {
@@ -107,14 +85,17 @@ function SignatureCanvas({ onSave }) {
       >
         <p style={{ color: "#ffffff", fontSize: "1rem", fontWeight: 600, letterSpacing: "0.02em" }}>Customer Signature</p>
 
-        <canvas
-          ref={canvasCallbackRef}
-          width={cw}
-          height={ch}
-          style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
-          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-        />
+        <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
+          <canvas
+            ref={canvasCallbackRef}
+            width={cw}
+            height={ch}
+            style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
+            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+          />
+          <SignatureGuideOverlay />
+        </div>
 
         {isPortrait && (
           <p style={{ color: "#9ca3af", fontSize: "0.75rem" }}>Rotate device for more space</p>
@@ -154,6 +135,9 @@ export default function MembershipAgreement() {
   // of a separate "Protection Plan Active" email.
   const [linkedToJob, setLinkedToJob] = useState(false);
   const [step, setStep] = useState("plan"); // "plan" | "terms" | "sign" | "done"
+  // Active members see a summary card first; "Renew or Change Plan" (or
+  // arriving from a job to sign) opens the plan -> terms -> sign flow.
+  const [renewing, setRenewing] = useState(!!fromJobId);
   const [agreed, setAgreed] = useState(false);
 
   const { data: customer, isLoading } = useQuery({
@@ -305,7 +289,7 @@ export default function MembershipAgreement() {
   const expiryStr = expiryDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
   // Already a member
-  if (customer.membership_plan && customer.membership_signed && step !== "done") {
+  if (customer.membership_plan && customer.membership_signed && step !== "done" && !renewing) {
     return (
       <div>
         <div className="flex items-center gap-3 p-4 border-b sticky top-0 bg-background/90 backdrop-blur-xl z-40">
@@ -333,7 +317,7 @@ export default function MembershipAgreement() {
               <p><span className="font-medium">Expires:</span> {formatDate(customer.membership_expiry)}</p>
             </div>
           </Card>
-          <Button variant="outline" className="w-full rounded-xl" onClick={() => setStep("plan")}>
+          <Button variant="outline" className="w-full rounded-xl" onClick={() => { setStep("plan"); setRenewing(true); }}>
             Renew or Change Plan
           </Button>
         </div>
@@ -345,7 +329,7 @@ export default function MembershipAgreement() {
     <div>
       <div className="flex items-center gap-3 p-4 border-b sticky top-0 bg-background/90 backdrop-blur-xl z-40">
         <button
-          onClick={() => { if (step === "terms") setStep("plan"); else if (step === "sign") setStep("terms"); else navigate(-1); }}
+          onClick={() => { if (step === "terms") setStep("plan"); else if (step === "sign") setStep("terms"); else if (renewing && !fromJobId) setRenewing(false); else navigate(-1); }}
           className="touch-target flex items-center justify-center w-9 h-9 rounded-xl hover:bg-muted"
         >
           <ArrowLeft className="w-5 h-5" />

@@ -20,7 +20,7 @@ import { haptics } from "@/lib/haptics";
 import StripePaymentModal from "@/components/payments/StripePaymentModal";
 import CheckNumberDialog from "@/components/payments/CheckNumberDialog";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
-import { isZeroDollarInvoice } from "@/lib/utils/invoiceTotals";
+import { isZeroDollarInvoice, receiptEmailExpected } from "@/lib/utils/invoiceTotals";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -45,6 +45,17 @@ export default function InvoiceDetail() {
     queryFn: async () => { const r = await db.Customer.filter({ id: invoice.customer_id }); return r[0]; },
     enabled: !!invoice?.customer_id,
   });
+
+  // The invoice's job: decides whether recording a payment emails a receipt
+  // (only if the job's completion email already went out — see
+  // receiptEmailExpected). Legacy jobs completed before that email existed
+  // get their payment recorded with NO email.
+  const { data: invoiceJob } = useQuery({
+    queryKey: ["invoice-job", invoice?.job_id],
+    queryFn: async () => { const r = await db.Job.filter({ id: invoice.job_id }); return r[0] || null; },
+    enabled: !!invoice?.job_id,
+  });
+  const receiptWillEmail = receiptEmailExpected({ job: invoiceJob, invoice, customer: invoiceCustomer });
 
   const updateMutation = useMutation({
     mutationFn: (data) => db.Invoice.update(id, data),
@@ -89,6 +100,9 @@ export default function InvoiceDetail() {
   // send). The Stripe webhook never emails.
   const sendReceiptIfNeeded = async () => {
     if (!invoice?.job_id) return;
+    // Known no-email case (e.g. legacy job whose completion email never went
+    // out): don't even ask the server. Unknown (job not loaded) -> server decides.
+    if (receiptWillEmail === false) return;
     try {
       const r = await sendJobSummaryEmail({ jobId: invoice.job_id, kind: "receipt" });
       if (r?.id && !r.skipped) toast.success(`Receipt emailed to ${r.to}`);
@@ -437,7 +451,16 @@ export default function InvoiceDetail() {
 
         {canCollect && (
           <Card className="p-4 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
-            <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-3 uppercase tracking-wider">Record Payment (Manual)</p>
+            <p className="text-xs font-semibold text-green-800 dark:text-green-200 uppercase tracking-wider">
+              {receiptWillEmail === false ? "Record Payment (no email)" : "Record Payment (Manual)"}
+            </p>
+            <p data-testid="receipt-email-hint" className="text-xs text-green-700 dark:text-green-300 mt-0.5 mb-3">
+              {receiptWillEmail === false
+                ? "The customer will not be emailed — the payment is only recorded."
+                : receiptWillEmail
+                  ? `A payment receipt will be emailed to ${invoiceCustomer?.email}.`
+                  : "\u00a0"}
+            </p>
             <div className="grid grid-cols-3 gap-2">
               {["cash", "check", "zelle", "venmo", "other"].map(method => (
                 <Button

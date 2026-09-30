@@ -1,4 +1,5 @@
-// POST /api/send-job-summary  { job_id, kind: 'completion' | 'receipt' | 'resend', nonce? }
+// POST /api/send-job-summary  { job_id, kind: 'completion' | 'receipt' | 'resend', nonce?,
+//                               document_ids?: uuid[], include_agreement?: boolean }
 // Authorization: Bearer <Supabase access token of an allowed staff user>
 //
 // The single customer email for a job. The recipient is ALWAYS the job's
@@ -65,6 +66,29 @@ async function release(db, table, id, column) {
   await db.from(table).update({ [column]: null }).eq('id', id).then(() => {}, () => {});
 }
 
+// document_ids omitted -> every completed document (receipt/resend/old
+// clients). Present -> exactly those (must be an array of uuids).
+export function parseAttachmentSelection(body = {}) {
+  let documentIds = null;
+  if (body.document_ids !== undefined && body.document_ids !== null) {
+    if (!Array.isArray(body.document_ids) || body.document_ids.length > 100 || !body.document_ids.every(id => UUID_RE.test(String(id)))) {
+      throw new Error('document_ids must be an array of uuids');
+    }
+    documentIds = new Set(body.document_ids.map(String));
+  }
+  return { documentIds, includeAgreement: body.include_agreement !== false };
+}
+
+export function selectDocuments(documents, selection) {
+  const completed = documents.filter(d => d.status === 'completed');
+  return selection.documentIds ? completed.filter(d => selection.documentIds.has(String(d.id))) : completed;
+}
+
+export function selectionKey(selectedDocs, withAgreement) {
+  const ids = selectedDocs.map(d => String(d.id)).sort().join(',');
+  return sha256(Buffer.from(`${ids}|${withAgreement ? 1 : 0}`)).slice(0, 16);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -86,6 +110,8 @@ export default async function handler(req, res) {
   if (!KINDS.has(kind)) return res.status(400).json({ error: 'invalid kind' });
   const nonce = String(body.nonce || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
   if (kind === 'resend' && !nonce) return res.status(400).json({ error: 'nonce required for resend' });
+  let selection;
+  try { selection = parseAttachmentSelection(body); } catch (e) { return res.status(400).json({ error: e.message }); }
 
   try {
     const { data: job } = await db.from('jobs').select('*').eq('id', jobId).maybeSingle();
@@ -100,7 +126,12 @@ export default async function handler(req, res) {
       db.from('job_agreements').select('*').eq('job_id', jobId).maybeSingle(),
     ]);
     const invoice = (invoices || [])[0] || null;
-    const agreement = agreementRes?.error ? null : agreementRes?.data || null;
+    // Per-document toggles from the Complete Job dialog. Only this job's
+    // completed documents are ever candidates (loaded by job_id above), so a
+    // foreign id in document_ids simply matches nothing.
+    const selectedDocs = selectDocuments(documents || [], selection);
+    const agreementRow = agreementRes?.error ? null : agreementRes?.data || null;
+    const agreement = selection.includeAgreement ? agreementRow : null;
 
     if (!customer?.email) return res.status(200).json({ ok: true, skipped: 'no_email' });
 
@@ -126,7 +157,7 @@ export default async function handler(req, res) {
     let email;
     try {
       email = await buildJobSummaryEmail({
-        kind, job, customer, invoice, parts: parts || [], labor: labor || [], documents: documents || [],
+        kind, job, customer, invoice, parts: parts || [], labor: labor || [], documents: selectedDocs,
         agreement: kind === 'receipt' ? null : agreement,
       });
     } catch (e) {
@@ -143,7 +174,10 @@ export default async function handler(req, res) {
     }
 
     // ── send ──────────────────────────────────────────────────────────────
-    const idempotencyKey = kind === 'completion' ? `job-completion-${job.id}`
+    // The selection is part of the completion key: Resend rejects a reused
+    // key with a different body, and the jobs.completion_email_sent_at claim
+    // already guarantees one completion email per job.
+    const idempotencyKey = kind === 'completion' ? `job-completion-${job.id}-${selectionKey(selectedDocs, !!agreement)}`
       : kind === 'receipt' ? `invoice-receipt-${invoice.id}`
       : `job-resend-${job.id}-${nonce}`;
     let result;

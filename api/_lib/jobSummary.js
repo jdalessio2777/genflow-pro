@@ -36,13 +36,19 @@ export function invoiceForEmail({ invoice, parts = [], labor = [], notes }) {
     }
   }
   if (isZeroDollarInvoice(inv)) {
-    inv = {
-      ...inv,
-      line_items: buildInvoiceLineItems(parts, labor, { includeNoChargeParts: true }),
-      notes: inv.notes || notes || '',
-    };
+    inv = { ...inv, line_items: buildInvoiceLineItems(parts, labor, { includeNoChargeParts: true }) };
   }
-  return inv;
+  // Customer-facing summary: the job's live "Invoice Summary" text
+  // (jobs.invoice_notes) is the source of truth. invoices.notes is only a
+  // snapshot taken when JobDetail last wrote the invoice (Collect Payment,
+  // Complete Job on an unpaid invoice, or a totals change) — so it is empty
+  // or stale when the summary was typed/edited after that, e.g. on a job paid
+  // before completion or edited before the pay-later receipt. Fall back to
+  // the snapshot only when no job text was passed (undefined). Never any
+  // internal field (jobs.notes / generator_notes / quote_notes).
+  if (notes === undefined) return inv;
+  const summary = String(notes ?? '').trim() ? String(notes) : '';
+  return (inv.notes ?? '') === summary ? inv : { ...inv, notes: summary };
 }
 
 export function buildSubject({ kind, invoice, checklistCount }) {
@@ -56,7 +62,7 @@ export function buildSubject({ kind, invoice, checklistCount }) {
 }
 
 export async function buildJobSummaryEmail({ kind = 'completion', job, customer, invoice, parts = [], labor = [], documents = [], agreement = null }) {
-  const inv = invoiceForEmail({ invoice, parts, labor, notes: job?.invoice_notes });
+  const inv = invoiceForEmail({ invoice, parts, labor, notes: job ? (job.invoice_notes ?? '') : undefined });
   const attachments = [];
   const attachmentLabels = [];
 
