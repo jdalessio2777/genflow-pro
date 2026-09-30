@@ -477,6 +477,16 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
 // Shared by InvoicePDF.jsx's "send invoice / checklists" screen and JobDetail.jsx's
 // job-completion screen — one implementation for the same email-body building blocks
 // so the two entry points can never drift out of sync.
+// Customer-facing invoice summary ("Invoice Summary" textarea on the job ->
+// jobs.invoice_notes, snapshotted to invoices.notes) rendered as the
+// SERVICE NOTES block. Escaped, newlines kept; omitted entirely when empty or
+// whitespace-only. Same wrapper markup as before, so an invoice without notes
+// renders byte-identically.
+export function serviceNotesHTML(notes) {
+  if (!String(notes ?? '').trim()) return ""
+  return `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(notes)}</p></div>`
+}
+
 export function invoiceSummaryHTML({ invoice, customer }) {
   // $0.00 invoices (exact, integer cents — see isZeroDollarInvoice) get their
   // own rendering with no paid/unpaid/payment-due language. Every invoice
@@ -586,7 +596,7 @@ export function invoiceSummaryHTML({ invoice, customer }) {
         </td>
       </tr>
     </table>
-    ${invoice.notes ? `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${invoice.notes}</p></div>` : ""}
+    ${serviceNotesHTML(invoice.notes)}
     ${invoice.paid_date ? `
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:16px;">
       <p style="font-size:11px;font-weight:bold;color:#166534;margin:0 0 4px 0;">✓ PAID — THANK YOU!</p>
@@ -729,7 +739,7 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
         </td>
       </tr>
     </table>
-    ${invoice.notes ? `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(invoice.notes)}</p></div>` : ""}
+    ${serviceNotesHTML(invoice.notes)}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
       <tr>
         <td align="center" style="padding:4px 0 0;">

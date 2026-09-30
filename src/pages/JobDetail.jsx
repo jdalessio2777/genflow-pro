@@ -610,9 +610,27 @@ export default function JobDetail() {
   // ($0.00 exactly -> close it as paid / payment_method 'no_charge'), mark the
   // job completed, then send the ONE completion email (server-built: invoice
   // inline + checklist/agreement PDFs). No other customer email is sent here.
+  // The server builds the summary email from jobs.invoice_notes, but the
+  // Invoice Summary textarea autosaves with a 1.2s debounce. Write any
+  // pending text synchronously before an email is requested so the last
+  // keystrokes are never missing.
+  const flushInvoiceNotes = async () => {
+    debouncedSaveNotes.cancel();
+    if ((job?.invoice_notes || "") === invoiceNotes) return;
+    await db.Job.update(id, { invoice_notes: invoiceNotes });
+    queryClient.invalidateQueries({ queryKey: ["job", id] });
+  };
+
   const doCompleteJob = async () => {
     setCompletingJob(true);
     try {
+      try {
+        await flushInvoiceNotes();
+      } catch (e) {
+        haptics.error();
+        toast.error(`Couldn't save the invoice summary: ${e.message}`);
+        return;
+      }
       const [freshParts, freshLabor] = await Promise.all([
         db.JobPart.filter({ job_id: id }),
         db.JobLabor.filter({ job_id: id }),
@@ -694,6 +712,7 @@ export default function JobDetail() {
   const doResendSummary = async () => {
     setResendingSummary(true);
     try {
+      await flushInvoiceNotes();
       const r = await sendJobSummaryEmail({ jobId: id, kind: "resend", nonce: newResendNonce() });
       if (r?.skipped === "no_email") toast.error("No email on file for this customer");
       else toast.success(`Summary re-sent to ${customer?.email}`);
