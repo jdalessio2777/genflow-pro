@@ -13,6 +13,9 @@ import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
 import { firstManagedPatch, suggestedSalePrice, isManaged } from "@/lib/utils/partsManaged";
+import { parseStockDraft, stockUpdatePatch } from "@/lib/utils/stockDraft";
+import StockCountInput from "@/components/catalog/StockCountInput";
+import StockEditor from "@/components/catalog/StockEditor";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -195,9 +198,26 @@ function PartsItemList({ category, parts }) {
 
   const commitBulkValue = (part) => {
     const raw = bulkValues[part.id];
-    const newStock = Math.max(0, parseInt(raw, 10) || 0);
+    // Bulk Count Entry semantics (unchanged): blank counts as 0, and a
+    // positive count clears the reorder flag.
+    const newStock = parseStockDraft(raw) ?? 0;
+    setBulkValues(v => ({ ...v, [part.id]: String(newStock) }));
     if (newStock === (part.in_stock ?? 0)) return;
-    reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0, ...firstManagedPatch(part) } });
+    reorderMutation.mutate({ id: part.id, data: stockUpdatePatch(part, newStock, { clearReorderWhenStocked: true }) });
+  };
+
+  // Day-to-day stock Save (StockEditor). Resolves/rejects so the editor can
+  // show Saved / error state. Patch keeps parity with the old +/- steppers.
+  const saveStock = async (part, newStock) => {
+    try {
+      const row = await db.Part.update(part.id, stockUpdatePatch(part, newStock));
+      queryClient.setQueryData(["parts-catalog"], (old) =>
+        Array.isArray(old) ? old.map(p => (p.id === part.id ? normalizePart({ ...p, ...row }) : p)) : old);
+      queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    } catch (err) {
+      toast.error(`Stock not saved for "${part.name}"`);
+      throw err;
+    }
   };
 
   const startEditingPrice = (part) => {
@@ -335,29 +355,15 @@ function PartsItemList({ category, parts }) {
                         </button>
                       )}
                     </div>
-                    {bulkEdit ? (
+                    {bulkEdit && (
                       <div className="flex flex-col items-center min-w-[64px]">
-                        <Input
-                          type="number"
-                          min="0"
-                          inputMode="numeric"
+                        <StockCountInput
+                          aria-label={`Count for ${part.name}`}
                           value={bulkValues[part.id] ?? ""}
-                          onFocus={e => e.target.select()}
-                          onChange={e => setBulkValues(v => ({ ...v, [part.id]: e.target.value }))}
+                          onChange={val => setBulkValues(v => ({ ...v, [part.id]: val }))}
                           onBlur={() => commitBulkValue(part)}
-                          onKeyDown={e => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
-                          className="h-8 w-16 text-center text-sm font-bold px-1"
                         />
                         <span className="text-[9px] text-muted-foreground leading-none mt-0.5">{isOut ? "OUT" : isLow ? "LOW" : "count"}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => { const newStock = Math.max(0, (part.in_stock || 0) - 1); reorderMutation.mutate({ id: part.id, data: { in_stock: newStock, reorder_flagged: newStock === 0 ? true : (part.reorder_flagged || false), ...firstManagedPatch(part) } }); }} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">−</button>
-                        <div className="flex flex-col items-center min-w-[36px]">
-                          <span className={`text-sm font-bold ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-foreground"}`}>{part.in_stock ?? 0}</span>
-                          <span className="text-[9px] text-muted-foreground leading-none">{isOut ? "OUT" : isLow ? "LOW" : "in stock"}</span>
-                        </div>
-                        <button onClick={() => updateMutation.mutate({ id: part.id, data: { in_stock: (part.in_stock || 0) + 1, ...firstManagedPatch(part) } })} className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center text-sm font-bold hover:bg-muted/80">+</button>
                       </div>
                     )}
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>
@@ -365,6 +371,7 @@ function PartsItemList({ category, parts }) {
                     </Button>
                   </div>
                 </div>
+                {!bulkEdit && <StockEditor part={part} onSave={(n) => saveStock(part, n)} />}
               </Card>
             );
           })}
