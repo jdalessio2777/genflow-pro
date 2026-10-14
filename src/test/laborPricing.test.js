@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildLaborLine, groupHourlyRates, memberPrice } from "@/lib/utils/laborPricing";
+import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { isActiveMember, memberDiscountRateFor } from "@/lib/utils/membership";
 
 // H-5 / B-04: job labor choices come from the catalog; the price shown is
@@ -13,10 +13,26 @@ const catalog = [
   { id: "f", name: "Tune-Up", type: "flat_rate", category: "maintenance", flat_price: 295, flat_cost: 27 },
 ];
 
+describe("Decision 1: emergency rates on the Labor tab", () => {
+  it("hourly + flat 'emergency' rows form the Emergency group; other flat rates stay off the Labor tab", () => {
+    const rates = [
+      ...catalog,
+      { id: "eh", name: "Emergency Hourly", type: "hourly", category: "emergency", rate: 245 },
+      { id: "ef", name: "Emergency Dispatch Fee", type: "flat_rate", category: "emergency", flat_price: 75 },
+    ];
+    const g = groupLaborRates(rates);
+    const em = g.find(x => x.key === "emergency");
+    expect(em.rates.map(r => r.name)).toEqual(["Emergency Hourly", "Emergency Dispatch Fee"]);
+    expect(g.flatMap(x => x.rates).some(r => r.name === "Tune-Up")).toBe(false);
+    expect(ratePrice(em.rates[1])).toBe(75);
+    expect(buildLaborLine({ rate: em.rates[1], jobId: "j" })).toMatchObject({ is_flat_rate: true, total_price: 75 });
+  });
+});
+
 describe("labor pricing", () => {
   it("groups catalog hourly rates; placeholders hidden; unknown category → Other", () => {
-    const g = groupHourlyRates(catalog);
-    expect(g.map(x => x.key)).toEqual(["labor", "after_hours", "other"]);
+    const g = groupLaborRates(catalog);
+    expect(g.map(x => x.key)).toEqual(["labor", "after_hours", "other"]); // no emergency rows in this list
     expect(g[0].rates.map(r => r.name)).toEqual(["Standard Hour", "Standard ½ Hour"]);
     expect(g[1].rates[0].rate).toBe(340);
     expect(g[2].rates[0].name).toBe("Emergency Hourly");

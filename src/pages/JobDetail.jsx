@@ -34,7 +34,7 @@ import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyT
 import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
 import { removePartFromJob } from "@/lib/inventory";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
-import { buildLaborLine, groupHourlyRates, memberPrice } from "@/lib/utils/laborPricing";
+import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
@@ -541,7 +541,7 @@ export default function JobDetail() {
     queryKey: ["labor-rates"],
     queryFn: () => db.LaborRate.list("name"),
   });
-  const laborGroups = groupHourlyRates(laborRates);
+  const laborGroups = groupLaborRates(laborRates);
 
   const getJobTotals = () => {
     const f = computeJobFinancials(parts, labor);
@@ -1665,7 +1665,8 @@ export default function JobDetail() {
                       <div key={group.key} className="space-y-2">
                         <p className={`text-[10px] font-bold uppercase tracking-wider mt-2 ${group.tone === "orange" ? "text-orange-400" : group.tone === "red" ? "text-red-400" : "text-muted-foreground/60"}`}>{group.label}</p>
                         {group.rates.filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map(r => {
-                          const unit = memberPrice(r.rate, memberDiscountRate);
+                          const unit = memberPrice(ratePrice(r), memberDiscountRate);
+                          const perHour = r.type === "hourly" ? "/hr" : "";
                           return (
                             <Card key={r.id} data-testid="labor-rate" className={`p-3 flex items-center justify-between ${group.tone === "orange" ? "border-orange-200 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-900/20" : group.tone === "red" ? "border-red-200 bg-red-50/40 dark:border-red-700 dark:bg-red-900/20" : ""}`}>
                               <div className="min-w-0 mr-2">
@@ -1674,8 +1675,8 @@ export default function JobDetail() {
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 <div className="text-right">
-                                  <p className="text-sm font-bold">{formatCurrency(unit)}/hr</p>
-                                  {isMember && <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(r.rate)}</p>}
+                                  <p className="text-sm font-bold">{formatCurrency(unit)}{perHour}</p>
+                                  {isMember && <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(ratePrice(r))}</p>}
                                 </div>
                                 <Button size="icon" className="h-7 w-7 rounded-lg" aria-label={`Add ${r.name}`} disabled={laborAdd.busy}
                                   onClick={() => laborAdd.add(buildLaborLine({ rate: r, jobId: id, memberDiscountRate }), r.name)}>

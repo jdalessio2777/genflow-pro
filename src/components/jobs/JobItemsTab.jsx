@@ -11,7 +11,7 @@ import { computeJobFinancials } from "@/lib/utils/jobFinancials";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
-import { buildLaborLine, memberPrice, isAgreementRate, isPlaceholderRate } from "@/lib/utils/laborPricing";
+import { buildLaborLine, memberPrice, isAgreementRate, isPlaceholderRate, LABOR_TAB_FLAT_CATEGORIES } from "@/lib/utils/laborPricing";
 
 const ITEM_FOLDERS = [
   { key: "labor", label: "Labor Rates", icon: Clock, color: "bg-amber-100 text-amber-700", description: "Hourly billing rates" },
@@ -158,7 +158,8 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
   // price), never from "Other" (B-02).
   const offered = rates.filter(r => !isPlaceholderRate(r));
   const hourlyRates = offered.filter(r => r.type === "hourly");
-  const knownKeys = [...FLAT_RATE_FOLDERS.map(f => f.key).filter(k => k !== "other"), "maintenance", "service_agreements"];
+  // "emergency" flat rows are offered on the Labor tab (LABOR_TAB_FLAT_CATEGORIES).
+  const knownKeys = [...FLAT_RATE_FOLDERS.map(f => f.key).filter(k => k !== "other"), "maintenance", "service_agreements", ...LABOR_TAB_FLAT_CATEGORIES];
 
   const getFlatRatesForFolder = (key) => {
     if (key === "other") return offered.filter(r => r.type === "flat_rate" && !knownKeys.includes(r.category));

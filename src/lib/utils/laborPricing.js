@@ -26,13 +26,21 @@ export const LABOR_GROUPS = [
   { key: "other", label: "Other", tone: "default" },
 ];
 
-export function groupHourlyRates(rates) {
-  const hourly = (rates || []).filter(r => r.type === "hourly" && !isPlaceholderRate(r));
+// Hourly rates, plus flat "emergency" rows (the dispatch fee lived on the
+// labor list before the catalog took over, so techs look for it there).
+export const LABOR_TAB_FLAT_CATEGORIES = ["emergency"];
+
+export function groupLaborRates(rates) {
+  const shown = (rates || []).filter(r => !isPlaceholderRate(r) &&
+    (r.type === "hourly" || (r.type === "flat_rate" && LABOR_TAB_FLAT_CATEGORIES.includes(r.category))));
   const known = new Set(LABOR_GROUPS.map(g => g.key));
   return LABOR_GROUPS
-    .map(g => ({ ...g, rates: hourly.filter(r => (known.has(r.category) ? r.category : "other") === g.key) }))
+    .map(g => ({ ...g, rates: shown.filter(r => (known.has(r.category) ? r.category : "other") === g.key) }))
     .filter(g => g.rates.length > 0);
 }
+
+// Catalog price of a rate row, whatever its type.
+export const ratePrice = (rate) => (rate?.type === "hourly" ? rate.rate : rate?.flat_price) || 0;
 
 // The job_labor row for a catalog rate. Discount rows (stored at $0, % in
 // notes) are computed from the job's current subtotal. Service agreements
