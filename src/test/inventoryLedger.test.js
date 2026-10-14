@@ -148,3 +148,26 @@ describe("Decision 2: cancel returns unused parts", () => {
     expect(state.parts.p1.in_stock).toBe(5);
   });
 });
+
+describe("Decision 2 follow-up: deleting a finished job never restocks", () => {
+  it("cancelled job with a returned part and a used part: delete keeps stock and usage rows", async () => {
+    vi.resetModules();
+    const jobs = { jc: { id: "jc", status: "canceled" } };
+    const { db } = await import("@/lib/db");
+    db.Job = { filter: async ({ id }) => (jobs[id] ? [jobs[id]] : []), delete: async () => {} };
+    for (const n of ["Quote", "ServiceRequest", "JobLabor", "JobDocument", "JobPhoto", "Invoice"]) {
+      db[n] = { filter: async () => [], delete: async () => {} };
+    }
+    state.parts.p2 = { id: "p2", in_stock: 4, reorder_flagged: false };
+    const a = await addPartToJob({ ...plan(1, 2), jobPart: { job_id: "jc", name: "P1", part_id: "p1", quantity: 2 } });
+    const b = await addPartToJob({ jobPartId: "jp2", usageId: "u2", qty: 1, stockPartId: "p2", jobPart: { job_id: "jc", name: "P2", part_id: "p2", quantity: 1 } });
+    await returnPartToStock(a.jobPart, { returnId: "r1" }); // P1 returned, P2 used
+    expect([state.parts.p1.in_stock, state.parts.p2.in_stock]).toEqual([5, 3]);
+    const { deleteJobCascade } = await import("@/lib/deleteRecords");
+    await deleteJobCascade("jc");
+    expect([state.parts.p1.in_stock, state.parts.p2.in_stock]).toEqual([5, 3]);
+    expect(Object.keys(state.jobParts)).toHaveLength(0);
+    expect(Object.values(state.usage).map(u => u.quantity).sort()).toEqual([-2, 1, 2]);
+    expect(b.jobPart).toBeTruthy();
+  });
+});
