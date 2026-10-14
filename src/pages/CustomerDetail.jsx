@@ -11,6 +11,7 @@ import RewardBadge from "@/components/ui/RewardBadge";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate, formatPhone } from "@/lib/utils/format";
+import { sortJobs, isJobOverdue, isClosedJob } from "@/lib/utils/jobSort";
 import { serviceHistoryNotesHtml, serviceHistoryTitleHtml } from "@/lib/serviceHistory";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -72,9 +73,7 @@ export default function CustomerDetail() {
   const generateServiceHistory = () => {
     setGeneratingHistory(true);
     try {
-      const completedJobs = jobs
-        .filter(j => ["completed", "invoiced"].includes(j.status))
-        .sort((a, b) => new Date(b.completed_date || b.created_date) - new Date(a.completed_date || a.created_date));
+      const completedJobs = sortJobs(jobs.filter(j => ["completed", "invoiced"].includes(j.status)));
 
       const jobRows = completedJobs.length === 0
         ? `<tr><td colspan="4" style="padding:20px;text-align:center;color:#888;font-size:13px;">No completed service history</td></tr>`
@@ -183,8 +182,7 @@ export default function CustomerDetail() {
       setGeneratingHistory(false);
     }
   };
-  const lastJob = jobs.filter(j => j.status === "completed" || j.status === "invoiced")
-    .sort((a, b) => new Date(b.completed_date || b.created_date) - new Date(a.completed_date || a.created_date))[0];
+  const lastJob = sortJobs(jobs.filter(j => j.status === "completed" || j.status === "invoiced"))[0];
 
   return (
     <div>
@@ -418,15 +416,20 @@ export default function CustomerDetail() {
             </Link>
           </div>
           <div className="space-y-2">
-            {jobs.map(job => (
+            {sortJobs(jobs).map(job => (
               <Link key={job.id} to={`/jobs/${job.id}`}>
                 <Card className="p-3 hover:bg-muted/50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{job.title}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(job.scheduled_date || job.created_date)}</p>
+                      <p className={`text-xs ${isJobOverdue(job) ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                        {isClosedJob(job)
+                          ? formatDate(job.completed_date || job.scheduled_date || job.created_date)
+                          : job.scheduled_date ? formatDate(job.scheduled_date) : "No date set"}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {isJobOverdue(job) && <StatusBadge status="overdue" />}
                       {job.total_price > 0 && <span className="text-xs font-medium">{formatCurrency(job.total_price)}</span>}
                       <StatusBadge status={job.status} />
                     </div>

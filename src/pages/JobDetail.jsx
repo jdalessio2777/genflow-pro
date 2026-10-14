@@ -16,9 +16,10 @@ import JobPartsTab from "@/components/jobs/JobPartsTab";
 import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
-import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
+import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { TAX_RATE, computeJobFinancials } from "@/lib/utils/jobFinancials";
 import { formatTime, toDatetimeLocalValue } from "@/lib/formatTime";
+import { sortJobs } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
@@ -340,8 +341,8 @@ export default function JobDetail() {
     queryFn: () => db.Job.filter({ customer_id: job?.customer_id }, "-created_date"),
     enabled: !!job?.customer_id,
   });
-  const previousJobs = customerHistory
-    .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status))
+  const previousJobs = sortJobs(customerHistory
+    .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status)))
     .slice(0, 10);
 
   useEffect(() => {

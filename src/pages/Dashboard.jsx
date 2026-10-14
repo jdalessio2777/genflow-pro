@@ -8,7 +8,8 @@ import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText,
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
-import { formatTime } from "@/lib/formatTime";
+import { formatTime, formatDateTime } from "@/lib/formatTime";
+import { sortJobs, isJobOverdue, etDateKey } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
 import { isManaged } from "@/lib/utils/partsManaged";
@@ -175,13 +176,12 @@ export default function Dashboard() {
     .sort((a, b) => a._svc.daysUntilDue - b._svc.daysUntilDue)
     .slice(0, 5);
 
-  const today = new Date().toDateString();
-  const todayJobs = jobs.filter(j => {
-    if (!j.scheduled_date) return false;
-    return new Date(j.scheduled_date).toDateString() === today && ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status);
-  }).sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+  const todayKey = etDateKey(new Date());
+  const todayJobs = sortJobs(jobs.filter(j =>
+    etDateKey(j.scheduled_date) === todayKey && ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)
+  ));
 
-  const activeJobs = jobs.filter(j => ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status));
+  const activeJobs = sortJobs(jobs.filter(j => ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)));
   const completedJobs = jobs.filter(j => j.status === "completed" || j.status === "invoiced");
   const totalRevenue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.total || 0), 0);
   const totalProfit = completedJobs.reduce((s, j) => s + (j.profit || 0), 0);
@@ -353,8 +353,14 @@ export default function Dashboard() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
+                        <p className={`text-xs mt-0.5 ${isJobOverdue(job) ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                          {job.scheduled_date ? formatDateTime(job.scheduled_date, use24h) : "No date set"}
+                        </p>
                       </div>
-                      <StatusBadge status={job.status} />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isJobOverdue(job) && <StatusBadge status="overdue" />}
+                        <StatusBadge status={job.status} />
+                      </div>
                     </div>
                   </div>
                 </Link>
