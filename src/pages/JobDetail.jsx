@@ -1436,7 +1436,7 @@ export default function JobDetail() {
                               return (
                                 <div key={p.id} className="flex items-center justify-between gap-2 rounded-xl border border-border p-2">
                                   <div className="min-w-0">
-                                    <p className="text-sm font-medium truncate">{p.name}</p>
+                                    <p className="text-sm font-medium break-words">{p.name}</p>
                                     <p className="text-xs text-muted-foreground">Qty {p.quantity}</p>
                                   </div>
                                   <div className="flex shrink-0 rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={`${p.name}: used or return`}>
