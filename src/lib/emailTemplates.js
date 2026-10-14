@@ -100,7 +100,10 @@ function footer() {
     </table>`
 }
 
-export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, discount = 0, total = 0, approveUrl, scopeNotes }) {
+// Totals come from computeQuoteTotals (same rules as invoices): line amounts
+// already carry any member price; `tax` is NJ sales tax; `total` is the real
+// amount due (H-3). memberSavings is informational only (not subtracted).
+export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, tax = 0, memberSavings = 0, total = 0, approveUrl, scopeNotes }) {
   const quoteNum = (job.id || '').slice(0, 8).toUpperCase()
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -114,10 +117,14 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, di
       <td style="padding:10px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(item.amount)}</td>
     </tr>`).join('')
 
-  const discountRow = discount > 0 ? `
+  const taxRow = tax > 0 ? `
     <tr>
-      <td colspan="2" style="padding:8px 16px;font-family:Arial,sans-serif;font-size:13px;color:#CC2200;">Member Discount</td>
-      <td style="padding:8px 16px;font-family:Arial,sans-serif;font-size:13px;color:#CC2200;text-align:right;font-weight:600;">-${fmt(discount)}</td>
+      <td colspan="2" style="padding:8px 16px;font-family:Arial,sans-serif;font-size:13px;color:#6b7280;">NJ Sales Tax (6.625%)</td>
+      <td style="padding:8px 16px;font-family:Arial,sans-serif;font-size:13px;text-align:right;color:#374151;">${fmt(tax)}</td>
+    </tr>` : ''
+  const savingsRow = memberSavings > 0 ? `
+    <tr>
+      <td colspan="3" style="padding:0 16px 8px;font-family:Arial,sans-serif;font-size:12px;color:#CC2200;">Includes your member savings of ${fmt(memberSavings)}</td>
     </tr>` : ''
 
   return `<!DOCTYPE html>
@@ -188,7 +195,8 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, di
             <td colspan="2" style="padding:10px 16px;font-size:13px;color:#6b7280;">Subtotal</td>
             <td style="padding:10px 16px;font-size:13px;text-align:right;color:#374151;">${fmt(subtotal)}</td>
           </tr>
-          ${discountRow}
+          ${savingsRow}
+          ${taxRow}
           <tr style="border-top:2px solid #e5e7eb;">
             <td colspan="2" style="padding:14px 16px;font-size:16px;font-weight:700;color:#0D1014;">Total Due</td>
             <td style="padding:14px 16px;font-size:20px;font-weight:700;text-align:right;color:#0D1014;">${fmt(total)}</td>

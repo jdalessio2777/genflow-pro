@@ -98,10 +98,12 @@ describe('quoteEmailHTML', () => {
     expect(html).toContain('Spark Plugs')
   })
 
-  it('shows Member Discount row when discount > 0', () => {
-    const html = quoteEmailHTML({ ...baseArgs, discount: 28.76, total: 258.79 })
-    expect(html).toContain('Member Discount')
-    expect(html).toContain('-$28.76')
+  it('shows NJ tax and member savings (H-3: prices already member-priced, savings not subtracted twice)', () => {
+    const html = quoteEmailHTML({ ...baseArgs, tax: 15.24, memberSavings: 28.76, total: 245.27 })
+    expect(html).toContain('NJ Sales Tax (6.625%)')
+    expect(html).toContain('$15.24')
+    expect(html).toContain('member savings of $28.76')
+    expect(html).not.toContain('-$28.76')
   })
 
   it('does NOT show Member Discount row when discount = 0', () => {
