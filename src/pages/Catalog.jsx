@@ -7,15 +7,15 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent, Pencil, Check } from "lucide-react";
+import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
-import { firstManagedPatch, suggestedSalePrice, isManaged } from "@/lib/utils/partsManaged";
+import { firstManagedPatch, isManaged } from "@/lib/utils/partsManaged";
 import { resolveBulkCommit, stockUpdatePatch } from "@/lib/utils/stockDraft";
 import StockCountInput from "@/components/catalog/StockCountInput";
 import StockEditor from "@/components/catalog/StockEditor";
+import PriceEditor from "@/components/catalog/PriceEditor";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -99,6 +99,37 @@ const TOP_FOLDERS = [
   { key: "documents", label: "Document Templates", icon: FileText, color: "bg-rose-100 text-rose-700", description: "Checklists and inspection forms" },
 ];
 
+// Keys ("stock:<id>", "price:<id>") of editors holding an unsaved draft.
+function useDirtyKeys() {
+  const [keys, setKeys] = useState(() => new Set());
+  const markDirty = (key, isDirty) => setKeys(prev => {
+    if (prev.has(key) === isDirty) return prev;
+    const next = new Set(prev);
+    if (isDirty) next.add(key); else next.delete(key);
+    return next;
+  });
+  return [keys.size, markDirty];
+}
+
+function UnsavedChangesDialog({ guard, count }) {
+  return (
+    <AlertDialog open={guard.blocked} onOpenChange={(o) => { if (!o) guard.stay(); }}>
+      <AlertDialogContent className="max-w-sm rounded-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>You have unsaved changes</AlertDialogTitle>
+          <AlertDialogDescription>
+            {count === 1 ? "1 stock or price edit hasn't" : `${count} stock or price edits haven't`} been saved. Leaving will discard {count === 1 ? "it" : "them"}.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="gap-2">
+          <AlertDialogCancel className="h-11 rounded-xl" onClick={guard.stay}>Stay</AlertDialogCancel>
+          <AlertDialogAction className="h-11 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={guard.leave}>Discard and leave</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 // ─── PARTS CATEGORY LIST ──────────────────────────────────────────────────────
 function PartsCategoryList({ parts, onSelectCategory }) {
   const queryClient = useQueryClient();
@@ -165,20 +196,8 @@ function PartsItemList({ category, parts }) {
   const { confirmDelete } = usePreferences();
   const [bulkEdit, setBulkEdit] = useState(false);
   const [bulkValues, setBulkValues] = useState({});
-  const [editingPriceId, setEditingPriceId] = useState(null);
-  const [editingCostValue, setEditingCostValue] = useState("");
-  const [editingSaleValue, setEditingSaleValue] = useState("");
-  const [saleTouched, setSaleTouched] = useState(false);
-  const [autoSuggestEligible, setAutoSuggestEligible] = useState(false);
-  // Part ids whose day-to-day stock draft differs from the DB value.
-  const [dirtyStockIds, setDirtyStockIds] = useState(() => new Set());
-  const markStockDirty = (id, isDirty) => setDirtyStockIds(prev => {
-    if (prev.has(id) === isDirty) return prev;
-    const next = new Set(prev);
-    if (isDirty) next.add(id); else next.delete(id);
-    return next;
-  });
-  const unsavedCount = dirtyStockIds.size;
+  // Stock and price editors whose draft differs from the DB value.
+  const [unsavedCount, markDirty] = useDirtyKeys();
   const stockGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const knownKeys = ALL_CATALOG_PART_KEYS;
@@ -189,10 +208,6 @@ function PartsItemList({ category, parts }) {
   const createMutation = useMutation({
     mutationFn: (data) => db.Part.create(data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }); setOpen(false); setForm({ name: "", part_number: "", cost: 0, default_price: 0, in_stock: 0 }); toast.success("Part added"); },
-  });
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => db.Part.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }),
   });
   const reorderMutation = useMutation({
     mutationFn: ({ id, data }) => db.Part.update(id, data),
@@ -231,51 +246,6 @@ function PartsItemList({ category, parts }) {
       toast.error(`Stock not saved for "${part.name}"`);
       throw err;
     }
-  };
-
-  const startEditingPrice = (part) => {
-    setEditingPriceId(part.id);
-    setEditingCostValue(String(part.cost ?? 0));
-    setEditingSaleValue(String(part.default_price ?? 0));
-    setSaleTouched(false);
-    // Captured once, from the part as it stood BEFORE this edit — a part
-    // already priced or already managed never gets the auto-suggest, even
-    // if the user clears the cost field mid-edit.
-    setAutoSuggestEligible(!part.first_managed_at && !(part.default_price > 0));
-  };
-
-  const cancelEditingPrice = () => {
-    setEditingPriceId(null);
-    setEditingCostValue("");
-    setEditingSaleValue("");
-    setSaleTouched(false);
-    setAutoSuggestEligible(false);
-  };
-
-  const onEditCostChange = (value) => {
-    setEditingCostValue(value);
-    if (autoSuggestEligible && !saleTouched) {
-      setEditingSaleValue(String(suggestedSalePrice(parseFloat(value) || 0)));
-    }
-  };
-
-  const onEditSaleChange = (value) => {
-    setEditingSaleValue(value);
-    setSaleTouched(true);
-  };
-
-  const commitPriceEdit = (part) => {
-    const newCost = parseFloat(editingCostValue);
-    const newSale = parseFloat(editingSaleValue);
-    if (isNaN(newCost) || newCost < 0 || isNaN(newSale) || newSale < 0) {
-      toast.error("Enter valid cost and price");
-      return;
-    }
-    updateMutation.mutate({
-      id: part.id,
-      data: { cost: newCost, default_price: newSale, ...(newSale > 0 ? firstManagedPatch(part) : {}) },
-    });
-    cancelEditingPrice();
   };
 
   return (
@@ -323,51 +293,6 @@ function PartsItemList({ category, parts }) {
                     {part.part_number && <p className="text-xs text-muted-foreground">#{part.part_number}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="text-right mr-1">
-                      {editingPriceId === part.id ? (
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] text-muted-foreground">cost</span>
-                            <Input
-                              type="number" step="0.01" min="0"
-                              value={editingCostValue}
-                              onFocus={e => e.target.select()}
-                              onChange={e => onEditCostChange(e.target.value)}
-                              className="h-6 w-16 text-xs text-right px-1.5"
-                              autoFocus
-                            />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] text-muted-foreground">price</span>
-                            <Input
-                              type="number" step="0.01" min="0"
-                              value={editingSaleValue}
-                              onFocus={e => e.target.select()}
-                              onChange={e => onEditSaleChange(e.target.value)}
-                              className="h-6 w-16 text-xs text-right px-1.5"
-                            />
-                          </div>
-                          {autoSuggestEligible && !saleTouched && parseFloat(editingCostValue) > 0 && (
-                            <p className="text-[9px] text-blue-600 dark:text-blue-400">×1.35 suggested</p>
-                          )}
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-green-600 hover:bg-green-50" onClick={() => commitPriceEdit(part)}>
-                              <Check className="w-3 h-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={cancelEditingPrice}>
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button type="button" onClick={() => startEditingPrice(part)} className="text-right group">
-                          <p className="text-sm font-semibold group-hover:underline">{formatCurrency(part.default_price)}</p>
-                          <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                            cost {formatCurrency(part.cost)} <Pencil className="w-2.5 h-2.5 opacity-50" />
-                          </p>
-                        </button>
-                      )}
-                    </div>
                     {bulkEdit && (
                       <div className="flex flex-col items-center min-w-[64px]">
                         <StockCountInput
@@ -384,26 +309,14 @@ function PartsItemList({ category, parts }) {
                     </Button>
                   </div>
                 </div>
-                {!bulkEdit && <StockEditor part={part} onSave={(n) => saveStock(part, n)} onDirtyChange={(d) => markStockDirty(part.id, d)} />}
+                {!bulkEdit && <PriceEditor kind="part" item={part} onDirtyChange={(d) => markDirty(`price:${part.id}`, d)} />}
+                {!bulkEdit && <StockEditor part={part} onSave={(n) => saveStock(part, n)} onDirtyChange={(d) => markDirty(`stock:${part.id}`, d)} />}
               </Card>
             );
           })}
         </div>
       )}
-      <AlertDialog open={stockGuard.blocked} onOpenChange={(o) => { if (!o) stockGuard.stay(); }}>
-        <AlertDialogContent className="max-w-sm rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>You have unsaved stock changes</AlertDialogTitle>
-            <AlertDialogDescription>
-              {unsavedCount === 1 ? "1 part has" : `${unsavedCount} parts have`} a stock count that hasn't been saved. Leaving will discard {unsavedCount === 1 ? "it" : "them"}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel className="h-11 rounded-xl" onClick={stockGuard.stay}>Stay</AlertDialogCancel>
-            <AlertDialogAction className="h-11 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={stockGuard.leave}>Discard and leave</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <UnsavedChangesDialog guard={stockGuard} count={unsavedCount} />
     </div>
   );
 }
@@ -414,6 +327,8 @@ function LaborRatesList() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", rate: 115, cost_rate: 0, notes: "" });
   const { confirmDelete } = usePreferences();
+  const [unsavedCount, markDirty] = useDirtyKeys();
+  const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const hourly = rates.filter(r => r.type === "hourly");
@@ -461,10 +376,12 @@ function LaborRatesList() {
                   </Button>
                 </div>
               </div>
+              <PriceEditor kind="hourly" item={r} onDirtyChange={(d) => markDirty(`price:${r.id}`, d)} />
             </Card>
           ))}
         </div>
       )}
+      <UnsavedChangesDialog guard={priceGuard} count={unsavedCount} />
     </div>
   );
 }
@@ -508,6 +425,8 @@ function FlatRatesItemList({ folder }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
   const { confirmDelete } = usePreferences();
+  const [unsavedCount, markDirty] = useDirtyKeys();
+  const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
@@ -562,10 +481,12 @@ function FlatRatesItemList({ folder }) {
                   </Button>
                 </div>
               </div>
+              {folder.key !== "discounts" && <PriceEditor kind="flat" item={r} onDirtyChange={(d) => markDirty(`price:${r.id}`, d)} />}
             </Card>
           ))}
         </div>
       )}
+      <UnsavedChangesDialog guard={priceGuard} count={unsavedCount} />
     </div>
   );
 }
@@ -576,6 +497,8 @@ function MaintenanceList() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
   const { confirmDelete } = usePreferences();
+  const [unsavedCount, markDirty] = useDirtyKeys();
+  const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
   const items = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
@@ -654,11 +577,13 @@ function MaintenanceList() {
                     </Button>
                   </div>
                 </div>
+                <PriceEditor kind="flat" item={r} onDirtyChange={(d) => markDirty(`price:${r.id}`, d)} />
               </Card>
             );
           })}
         </div>
       )}
+      <UnsavedChangesDialog guard={priceGuard} count={unsavedCount} />
     </div>
   );
 }
@@ -682,6 +607,9 @@ export default function Catalog() {
     : null;
   const [search, setSearch] = useState("");
   const [partsBrowseSearch, setPartsBrowseSearch] = useState("");
+  // Price editors in the search result lists.
+  const [unsavedCount, markDirty] = useDirtyKeys();
+  const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
   const [debouncedPartsBrowse, setDebouncedPartsBrowse] = useState("");
 
   useEffect(() => {
@@ -810,6 +738,7 @@ export default function Catalog() {
                                   </div>
                                   <p className="text-sm font-bold">{formatCurrency(part.default_price || 0)}</p>
                                 </div>
+                                <PriceEditor kind="part" item={part} onDirtyChange={(d) => markDirty(`price:${part.id}`, d)} />
                               </Card>
                             ))}
                           </div>
@@ -828,6 +757,7 @@ export default function Catalog() {
                                   </div>
                                   <p className="text-sm font-bold">{formatCurrency(rate.flat_price || rate.rate || 0)}</p>
                                 </div>
+                                {rate.category !== "discounts" && <PriceEditor kind={rate.type === "hourly" ? "hourly" : "flat"} item={rate} onDirtyChange={(d) => markDirty(`price:${rate.id}`, d)} />}
                               </Card>
                             ))}
                           </div>
@@ -917,7 +847,9 @@ export default function Catalog() {
                   {partsSearchResults.length} result{partsSearchResults.length !== 1 ? "s" : ""}
                 </p>
                 {partsSearchResults.map((part) => {
-                  const orderPrice = part.order_price ?? part.default_price ?? 0;
+                  // Show the real sale price (default_price). order_price is a
+                  // stale import field that never changed when prices were edited.
+                  const salePrice = Number(part.default_price) || 0;
                   return (
                     <Card key={part.id} className="p-3.5 rounded-xl border-border">
                       <div className="flex items-start justify-between gap-2">
@@ -930,10 +862,12 @@ export default function Catalog() {
                             <StatusBadge status={part.category || "other"} />
                           </div>
                         </div>
-                        {orderPrice > 0 ? (
-                          <p className="text-sm font-bold text-primary shrink-0">{formatCurrency(orderPrice)}</p>
-                        ) : null}
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-primary">{formatCurrency(salePrice)}</p>
+                          <p className="text-xs text-muted-foreground">cost {formatCurrency(part.cost)}</p>
+                        </div>
                       </div>
+                      <PriceEditor kind="part" item={part} onDirtyChange={(d) => markDirty(`price:${part.id}`, d)} />
                     </Card>
                   );
                 })}
@@ -984,6 +918,7 @@ export default function Catalog() {
           </div>
         )}
 
+      <UnsavedChangesDialog guard={priceGuard} count={unsavedCount} />
       </div>
     </div>
   );

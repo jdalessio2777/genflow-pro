@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Minus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
-import { firstManagedPatch, suggestedSalePrice } from "@/lib/utils/partsManaged";
+import { suggestedSalePrice } from "@/lib/utils/partsManaged";
+import { saveCatalogPrice, applySavedPrice } from "@/lib/catalogPrices";
 import { matchesPart, searchParts, sanitizeQuantityInput, parseQuantity } from "@/lib/utils/partsSearch";
 import { toast } from "sonner";
 
@@ -237,15 +238,22 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     }
 
     // Tech explicitly opted to carry a manually-typed cost/price forward to future jobs
+    // Same save path as the Catalog price editor (src/lib/catalogPrices.js).
     if (updateCatalogPrice && form.part_id && (form.price !== form.catalogPrice || form.cost !== form.catalogCost)) {
-      const catalogPartForPrice = catalogParts.find(p => p.id === form.part_id) || {};
-      const catalogPatch = {};
-      if (form.price !== form.catalogPrice) catalogPatch.default_price = form.price;
-      if (form.cost !== form.catalogCost) catalogPatch.cost = form.cost;
-      db.Part.update(form.part_id, {
-        ...catalogPatch,
-        ...(catalogPatch.default_price !== undefined ? firstManagedPatch(catalogPartForPrice) : {}),
-      }).then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
+      const catalogPartForPrice = catalogParts.find(p => p.id === form.part_id) || { id: form.part_id, default_price: form.catalogPrice, cost: form.catalogCost };
+      const partName = form.name.trim();
+      saveCatalogPrice("part", catalogPartForPrice, {
+        price: form.price !== form.catalogPrice ? Math.round((Number(form.price) || 0) * 100) / 100 : null,
+        cost: form.cost !== form.catalogCost ? Math.round((Number(form.cost) || 0) * 100) / 100 : null,
+      })
+        .then((res) => {
+          applySavedPrice(queryClient, "part", form.part_id, res.patch);
+          if (res.message) toast.success(`Catalog updated for future jobs: ${res.message}`);
+        })
+        .catch((err) => {
+          console.error("Catalog price save failed", form.part_id, err);
+          toast.error(`Part added, but the catalog price for "${partName}" was NOT updated`);
+        });
     }
 
     // Usage log for the weekly "what got used" report — one row per part
@@ -613,7 +621,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <div>
                     <Label className="text-xs">Cost</Label>
                     <Input
-                      type="number" step="0.01" value={form.cost} onFocus={e => e.target.select()}
+                      type="number" inputMode="decimal" step="0.01" min="0" value={form.cost} onFocus={e => e.target.select()}
                       onChange={e => {
                         const newCost = parseFloat(e.target.value) || 0;
                         const catalogPart = catalogParts.find(p => p.id === form.part_id);
@@ -630,7 +638,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <div>
                     <Label className="text-xs">Price</Label>
                     <Input
-                      type="number" step="0.01" value={form.price} onFocus={e => e.target.select()}
+                      type="number" inputMode="decimal" step="0.01" min="0" value={form.price} onFocus={e => e.target.select()}
                       onChange={e => { setSaleTouchedInConfirm(true); setForm(f => ({...f, price: parseFloat(e.target.value) || 0})); }}
                       className="mt-1"
                     />

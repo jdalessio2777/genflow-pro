@@ -66,7 +66,8 @@ export default function QuoteBuilder() {
   const removeLine = (id) => setLineItems(prev => prev.filter(l => l.id !== id));
 
   const addPart = (p) => addLine({
-    type: "part", description: p.name, quantity: 1, unit_price: p.price || 0, total_price: p.price || 0, source_part_id: p.id,
+    // Catalog sale price lives in parts.default_price (there is no parts.price column).
+    type: "part", description: p.name, quantity: 1, unit_price: Number(p.default_price) || 0, total_price: Number(p.default_price) || 0, source_part_id: p.id,
   });
 
   const addRate = (r) => {
@@ -270,7 +271,7 @@ export default function QuoteBuilder() {
                       {p.part_number && <p className="text-xs text-muted-foreground">#{p.part_number}</p>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm font-semibold">{formatCurrency(p.price)}</span>
+                      <span className="text-sm font-semibold">{formatCurrency(p.default_price)}</span>
                       <Plus className="w-4 h-4 text-primary" />
                     </div>
                   </div>
