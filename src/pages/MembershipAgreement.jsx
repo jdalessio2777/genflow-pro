@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
+import { escapeHtml } from "@/lib/utils/escapeHtml";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, CheckCircle2, Loader2, Shield } from "lucide-react";
@@ -231,13 +232,13 @@ export default function MembershipAgreement() {
               <p style="color:#A8B4C4;margin:3px 0 0 0;font-size:12px;">Protection Plan Active</p>
             </div>
             <div style="background:#f8f9fa;padding:22px 24px;border-radius:0 0 8px 8px;">
-              <p style="font-size:14px;color:#1a1a1a;">Hi ${customer.name},</p>
-              <p style="font-size:13px;color:#444;margin-top:8px;">Thank you for signing up for the <strong>${planName}</strong>. Your agreement is now active.</p>
+              <p style="font-size:14px;color:#1a1a1a;">Hi ${escapeHtml(customer.name)},</p>
+              <p style="font-size:13px;color:#444;margin-top:8px;">Thank you for signing up for the <strong>${escapeHtml(planName)}</strong>. Your agreement is now active.</p>
               <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin:14px 0;">
-                <p style="margin:0 0 6px 0;font-size:13px;"><strong>Plan:</strong> ${planName}</p>
+                <p style="margin:0 0 6px 0;font-size:13px;"><strong>Plan:</strong> ${escapeHtml(planName)}</p>
                 <p style="margin:0 0 6px 0;font-size:13px;"><strong>Start Date:</strong> ${startStr}</p>
                 <p style="margin:0 0 6px 0;font-size:13px;"><strong>Expiration:</strong> ${expiryStr}</p>
-                <p style="margin:0 0 8px 0;font-size:13px;"><strong>Generator:</strong> ${customer.generator_model || "Your generator"}${customer.generator_serial ? ` (S/N: ${customer.generator_serial})` : ""}</p>
+                <p style="margin:0 0 8px 0;font-size:13px;"><strong>Generator:</strong> ${escapeHtml(customer.generator_model || "Your generator")}${customer.generator_serial ? ` (S/N: ${escapeHtml(customer.generator_serial)})` : ""}</p>
                 <p style="margin:0 0 4px 0;font-size:13px;font-weight:bold;">What's included:</p>
                 <ul style="margin:0;padding-left:18px;font-size:13px;color:#444;">${plan.includes.map(i => `<li style="margin-bottom:3px;">${i}</li>`).join("")}</ul>
               </div>

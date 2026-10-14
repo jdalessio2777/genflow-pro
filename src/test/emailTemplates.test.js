@@ -297,7 +297,7 @@ describe('completionEmailHTML', () => {
   it('when includeChecklist=true shows completed document names', () => {
     const html = completionEmailHTML(baseArgs)
     expect(html).toContain('Annual Maintenance Checklist')
-    expect(html).toContain('Oil & Filter Inspection')
+    expect(html).toContain('Oil &amp; Filter Inspection') // escaped (C-2)
   })
 
   it('when includeChecklist=true does NOT show pending documents', () => {

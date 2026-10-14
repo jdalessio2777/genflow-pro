@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { toast } from "sonner";
+import { escapeHtml } from "@/lib/utils/escapeHtml";
 
 // Shared team notification sender
 // Reads team emails from AppSettings and sends to all filled-in addresses
@@ -27,7 +28,7 @@ export async function notifyTeam({ subject, body, triggeredBy = "" }) {
         </div>
         <div style="background:#f8f9fa;padding:20px;border-radius:0 0 8px 8px;">
           ${body}
-          ${triggeredBy ? `<p style="font-size:11px;color:#aaa;margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb;">Action performed by: ${triggeredBy}</p>` : ""}
+          ${triggeredBy ? `<p style="font-size:11px;color:#aaa;margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb;">Action performed by: ${escapeHtml(triggeredBy)}</p>` : ""}
         </div>
       </div>
     `;
@@ -48,9 +49,11 @@ export async function notifyTeam({ subject, body, triggeredBy = "" }) {
   }
 }
 
+// Values are plain text (customer/job fields); they're escaped here so no
+// caller can forget.
 export function buildRow(label, value) {
   if (!value) return "";
-  return `<tr><td style="padding:5px 0;font-size:12px;color:#666;width:110px;vertical-align:top;">${label}</td><td style="padding:5px 0;font-size:12px;color:#1a1a1a;font-weight:600;">${value}</td></tr>`;
+  return `<tr><td style="padding:5px 0;font-size:12px;color:#666;width:110px;vertical-align:top;">${escapeHtml(label)}</td><td style="padding:5px 0;font-size:12px;color:#1a1a1a;font-weight:600;">${escapeHtml(value)}</td></tr>`;
 }
 
 export function buildTable(rows) {
@@ -67,5 +70,5 @@ export function buildEventBadge(label, color) {
     red: "background:#fee2e2;color:#991b1b;",
     purple: "background:#f3e8ff;color:#6b21a8;",
   };
-  return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;${colors[color] || colors.blue}">${label}</span>`;
+  return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;${colors[color] || colors.blue}">${escapeHtml(label)}</span>`;
 }

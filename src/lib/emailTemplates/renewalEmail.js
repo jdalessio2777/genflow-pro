@@ -1,3 +1,5 @@
+import { escapeHtml } from '../utils/escapeHtml.js'
+
 export function renewalEmailSubject() {
   return "Your GenShield Generator Service is Due";
 }
@@ -42,7 +44,7 @@ export function renewalEmailHTML({ customerName, plan, expiryDate }) {
 
             <!-- GREETING -->
             <p style="margin:0 0 16px;font-size:16px;color:#1a1a1c;">
-              Hi ${customerName},
+              Hi ${escapeHtml(customerName)},
             </p>
 
             <!-- PARAGRAPH 1 -->
@@ -55,7 +57,7 @@ export function renewalEmailHTML({ customerName, plan, expiryDate }) {
               <tr>
                 <td style="background:#f9f9f9;border:1px solid #e0e0e0;border-left:3px solid #D32C2C;border-radius:6px;padding:14px 16px;">
                   <p style="margin:0 0 3px;font-size:13px;color:#888888;">
-                    ${plan} Maintenance Agreement
+                    ${escapeHtml(plan)} Maintenance Agreement
                   </p>
                   <p style="margin:0;font-size:15px;font-weight:700;color:#1a1a1c;">
                     Expires ${formattedDate}

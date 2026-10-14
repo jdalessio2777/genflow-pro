@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { renewalEmailHTML, renewalEmailSubject } from '../src/lib/emailTemplates/renewalEmail.js';
 import { sendEmail } from './_lib/sendEmail.js';
+import { escapeHtml } from '../src/lib/utils/escapeHtml.js';
 import { isAuthorizedCron, isAuthorizedManual } from './_lib/cronAuth.js';
 
 const INTERNAL_EMAIL = 'contact@genshieldservice.com';
@@ -27,12 +28,12 @@ function internalAlertHTML({ customer, days }) {
   </div>
   <div style="background:#f9f9f9;padding:18px 20px;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 6px 6px;">
     <table cellpadding="0" cellspacing="0" style="font-size:13px;color:#333;width:100%;">
-      <tr><td style="padding:4px 0;width:130px;color:#888;">Customer</td><td style="padding:4px 0;font-weight:700;">${customer.name}</td></tr>
+      <tr><td style="padding:4px 0;width:130px;color:#888;">Customer</td><td style="padding:4px 0;font-weight:700;">${escapeHtml(customer.name)}</td></tr>
       <tr><td style="padding:4px 0;color:#888;">Plan</td><td style="padding:4px 0;">${planLabel(customer.membership_plan)} Protection Plan</td></tr>
       <tr><td style="padding:4px 0;color:#888;">Expiry Date</td><td style="padding:4px 0;">${expiryStr}</td></tr>
       <tr><td style="padding:4px 0;color:#888;">Status</td><td style="padding:4px 0;">${statusLine}</td></tr>
-      ${customer.phone ? `<tr><td style="padding:4px 0;color:#888;">Phone</td><td style="padding:4px 0;">${customer.phone}</td></tr>` : ''}
-      ${customer.email ? `<tr><td style="padding:4px 0;color:#888;">Email</td><td style="padding:4px 0;">${customer.email}</td></tr>` : ''}
+      ${customer.phone ? `<tr><td style="padding:4px 0;color:#888;">Phone</td><td style="padding:4px 0;">${escapeHtml(customer.phone)}</td></tr>` : ''}
+      ${customer.email ? `<tr><td style="padding:4px 0;color:#888;">Email</td><td style="padding:4px 0;">${escapeHtml(customer.email)}</td></tr>` : ''}
     </table>
     <p style="margin:14px 0 0;font-size:12px;color:#888;">Call or email to schedule renewal.</p>
   </div>

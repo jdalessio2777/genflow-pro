@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { escapeHtml } from '../src/lib/utils/escapeHtml.js';
 import { sendEmail } from './_lib/sendEmail.js';
 
 // ─── period helper ─────────────────────────────────────────────────────────
@@ -72,8 +73,8 @@ function buildHTML(usage, label) {
   const rows = usage.length
     ? usage.map(p => `
       <tr>
-        <td style="padding:6px 10px;border:1px solid #e5e5e5;">${p.name}${p.part_number ? ` <span style="color:#999;">#${p.part_number}</span>` : ''}</td>
-        <td style="padding:6px 10px;border:1px solid #e5e5e5;text-align:center;font-weight:700;">${p.quantity}</td>
+        <td style="padding:6px 10px;border:1px solid #e5e5e5;">${escapeHtml(p.name)}${p.part_number ? ` <span style="color:#999;">#${escapeHtml(p.part_number)}</span>` : ''}</td>
+        <td style="padding:6px 10px;border:1px solid #e5e5e5;text-align:center;font-weight:700;">${escapeHtml(p.quantity)}</td>
         <td style="padding:6px 10px;border:1px solid #e5e5e5;text-align:right;">${stockBadge(p)}</td>
       </tr>`).join('')
     : `<tr><td colspan="3" style="padding:12px;text-align:center;color:#888;">No parts logged as used this week.</td></tr>`;
