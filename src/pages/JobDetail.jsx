@@ -1915,7 +1915,14 @@ export default function JobDetail() {
                         <DialogContent className="max-w-sm">
                           <DialogHeader><DialogTitle>Customer Signature</DialogTitle></DialogHeader>
                           <p className="text-sm text-muted-foreground text-center italic">Please sign below to confirm work was completed satisfactorily</p>
-                          <SignatureCanvas onSave={sig => { haptics.success(); updateJob.mutate({ customer_signature: sig }); setSigOpen(false); toast.success("Signature saved"); }} />
+                          <SignatureCanvas onSave={function saveSignature(sig) {
+                            // "Saved" only after the server has it; on failure the
+                            // signature is kept and Retry re-sends it (H-2).
+                            updateJob.mutate({ customer_signature: sig }, {
+                              onSuccess: () => { haptics.success(); dismissSaveError("", { id: "signature-error" }); setSigOpen(false); toast.success("Signature saved"); },
+                              onError: (e) => { haptics.error(); showSaveError("Signature NOT saved", e, () => saveSignature(sig), { id: "signature-error" }); },
+                            });
+                          }} />
                         </DialogContent>
                       </Dialog>
                     )}
