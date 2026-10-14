@@ -1,22 +1,33 @@
 import { createClient } from '@supabase/supabase-js';
 import { isAllowedEmail } from '../../src/lib/allowedUsers.js';
 
-// Browser origins allowed to call staff-only /api routes: production, this
-// project's Vercel previews, and local dev. Requests without an Origin header
-// (curl, server-to-server) pass this check and still need a staff token; the
-// token check below is what actually authorizes a request.
-const ALLOWED_ORIGIN_RE =
-  /^(https:\/\/genflow-pro\.vercel\.app|https:\/\/genflow-[a-z0-9-]+-jdalessio2777s-projects\.vercel\.app|http:\/\/localhost:5173)$/;
+const PRODUCTION_ORIGIN = 'https://genflow-pro.vercel.app';
 
-export function isAllowedOrigin(origin) {
-  return !origin || ALLOWED_ORIGIN_RE.test(origin);
+// Browser origins allowed to call staff-only /api routes, matched exactly (no
+// wildcards): production, plus this deployment's own URLs from Vercel's system
+// env vars, so a preview only accepts itself. A pattern like
+// genflow-*.vercel.app would also match other people's projects. Local dev is
+// allowed only outside production. Requests without an Origin header (curl,
+// server-to-server) pass this check and still need a staff token; the token
+// check below is what actually authorizes a request.
+export function allowedOrigins(env = process.env) {
+  const origins = new Set([PRODUCTION_ORIGIN]);
+  for (const host of [env.VERCEL_URL, env.VERCEL_BRANCH_URL, env.VERCEL_PROJECT_PRODUCTION_URL]) {
+    if (host) origins.add(`https://${host}`);
+  }
+  if (env.VERCEL_ENV !== 'production') origins.add('http://localhost:5173');
+  return origins;
+}
+
+export function isAllowedOrigin(origin, env = process.env) {
+  return !origin || allowedOrigins(env).has(origin);
 }
 
 // Reflects the Origin only when it's one of ours; anything else gets no CORS
 // headers, so the browser blocks the response.
 export function applyCors(req, res, methods) {
   const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGIN_RE.test(origin)) {
+  if (origin && allowedOrigins().has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', methods);

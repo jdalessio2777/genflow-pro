@@ -35,20 +35,50 @@ beforeEach(() => {
 })
 
 describe('staffAuth', () => {
-  it('allows our origins and requests with no Origin', () => {
-    expect(isAllowedOrigin(undefined)).toBe(true)
-    expect(isAllowedOrigin('https://genflow-pro.vercel.app')).toBe(true)
-    expect(isAllowedOrigin('https://genflow-otfwtpajw-jdalessio2777s-projects.vercel.app')).toBe(true)
-    expect(isAllowedOrigin('https://genflow-pro-git-main-jdalessio2777s-projects.vercel.app')).toBe(true)
-    expect(isAllowedOrigin('http://localhost:5173')).toBe(true)
+  const PREVIEW_ENV = {
+    VERCEL_ENV: 'preview',
+    VERCEL_URL: 'genflow-5t6tw0phk-jdalessio2777s-projects.vercel.app',
+    VERCEL_BRANCH_URL: 'genflow-pro-git-fix-send-email-auth-jdalessio2777s-projects.vercel.app',
+    VERCEL_PROJECT_PRODUCTION_URL: 'genflow-pro.vercel.app',
+  }
+  const PROD_ENV = {
+    VERCEL_ENV: 'production',
+    VERCEL_URL: 'genflow-abc123xyz-jdalessio2777s-projects.vercel.app',
+    VERCEL_BRANCH_URL: 'genflow-pro-git-main-jdalessio2777s-projects.vercel.app',
+    VERCEL_PROJECT_PRODUCTION_URL: 'genflow-pro.vercel.app',
+  }
+
+  it('production origin is always allowed; no Origin header passes to the token check', () => {
+    expect(isAllowedOrigin('https://genflow-pro.vercel.app', PROD_ENV)).toBe(true)
+    expect(isAllowedOrigin('https://genflow-pro.vercel.app', PREVIEW_ENV)).toBe(true)
+    expect(isAllowedOrigin('https://genflow-pro.vercel.app', {})).toBe(true)
+    expect(isAllowedOrigin(undefined, PROD_ENV)).toBe(true)
   })
 
-  it('rejects other origins, including look-alikes', () => {
-    expect(isAllowedOrigin('https://evil.example.com')).toBe(false)
-    expect(isAllowedOrigin('https://genflow-pro.vercel.app.evil.com')).toBe(false)
-    expect(isAllowedOrigin('https://genflow-x-otherteam-projects.vercel.app')).toBe(false)
-    expect(isAllowedOrigin('http://genflow-pro.vercel.app')).toBe(false)
-    expect(isAllowedOrigin('https://genshieldservice.com')).toBe(false)
+  it("a deployment accepts exactly its own URLs, not other previews'", () => {
+    expect(isAllowedOrigin('https://genflow-5t6tw0phk-jdalessio2777s-projects.vercel.app', PREVIEW_ENV)).toBe(true)
+    expect(isAllowedOrigin('https://genflow-pro-git-fix-send-email-auth-jdalessio2777s-projects.vercel.app', PREVIEW_ENV)).toBe(true)
+    expect(isAllowedOrigin('https://genflow-pro-git-main-jdalessio2777s-projects.vercel.app', PROD_ENV)).toBe(true)
+    expect(isAllowedOrigin('https://genflow-otfwtpajw-jdalessio2777s-projects.vercel.app', PREVIEW_ENV)).toBe(false)
+  })
+
+  it('rejects other sites and look-alikes', () => {
+    for (const env of [PREVIEW_ENV, PROD_ENV]) {
+      expect(isAllowedOrigin('https://evil.example.com', env)).toBe(false)
+      expect(isAllowedOrigin('https://genflow-pro.vercel.app.evil.com', env)).toBe(false)
+      expect(isAllowedOrigin('https://evil-genflow-pro.vercel.app', env)).toBe(false)
+      // another project whose name mimics our preview URLs (would get <name>.vercel.app)
+      expect(isAllowedOrigin('https://genflow-x-jdalessio2777s-projects.vercel.app', env)).toBe(false)
+      expect(isAllowedOrigin('https://anything.vercel.app', env)).toBe(false)
+      expect(isAllowedOrigin('http://genflow-pro.vercel.app', env)).toBe(false)
+      expect(isAllowedOrigin('https://genflow-pro.vercel.app/', env)).toBe(false)
+      expect(isAllowedOrigin('https://genshieldservice.com', env)).toBe(false)
+    }
+  })
+
+  it('localhost dev origin only outside production', () => {
+    expect(isAllowedOrigin('http://localhost:5173', PREVIEW_ENV)).toBe(true)
+    expect(isAllowedOrigin('http://localhost:5173', PROD_ENV)).toBe(false)
   })
 
   it('requireStaff: missing token → 401 without calling Supabase', async () => {
@@ -124,6 +154,9 @@ describe('POST /api/send-email', () => {
   })
 })
 
+const toastError = vi.fn()
+vi.mock('sonner', () => ({ toast: { error: (...a) => toastError(...a) } }))
+
 describe('integrationsCore.SendEmail (client)', () => {
   it('sends the session token and does not retry 4xx', async () => {
     vi.resetModules()
@@ -136,6 +169,34 @@ describe('integrationsCore.SendEmail (client)', () => {
     await expect(integrationsCore.SendEmailWithRetry(BODY, [0, 0])).rejects.toThrow('Not allowed')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok123')
+    vi.unstubAllGlobals()
+  })
+
+  it('401: shows a persistent "Email NOT sent" message, no retry', async () => {
+    vi.resetModules()
+    toastError.mockReset()
+    vi.doMock('@/lib/supabaseClient', () => ({
+      supabase: { auth: { getSession: async () => ({ data: { session: { access_token: 'expired' } } }) } },
+    }))
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({ error: 'Invalid session' }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { integrationsCore } = await import('@/lib/coreIntegrations')
+    await expect(integrationsCore.SendEmailWithRetry(BODY, [0, 0])).rejects.toThrow('Invalid session')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/^Email NOT sent: your sign-in has expired/), expect.objectContaining({ duration: Infinity }))
+    vi.unstubAllGlobals()
+  })
+
+  it('no session: persistent message, no request made', async () => {
+    vi.resetModules()
+    toastError.mockReset()
+    vi.doMock('@/lib/supabaseClient', () => ({ supabase: { auth: { getSession: async () => ({ data: { session: null } }) } } }))
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const { integrationsCore } = await import('@/lib/coreIntegrations')
+    await expect(integrationsCore.SendEmailWithRetry(BODY, [0, 0])).rejects.toThrow('Not signed in')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/^Email NOT sent/), expect.objectContaining({ duration: Infinity }))
     vi.unstubAllGlobals()
   })
 })
