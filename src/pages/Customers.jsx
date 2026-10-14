@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { deleteCustomerCascade } from "@/lib/deleteRecords";
+import { isActiveMember } from "@/lib/utils/membership";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,7 +94,7 @@ function CustomerCard({ customer }) {
             <p className={`text-xs ${customer.last_service_date ? "text-muted-foreground" : "text-amber-600 font-medium"}`}>
               {customer.last_service_date ? `Last service: ${formatDate(customer.last_service_date)}` : "Never serviced"}
             </p>
-            {customer.membership_plan && customer.membership_signed && (
+            {isActiveMember(customer) && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-200/60 shrink-0 dark:bg-green-900 dark:text-green-200 dark:border-green-700/60">
                 <Shield className="w-2.5 h-2.5" /> Member
               </span>

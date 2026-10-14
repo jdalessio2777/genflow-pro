@@ -33,6 +33,9 @@ import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
 import { removePartFromJob } from "@/lib/inventory";
+import { useAddJobLabor } from "@/lib/useAddJobLabor";
+import { buildLaborLine, groupHourlyRates, memberPrice } from "@/lib/utils/laborPricing";
+import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
@@ -533,6 +536,13 @@ export default function JobDetail() {
     }
   });
 
+  const laborAdd = useAddJobLabor(id);
+  const { data: laborRates = [], isSuccess: laborRatesLoaded } = useQuery({
+    queryKey: ["labor-rates"],
+    queryFn: () => db.LaborRate.list("name"),
+  });
+  const laborGroups = groupHourlyRates(laborRates);
+
   const getJobTotals = () => {
     const f = computeJobFinancials(parts, labor);
     return { partsCost: f.partsCost, partsPrice: f.partsTotal, laborCost: f.laborCost, laborPrice: f.laborTotal };
@@ -653,7 +663,7 @@ export default function JobDetail() {
   // Agreement added to this job but not yet signed on it — must be signed
   // BEFORE Complete Job so its PDF can ride on the single completion email.
   // An already-active member (agreement line = renewal/upgrade) isn't blocked.
-  const isActiveMember = !!(customer?.membership_signed && (!customer?.membership_expiry || new Date(customer.membership_expiry) > new Date()));
+  const isActiveMember = isActiveMemberNow(customer);
   const agreementLine = labor.find(l => l.requires_agreement);
   const agreementUnsigned = !!agreementLine && !jobAgreement && !isActiveMember;
   const goSignAgreement = () => {
@@ -943,9 +953,9 @@ export default function JobDetail() {
   // Completed jobs are done: no editing the job itself or canceling it.
   // (Payment, resend summary, photos and notes stay available as before.)
   const canEditOrCancel = !isClosed && job.status !== "completed";
-  const isMember = !!(customer?.membership_plan && customer?.membership_signed);
-  const isSemiMember = !!(customer?.membership_plan === "semi_annual" && customer?.membership_signed);
-  const memberDiscountRate = isSemiMember ? 0.85 : isMember ? 0.90 : 1.0;
+  // Expired plans get no discount (D-01): one rule, src/lib/utils/membership.js.
+  const memberDiscountRate = memberDiscountRateFor(customer);
+  const isMember = memberDiscountRate < 1.0;
   const hasPendingAgreement = labor.some(l => l.requires_agreement);
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
   // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
@@ -1229,7 +1239,7 @@ export default function JobDetail() {
                     <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{jobAgreement.plan_name}</p>
                     <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed contract (PDF) is emailed with the job summary at completion</p>
                   </Card>
-                ) : customer?.membership_signed ? (
+                ) : isActiveMember ? (
                   <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
                     <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
                       ✅ SERVICE AGREEMENT ACTIVE
@@ -1632,7 +1642,9 @@ export default function JobDetail() {
                                       <Pencil className="w-3 h-3" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7"
-                                      onClick={() => db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))}>
+                                      onClick={() => db.JobLabor.delete(item.id)
+                                        .then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))
+                                        .catch(e => { haptics.error(); showSaveError(`"${item.description}" NOT removed`, e); })}>
                                       <Trash2 className="w-3 h-3 text-destructive" />
                                     </Button>
                                   </>
@@ -1645,98 +1657,39 @@ export default function JobDetail() {
                       </>
                     )}
 
-                    {/* Standard rates */}
+                    {/* Rate Catalog — straight from Catalog › Labor Rates (H-5).
+                        Adding stores the price at that moment; later catalog
+                        edits only change NEW lines. */}
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Rate Catalog</p>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Standard</p>
-                    {[
-                      { name: "First ½ Hour", sub: "Minimum charge", price: 125, type: "flat" },
-                      { name: "Standard Hourly", sub: "After first ½ hr · per hour", price: 115, type: "hourly" },
-                    ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-muted-foreground">{r.sub}{isMember ? ` · ${Math.round((1-memberDiscountRate)*100)}% off` : ""}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm font-bold">${isMember ? Math.round(r.price * memberDiscountRate) : r.price}{r.type === "hourly" ? "/hr" : ""}</p>
-                          <Button size="icon" className="h-7 w-7 rounded-lg" onClick={() => {
-                            const price = isMember ? Math.round(r.price * memberDiscountRate * 100) / 100 : r.price;
-                            db.JobLabor.create({
-                              job_id: id,
-                              description: r.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
-                              is_flat_rate: r.type === "flat",
-                              flat_rate_amount: r.type === "flat" ? price : 0,
-                              hours: r.type === "hourly" ? 1 : 0,
-                              rate: r.type === "hourly" ? price : 0,
-                              total_price: price,
-                              total_cost: 0,
-                              flat_rate_cost: 0,
-                            }).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
-                            toast.success(`${r.name} added`);
-                          }}>
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </Card>
+                    {laborGroups.map(group => (
+                      <div key={group.key} className="space-y-2">
+                        <p className={`text-[10px] font-bold uppercase tracking-wider mt-2 ${group.tone === "orange" ? "text-orange-400" : group.tone === "red" ? "text-red-400" : "text-muted-foreground/60"}`}>{group.label}</p>
+                        {group.rates.filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map(r => {
+                          const unit = memberPrice(r.rate, memberDiscountRate);
+                          return (
+                            <Card key={r.id} data-testid="labor-rate" className={`p-3 flex items-center justify-between ${group.tone === "orange" ? "border-orange-200 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-900/20" : group.tone === "red" ? "border-red-200 bg-red-50/40 dark:border-red-700 dark:bg-red-900/20" : ""}`}>
+                              <div className="min-w-0 mr-2">
+                                <p className="text-sm font-medium">{r.name}</p>
+                                <p className="text-xs text-muted-foreground">{r.notes || "Per hour"}{isMember ? ` · ${Math.round((1 - memberDiscountRate) * 100)}% off` : ""}</p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right">
+                                  <p className="text-sm font-bold">{formatCurrency(unit)}/hr</p>
+                                  {isMember && <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(r.rate)}</p>}
+                                </div>
+                                <Button size="icon" className="h-7 w-7 rounded-lg" aria-label={`Add ${r.name}`} disabled={laborAdd.busy}
+                                  onClick={() => laborAdd.add(buildLaborLine({ rate: r, jobId: id, memberDiscountRate }), r.name)}>
+                                  <Plus className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
                     ))}
-
-                    {/* After Hours */}
-                     <p className="text-[10px] font-bold uppercase tracking-wider text-orange-400 mt-2">After Hours & Weekend</p>
-                    {[
-                      { name: "Night / Sat until 3:30pm", sub: "After hours rate", price: 245 },
-                      { name: "Sat after 3:30pm / Sun", sub: "Weekend rate", price: 330 },
-                      { name: "Holiday Rate", sub: "Federal holidays", price: 330 },
-                    ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between border-orange-200 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-900/20">
-                        <div>
-                          <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-orange-600 dark:text-orange-400">{r.sub}{isMember ? ` · ${Math.round((1-memberDiscountRate)*100)}% off` : ""}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm font-bold text-orange-700">${isMember ? Math.round(r.price * memberDiscountRate) : r.price}/hr</p>
-                          <Button size="icon" className="h-7 w-7 rounded-lg bg-orange-500 hover:bg-orange-600" onClick={() => {
-                            const price = isMember ? Math.round(r.price * memberDiscountRate * 100) / 100 : r.price;
-                            db.JobLabor.create({
-                              job_id: id, description: r.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
-                              is_flat_rate: false, hours: 1, rate: price, total_price: price, total_cost: 0,
-                            }).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
-                            toast.success(`${r.name} added`);
-                          }}>
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
-
-                    {/* Emergency */}
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-red-400 mt-2">Emergency</p>
-                    {[
-                      { name: "Emergency Dispatch Fee", sub: "Same-day emergency response", price: 75, type: "flat" },
-                      { name: "Emergency Hourly", sub: "Emergency rate · per hour", price: 245, type: "hourly" },
-                    ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between border-red-200 bg-red-50/40 dark:border-red-700 dark:bg-red-900/20">
-                        <div>
-                          <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-red-500 dark:text-red-400">{r.sub}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm font-bold text-red-700">${r.price}{r.type === "hourly" ? "/hr" : ""}</p>
-                          <Button size="icon" className="h-7 w-7 rounded-lg bg-red-500 hover:bg-red-600" onClick={() => {
-                            db.JobLabor.create({
-                              job_id: id, description: r.name,
-                              is_flat_rate: r.type === "flat",
-                              flat_rate_amount: r.type === "flat" ? r.price : 0,
-                              hours: r.type === "hourly" ? 1 : 0,
-                              rate: r.type === "hourly" ? r.price : 0,
-                              total_price: r.price, total_cost: 0,
-                            }).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
-                            toast.success(`${r.name} added`);
-                          }}>
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
+                    {laborRatesLoaded && laborGroups.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No labor rates in the catalog. Add them in Catalog › Labor Rates.</p>
+                    )}
                   </div>
                 )}
 
