@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Minus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { partChargeTotal } from "@/lib/utils/jobFinancials";
+import { stockStatus } from "@/lib/utils/stockStatus";
 import { usePreferences } from "@/hooks/usePreferences";
 import { suggestedSalePrice } from "@/lib/utils/partsManaged";
 import { saveCatalogPrice, applySavedPrice } from "@/lib/catalogPrices";
@@ -626,7 +627,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <p className="text-sm font-semibold">{form.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {form.part_number ? <span className="font-mono">#{form.part_number} · </span> : null}
-                    {catalogParts.find(p => p.id === form.part_id)?.in_stock ?? 0} in stock · Selected from catalog
+                    {(() => { const n = catalogParts.find(p => p.id === form.part_id)?.in_stock ?? 0; return stockStatus(n) === "recount" ? `Recount needed (${n})` : `${n} in stock`; })()} · Selected from catalog
                   </p>
                 </Card>
                 <div>

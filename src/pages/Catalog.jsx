@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { stockStatus } from "@/lib/utils/stockStatus";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -283,13 +284,15 @@ function PartsItemList({ category, parts }) {
       {items.length === 0 ? <EmptyState icon={Package} title={`No ${category.label} yet`} description="Tap + to add one" /> : (
         <div className="space-y-2">
           {items.map(part => {
-            const isLow = part.in_stock !== undefined && part.in_stock <= 2;
-            const isOut = part.in_stock !== undefined && part.in_stock <= 0;
+            const st = stockStatus(part.in_stock);
+            const isRecount = st === "recount";
+            const isOut = st === "out";
+            const isLow = st === "low";
             return (
-              <Card key={part.id} className={`p-3 ${isOut ? "border-red-200" : isLow ? "border-amber-200" : ""}`}>
+              <Card key={part.id} className={`p-3 ${isRecount ? "border-red-500 border-2" : isOut ? "border-red-200" : isLow ? "border-amber-200" : ""}`}>
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{part.name}</p>
+                    <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">{part.name}{isRecount && <span data-testid="recount-badge" className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Recount</span>}</p>
                     {part.part_number && <p className="text-xs text-muted-foreground">#{part.part_number}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -301,7 +304,7 @@ function PartsItemList({ category, parts }) {
                           onChange={val => setBulkValues(v => ({ ...v, [part.id]: val }))}
                           onBlur={() => commitBulkValue(part)}
                         />
-                        <span className="text-[9px] text-muted-foreground leading-none mt-0.5">{isOut ? "OUT" : isLow ? "LOW" : "count"}</span>
+                        <span className="text-[9px] text-muted-foreground leading-none mt-0.5">{isRecount ? "RECOUNT" : isOut ? "OUT" : isLow ? "LOW" : "count"}</span>
                       </div>
                     )}
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>
@@ -733,7 +736,7 @@ export default function Catalog() {
                               <Card key={part.id} className="p-3">
                                 <div className="flex items-center justify-between">
                                   <div>
-                                    <p className="text-sm font-medium">{part.name}</p>
+                                    <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">{part.name}{stockStatus(part.in_stock) === "recount" && <span data-testid="recount-badge" className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Recount</span>}</p>
                                     <p className="text-xs text-muted-foreground capitalize">{part.category?.replace(/_/g, " ")} · Stock: {part.in_stock ?? 0}</p>
                                   </div>
                                   <p className="text-sm font-bold">{formatCurrency(part.default_price || 0)}</p>

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { escapeHtml } from '../src/lib/utils/escapeHtml.js';
+import { stockStatus } from '../src/lib/utils/stockStatus.js';
 import { sendEmail } from './_lib/sendEmail.js';
 
 // ─── period helper ─────────────────────────────────────────────────────────
@@ -64,8 +65,10 @@ function stockBadge(part) {
   // Respect the first_managed_at exclusion: never show a status badge for a
   // legacy/never-actively-managed part, even if it happens to show up here.
   if (!part.first_managed_at) return '';
-  const isOut = part.in_stock <= 0;
-  const isLow = part.in_stock > 0 && part.in_stock <= 2;
+  const status = stockStatus(part.in_stock);
+  if (status === 'recount') return `<span style="color:#991b1b;font-weight:700;">RECOUNT (${part.in_stock})</span>`;
+  const isOut = status === 'out';
+  const isLow = status === 'low';
   if (isOut) return `<span style="color:#991b1b;font-weight:700;">OUT (${part.in_stock})</span>`;
   if (isLow) return `<span style="color:#9a3412;font-weight:700;">LOW (${part.in_stock})</span>`;
   return `<span style="color:#166534;">${part.in_stock} in stock</span>`;
