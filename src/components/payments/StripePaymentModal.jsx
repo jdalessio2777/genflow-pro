@@ -9,11 +9,19 @@ import { Loader2, CreditCard, ShieldCheck } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabaseClient';
+import { SURCHARGE_RATE } from '@/lib/utils/paymentAmounts';
 
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
-const SURCHARGE_RATE = 0.03;
+// The payment routes are staff-only: send the signed-in user's access token.
+async function authHeaders() {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error('Your sign-in has expired. Sign in again, then retry.');
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+}
 
 // ─── Inner form (must be inside <Elements>) ───────────────────────────────────
 //
@@ -114,17 +122,14 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
         setFunding(pm.card?.funding ?? 'unknown');
       }
 
-      const clientSurcharge = pm.card?.funding === 'credit'
-        ? Math.round(baseAmount * SURCHARGE_RATE * 100) / 100
-        : 0;
-
+      // The server reads the card type from Stripe and sets the amount.
       const resp = await fetch('/api/update-payment-intent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({
           payment_intent_id: paymentIntentId,
           invoice_id: invoice.id,
-          surcharge_amount: clientSurcharge,
+          payment_method_id: pm.id,
         }),
       });
 
@@ -311,11 +316,12 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
     setLoading(true);
     setInitError(null);
 
-    fetch('/api/create-payment-intent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoice_id: invoice.id }),
-    })
+    authHeaders()
+      .then((headers) => fetch('/api/create-payment-intent', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ invoice_id: invoice.id }),
+      }))
       .then(async (resp) => {
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || 'Failed to initialize payment');

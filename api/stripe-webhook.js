@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { owedCents, paymentCoversInvoice } from '../src/lib/utils/paymentAmounts.js';
 
 async function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -43,7 +44,7 @@ export default async function handler(req, res) {
 
     const { data: invoice } = await supabase
       .from('invoices')
-      .select('id, status, total, stripe_payment_intent_id')
+      .select('id, status, total, parts_total, labor_total, tax_amount, stripe_payment_intent_id')
       .eq('id', invoiceId)
       .single();
 
@@ -56,7 +57,17 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true, skipped: 'already_processed' });
     }
 
-    const surchargeAmount = parseFloat(pi.metadata?.surcharge_amount || '0');
+    // Never mark an invoice paid for less than it owes. The surcharge is
+    // whatever Stripe actually received above the owed amount (never
+    // negative), not a number from metadata.
+    const received = pi.amount_received ?? pi.amount ?? 0;
+    if (!paymentCoversInvoice(received, invoice)) {
+      console.error('[stripe-webhook] UNDERPAID — not marking paid:', invoiceId, 'pi:', pi.id,
+        'received', received, 'owed', owedCents(invoice));
+      return res.status(200).json({ received: true, skipped: 'underpaid' });
+    }
+    const base = owedCents(invoice);
+    const surchargeAmount = (received - base) / 100;
 
     await supabase.from('invoices').update({
       status: 'paid',
@@ -64,7 +75,7 @@ export default async function handler(req, res) {
       paid_date: new Date().toISOString(),
       stripe_payment_intent_id: pi.id,
       surcharge_amount: surchargeAmount,
-      total: (invoice.total || 0) + surchargeAmount,
+      total: received / 100,
     }).eq('id', invoiceId);
 
     console.log('[stripe-webhook] invoice marked paid via webhook:', invoiceId, 'pi:', pi.id);
