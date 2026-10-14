@@ -32,3 +32,11 @@ describe("saveSafety (H-2)", () => {
     expect(isConnectionError(new Error("Load failed"))).toBe(true);
   });
 });
+
+import { saveErrorText } from "@/lib/saveSafety";
+describe("saveErrorText", () => {
+  it("ends a server message with a period so the next sentence reads cleanly", () => {
+    expect(saveErrorText(new Error("boom"))).toBe("boom.");
+    expect(saveErrorText(new Error("Done!"))).toBe("Done!");
+  });
+});

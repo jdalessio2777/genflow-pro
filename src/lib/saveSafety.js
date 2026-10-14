@@ -24,7 +24,8 @@ export function isConnectionError(error) {
 
 export function saveErrorText(error) {
   if (isConnectionError(error)) return "No connection (or the signal dropped).";
-  return error?.message || "Unknown error.";
+  const msg = String(error?.message || "Unknown error").trim();
+  return /[.!?]$/.test(msg) ? msg : `${msg}.`;
 }
 
 // Persistent error with Retry. `what` names what did NOT happen, e.g.
