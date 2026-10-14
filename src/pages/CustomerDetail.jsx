@@ -2,6 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { deleteCustomerCascade } from "@/lib/deleteRecords";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -24,27 +25,12 @@ export default function CustomerDetail() {
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const invoices = await db.Invoice.filter({ customer_id: id });
-      await Promise.all(invoices.map(inv => db.Invoice.delete(inv.id)));
-
-      const jobs = await db.Job.filter({ customer_id: id });
-      for (const job of jobs) {
-        await Promise.all([
-          db.JobPart.filter({ job_id: job.id }).then(rows => Promise.all(rows.map(r => db.JobPart.delete(r.id)))),
-          db.JobLabor.filter({ job_id: job.id }).then(rows => Promise.all(rows.map(r => db.JobLabor.delete(r.id)))),
-          db.JobPhoto.filter({ job_id: job.id }).then(rows => Promise.all(rows.map(r => db.JobPhoto.delete(r.id)))),
-          db.JobDocument.filter({ job_id: job.id }).then(rows => Promise.all(rows.map(r => db.JobDocument.delete(r.id)))),
-        ]);
-        await db.Job.delete(job.id);
-      }
-      await db.Customer.delete(id);
-    },
+    mutationFn: () => deleteCustomerCascade(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       navigate("/customers", { replace: true });
     },
-    onError: (e) => { toast.error("Failed to delete: " + e.message); },
+    onError: (e) => { toast.error("Failed to delete: " + e.message, { duration: Infinity, closeButton: true }); },
   });
 
   const { data: customer, isLoading } = useQuery({

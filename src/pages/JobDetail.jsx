@@ -32,6 +32,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
+import { removePartFromJob } from "@/lib/inventory";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
@@ -509,6 +510,28 @@ export default function JobDetail() {
   const scheduleNextGuard = useSaveGuard();
   const scheduleNextId = useRef(newRequestId());
   const collectInvoiceId = useRef(newRequestId());
+
+  // Items-tab remove: same inventory ledger as the Work tab (stock back +
+  // usage row removed), with Retry that resumes (H-4 / C-3).
+  const removePartGuard = useSaveGuard();
+  const pendingPartRemovals = useRef(new Map());
+  const removeJobPart = (part) => removePartGuard.run(async function attempt() {
+    const progress = pendingPartRemovals.current.get(part.id) || {};
+    pendingPartRemovals.current.set(part.id, progress);
+    try {
+      await removePartFromJob(part, progress);
+      pendingPartRemovals.current.delete(part.id);
+      dismissSaveError("", { id: `remove-part-${part.id}` });
+      toast.success(progress.stock ? `Part removed — ${part.quantity} put back in stock` : "Part removed");
+    } catch (e) {
+      haptics.error();
+      showSaveError(progress.deleted ? `"${part.name}" removed, but stock NOT put back yet` : `"${part.name}" NOT removed`, e,
+        () => removePartGuard.run(attempt), { id: `remove-part-${part.id}` });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["job-parts", id] });
+      queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    }
+  });
 
   const getJobTotals = () => {
     const f = computeJobFinancials(parts, labor);
@@ -2011,10 +2034,10 @@ export default function JobDetail() {
                                         </Button>
                                       </>
                                     )}
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" disabled={removePartGuard.busy} onClick={() => {
                                       if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) {
                                         haptics.medium();
-                                        db.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
+                                        removeJobPart(part);
                                       }
                                     }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                                   </>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { deleteJobCascade } from "@/lib/deleteRecords";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
@@ -65,28 +66,12 @@ export default function Jobs() {
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
 
   const deleteMutation = useMutation({
-    mutationFn: async (jobId) => {
-      const [parts, labor, docs, photos, invoices] = await Promise.all([
-        db.JobPart.filter({ job_id: jobId }),
-        db.JobLabor.filter({ job_id: jobId }),
-        db.JobDocument.filter({ job_id: jobId }),
-        db.JobPhoto.filter({ job_id: jobId }),
-        db.Invoice.filter({ job_id: jobId }),
-      ]);
-      await Promise.all([
-        ...parts.map(r => db.JobPart.delete(r.id)),
-        ...labor.map(r => db.JobLabor.delete(r.id)),
-        ...docs.map(r => db.JobDocument.delete(r.id)),
-        ...photos.map(r => db.JobPhoto.delete(r.id)),
-        ...invoices.map(r => db.Invoice.delete(r.id)),
-      ]);
-      return db.Job.delete(jobId);
-    },
+    mutationFn: (jobId) => deleteJobCascade(jobId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       toast.success("Job deleted");
     },
-    onError: (e) => toast.error("Failed to delete: " + e.message),
+    onError: (e) => toast.error("Failed to delete: " + e.message, { duration: Infinity, closeButton: true }),
   });
 
   const filtered = jobs.filter(j => {

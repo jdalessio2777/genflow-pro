@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { deleteCustomerCascade } from "@/lib/deleteRecords";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import SwipeableListItem from "@/components/ui/SwipeableListItem";
 import { Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { formatPhone, formatDate } from "@/lib/utils/format";
+import { formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 
 function getServiceStatus(customer) {
@@ -44,33 +45,12 @@ function CustomerCard({ customer }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const deleteMutation = useMutation({
-    mutationFn: async (customerId) => {
-      const invoices = await db.Invoice.filter({ customer_id: customerId });
-      await Promise.all(invoices.map(inv => db.Invoice.delete(inv.id)));
-
-      const jobs = await db.Job.filter({ customer_id: customerId });
-      for (const job of jobs) {
-        const [parts, labor, docs, photos] = await Promise.all([
-          db.JobPart.filter({ job_id: job.id }),
-          db.JobLabor.filter({ job_id: job.id }),
-          db.JobDocument.filter({ job_id: job.id }),
-          db.JobPhoto.filter({ job_id: job.id }),
-        ]);
-        await Promise.all([
-          ...parts.map(r => db.JobPart.delete(r.id)),
-          ...labor.map(r => db.JobLabor.delete(r.id)),
-          ...docs.map(r => db.JobDocument.delete(r.id)),
-          ...photos.map(r => db.JobPhoto.delete(r.id)),
-        ]);
-        await db.Job.delete(job.id);
-      }
-      return db.Customer.delete(customerId);
-    },
+    mutationFn: (customerId) => deleteCustomerCascade(customerId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success("Customer deleted");
     },
-    onError: (e) => toast.error("Failed to delete: " + e.message),
+    onError: (e) => toast.error("Failed to delete: " + e.message, { duration: Infinity, closeButton: true }),
   });
 
   const svc = getServiceStatus(customer);
