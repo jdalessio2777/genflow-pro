@@ -1,4 +1,5 @@
 import { sendEmail } from './_lib/sendEmail.js';
+import { applyCors, isAllowedOrigin, requireStaff } from './_lib/staffAuth.js';
 
 async function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -12,13 +13,18 @@ async function readJsonBody(req) {
   });
 }
 
+// Staff-only: requires a signed-in staff user's Supabase access token
+// (Authorization: Bearer). From and Reply-To are fixed in _lib/sendEmail.js
+// and are never read from the request.
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  applyCors(req, res, 'POST, OPTIONS');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'OPTIONS') return res.status(isAllowedOrigin(req.headers.origin) ? 204 : 403).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: 'Origin not allowed' });
+
+  const auth = await requireStaff(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   const { to, subject, html, internal } = await readJsonBody(req);
   if (!to || !subject || !html) {
@@ -26,7 +32,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await sendEmail({ to, subject, html, internal });
+    const result = await sendEmail({ to, subject, html, internal: internal === true });
+    console.log('[send-email] sent', result.id, 'by', auth.user.email);
     return res.status(200).json({ ok: true, id: result.id });
   } catch (err) {
     console.error('[send-email]', err.message);
