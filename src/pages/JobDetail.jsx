@@ -17,7 +17,7 @@ import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
-import { TAX_RATE, computeJobFinancials } from "@/lib/utils/jobFinancials";
+import { TAX_RATE, computeJobFinancials, partChargeTotal } from "@/lib/utils/jobFinancials";
 import { formatTime, toDatetimeLocalValue } from "@/lib/formatTime";
 import { sortJobs } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -423,7 +423,11 @@ export default function JobDetail() {
   };
 
   const updatePartPriceMutation = useMutation({
-    mutationFn: ({ id, price, quantity }) => db.JobPart.update(id, { price, total_price: price * quantity }),
+    mutationFn: ({ id, price, quantity, charge_for_part }) => {
+      // A No Charge line is hidden on the invoice, so it can never carry a price.
+      if (charge_for_part === false) throw new Error("No Charge parts can't be priced");
+      return db.JobPart.update(id, { price, total_price: price * quantity });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-parts", id] });
       setEditingPartPriceId(null);
@@ -445,7 +449,7 @@ export default function JobDetail() {
   const commitPartPriceEdit = (part) => {
     const newPrice = parseFloat(editingPartPriceValue);
     if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
-    updatePartPriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity });
+    updatePartPriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity, charge_for_part: part.charge_for_part });
   };
 
   const updateJobOffline = useOfflineMutation({
@@ -1933,11 +1937,17 @@ export default function JobDetail() {
                                   </>
                                 ) : (
                                   <>
-                                    <p className="text-sm font-semibold">{formatCurrency(part.total_price)}</p>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                      onClick={() => startEditingPartPrice(part)}>
-                                      <Pencil className="w-3 h-3" />
-                                    </Button>
+                                    {part.charge_for_part === false ? (
+                                      <p className="text-xs font-semibold text-muted-foreground">No Charge</p>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm font-semibold">{formatCurrency(partChargeTotal(part))}</p>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                          onClick={() => startEditingPartPrice(part)}>
+                                          <Pencil className="w-3 h-3" />
+                                        </Button>
+                                      </>
+                                    )}
                                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                                       if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) {
                                         haptics.medium();

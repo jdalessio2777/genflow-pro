@@ -1,4 +1,5 @@
 import { isZeroDollarInvoice } from './utils/invoiceTotals.js'
+import { partChargeTotal } from './utils/jobFinancials.js'
 
 function fmt(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -356,7 +357,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
 
 export function completionEmailHTML({ customer, job, parts = [], labor = [], documents = [], includeChecklist = true }) {
   const generatorInfo = [customer.generator_model, customer.generator_serial].filter(Boolean).join(' · ')
-  const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0)
+  const partsTotal = parts.reduce((s, p) => s + partChargeTotal(p), 0)
   const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0)
   const total = partsTotal + laborTotal
 
@@ -366,7 +367,7 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
       <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(l.total_price)}</td>
     </tr>`).join('')
 
-  const partsRows = parts.filter(p => p.total_price > 0).map((p, i) => `
+  const partsRows = parts.filter(p => partChargeTotal(p) > 0).map((p, i) => `
     <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;color:#374151;border-bottom:1px solid #f0f0f0;">${p.name} ×${p.quantity}</td>
       <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(p.total_price)}</td>

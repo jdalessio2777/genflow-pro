@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Minus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { partChargeTotal } from "@/lib/utils/jobFinancials";
 import { usePreferences } from "@/hooks/usePreferences";
 import { suggestedSalePrice } from "@/lib/utils/partsManaged";
 import { saveCatalogPrice, applySavedPrice } from "@/lib/catalogPrices";
@@ -143,15 +144,18 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
   });
 
   const updatePriceMutation = useMutation({
-    mutationFn: ({ id, price, quantity }) =>
-      db.JobPart.update(id, { price, total_price: price * quantity }),
+    mutationFn: ({ id, price, quantity, charge_for_part }) => {
+      // A No Charge line is never billed; its price can't be edited.
+      if (charge_for_part === false) throw new Error("No Charge parts can't be priced");
+      return db.JobPart.update(id, { price, total_price: price * quantity });
+    },
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
       setOverriddenPriceIds(prev => new Set(prev).add(id));
       setEditingPriceId(null);
       toast.success("Price updated");
     },
-    onError: () => toast.error("Failed to update price"),
+    onError: (err) => toast.error("Failed to update price: " + (err?.message || "try again")),
   });
 
   const startEditingPrice = (part) => {
@@ -162,7 +166,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
   const commitPriceEdit = (part) => {
     const newPrice = parseFloat(editingPriceValue);
     if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
-    updatePriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity });
+    updatePriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity, charge_for_part: part.charge_for_part });
   };
 
   const cancelPriceEdit = () => {
@@ -356,7 +360,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     ) : null;
 
   const totalCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
-  const totalPrice = parts.reduce((s, p) => s + (p.total_price || 0), 0);
+  const totalPrice = parts.reduce((s, p) => s + partChargeTotal(p), 0);
 
   return (
     <div className="space-y-3">
@@ -768,7 +772,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   ) : (
                     <>
                       <div className="text-right">
-                        <span className="text-sm font-semibold">{formatCurrency(part.total_price)}</span>
+                        <span className="text-sm font-semibold">{formatCurrency(partChargeTotal(part))}</span>
                         {overriddenPriceIds.has(part.id) && (
                           <p className="text-[10px] text-muted-foreground leading-none mt-0.5">edited</p>
                         )}

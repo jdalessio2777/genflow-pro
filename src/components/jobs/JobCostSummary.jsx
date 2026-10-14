@@ -1,9 +1,10 @@
 import { Card } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/format";
+import { partChargeTotal } from "@/lib/utils/jobFinancials";
 
 export default function JobCostSummary({ parts, labor }) {
   const partsCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
-  const partsPrice = parts.reduce((s, p) => s + (p.total_price || 0), 0);
+  const partsPrice = parts.reduce((s, p) => s + partChargeTotal(p), 0);
   const laborCost = labor.reduce((s, l) => s + (l.total_cost || 0), 0);
   const laborPrice = labor.reduce((s, l) => s + (l.total_price || 0), 0);
   const totalCost = partsCost + laborCost;
