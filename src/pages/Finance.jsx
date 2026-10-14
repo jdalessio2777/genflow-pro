@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
+import { mileageLogPayload } from "@/lib/utils/mileage";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Card } from "@/components/ui/card";
@@ -476,7 +477,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
   };
 
   const createMutation = useMutation({
-    mutationFn: (data) => db.MileageLog.create(data),
+    mutationFn: (data) => db.MileageLog.create(mileageLogPayload(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mileage"] });
       setSmartOpen(false);
