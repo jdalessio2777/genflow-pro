@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyCors, isAllowedOrigin, requireStaff } from './_lib/staffAuth.js';
 import { computeCharge, validateClientSurcharge } from '../src/lib/utils/paymentAmounts.js';
+import { surchargeConfig } from '../src/lib/utils/surcharge.js';
 
 async function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -67,7 +68,11 @@ export default async function handler(req, res) {
     const pm = await stripe.paymentMethods.retrieve(payment_method_id);
     const funding = pm?.card?.funding || 'unknown';
 
-    const charge = computeCharge(invoice, funding);
+    // Same rate/taxable settings as the invoice screen's surcharge button.
+    const { data: settingsRows } = await supabase
+      .from('app_settings').select('key, value')
+      .in('key', ['card_surcharge_rate', 'card_surcharge_taxable']);
+    const charge = computeCharge(invoice, funding, surchargeConfig(settingsRows || []));
     if (!charge.ok) return res.status(charge.status).json({ error: charge.error });
 
     // Pin the card that was checked, so the amount matches the card charged.

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useSettings } from "@/lib/useSettings";
+import { surchargeConfig } from "@/lib/utils/surcharge";
+import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +67,42 @@ function BusinessTab({ settings, setSetting, isSaving }) {
 }
 
 // ─── OPERATIONS TAB ───────────────────────────────────────────────────────────
+// Credit card surcharge settings (Part 2). Unset = code defaults (3%, not
+// taxable). Save writes only these two keys, and only when changed.
+function CardSurchargeSettings({ settings, setSetting }) {
+  const cfg = surchargeConfig(settings);
+  const [rate, setRate] = useState(String(Math.round(cfg.rate * 10000) / 100));
+  const [taxable, setTaxable] = useState(cfg.taxable);
+  const pct = parseFloat(rate);
+  const valid = Number.isFinite(pct) && pct >= 0 && pct <= 4;
+  const changed = valid && (Math.abs(pct / 100 - cfg.rate) > 1e-9 || taxable !== cfg.taxable);
+  const save = () => {
+    if (!valid) { toast.error("Enter a rate from 0 to 4%"); return; }
+    if (Math.abs(pct / 100 - cfg.rate) > 1e-9) setSetting("card_surcharge_rate", String(pct));
+    if (taxable !== cfg.taxable) setSetting("card_surcharge_taxable", String(taxable));
+    toast.success("Card surcharge settings saved");
+  };
+  return (
+    <Card className="p-4 space-y-3" data-testid="card-surcharge-settings">
+      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Card surcharge</p>
+      <div className="grid grid-cols-2 gap-3 items-end">
+        <div>
+          <Label className="text-xs">Rate (credit cards only)</Label>
+          <div className="relative mt-1">
+            <Input type="text" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} className="pr-7" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
+          </div>
+        </div>
+        <label className="flex items-center gap-2 min-h-[44px] text-sm">
+          <Switch checked={taxable} onCheckedChange={setTaxable} aria-label="Surcharge is taxable" /> Taxable
+        </label>
+      </div>
+      <p className="text-xs text-muted-foreground">Used by the invoice's "Credit card surcharge" button and the in-app card form. Applied to the total after discounts and tax.</p>
+      <Button onClick={save} disabled={!changed} className="w-full rounded-xl">Save surcharge settings</Button>
+    </Card>
+  );
+}
+
 function OperationsTab({ settings, setSetting, isSaving }) {
   const [homeAddress, setHomeAddress] = useState(settings.home_address);
   const [firstHalfHourRate, setFirstHalfHourRate] = useState(settings.first_half_hour_rate);
@@ -93,6 +131,8 @@ function OperationsTab({ settings, setSetting, isSaving }) {
           <p className="text-xs text-muted-foreground mt-1">Starting point for mileage calculations</p>
         </div>
       </Card>
+
+      <CardSurchargeSettings settings={settings} setSetting={setSetting} />
 
       <Card className="p-4 space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Labor Rates</p>

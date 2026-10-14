@@ -2,7 +2,10 @@
 // from the request. Plain ESM, no aliases: used by api/create-payment-intent,
 // api/update-payment-intent, api/stripe-webhook and the client modal.
 
-export const SURCHARGE_RATE = 0.03;
+import { SURCHARGE_DEFAULTS, surchargeCents } from './surcharge.js';
+
+// Kept for the card form's preview; the rate itself lives in surcharge.js.
+export const SURCHARGE_RATE = SURCHARGE_DEFAULTS.rate;
 
 const cents = (n) => Math.round(Number(n || 0) * 100);
 
@@ -13,16 +16,16 @@ export function owedCents(invoice) {
   return cents(invoice.parts_total) + cents(invoice.labor_total) + cents(invoice.tax_amount);
 }
 
-// Surcharge policy (unchanged): 3% on CREDIT cards only. Debit, prepaid and
-// unknown funding are never surcharged.
-export function surchargeCentsFor(baseCents, funding) {
-  return funding === 'credit' ? Math.round(baseCents * SURCHARGE_RATE) : 0;
+// Surcharge policy (unchanged): CREDIT cards only, at the shared config rate
+// (surcharge.js). Debit, prepaid and unknown funding are never surcharged.
+export function surchargeCentsFor(baseCents, funding, config = SURCHARGE_DEFAULTS) {
+  return funding === 'credit' ? surchargeCents(baseCents, config) : 0;
 }
 
 // The charge for an invoice. Refuses paid invoices, $0/negative amounts, and
 // invoices whose stored `total` disagrees with its parts/labor/tax (stale
 // snapshot — reopening the job re-syncs it) rather than guessing.
-export function computeCharge(invoice, funding = null) {
+export function computeCharge(invoice, funding = null, config = SURCHARGE_DEFAULTS) {
   if (!invoice) return { ok: false, status: 404, error: 'Invoice not found' };
   if (invoice.status === 'paid') return { ok: false, status: 400, error: 'Invoice is already paid' };
   const baseCents = owedCents(invoice);
@@ -30,8 +33,8 @@ export function computeCharge(invoice, funding = null) {
   if (Math.abs(cents(invoice.total) - baseCents) > 1) {
     return { ok: false, status: 409, error: 'Invoice total is out of date. Open the job to refresh it, then try again.' };
   }
-  const surchargeCents = surchargeCentsFor(baseCents, funding);
-  return { ok: true, baseCents, surchargeCents, totalCents: baseCents + surchargeCents };
+  const sc = surchargeCentsFor(baseCents, funding, config);
+  return { ok: true, baseCents, surchargeCents: sc, totalCents: baseCents + sc };
 }
 
 // The client may still send its own surcharge figure (older app versions).

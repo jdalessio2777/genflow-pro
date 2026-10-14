@@ -1,5 +1,6 @@
 import { isZeroDollarInvoice } from './utils/invoiceTotals.js'
 import { partChargeTotal } from './utils/jobFinancials.js'
+import { SURCHARGE_DEFAULTS, surchargeLabel } from './utils/surcharge.js'
 // Escaping lives in one shared module (also used by the printable Service
 // History and api/); re-exported here for existing imports.
 import { escapeHtml, multilineHtml, safeImageSrc } from './utils/escapeHtml.js'
@@ -485,7 +486,7 @@ export function serviceNotesHTML(notes) {
   return `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(notes)}</p></div>`
 }
 
-export function invoiceSummaryHTML({ invoice, customer }) {
+export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHARGE_DEFAULTS }) {
   // $0.00 invoices (exact, integer cents — see isZeroDollarInvoice) get their
   // own rendering with no paid/unpaid/payment-due language. Every invoice
   // > $0 (and every negative-total invoice) falls through to the original
@@ -583,7 +584,7 @@ export function invoiceSummaryHTML({ invoice, customer }) {
               <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.tax_amount)}</td>
             </tr>` : ''}
             ${invoice.surcharge_amount > 0 ? `<tr>
-              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">Card Surcharge (3%)</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">${surchargeLabel(surchargeConfig)}</td>
               <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.surcharge_amount)}</td>
             </tr>` : ''}
             <tr>
@@ -775,8 +776,8 @@ export function jobSummaryIntroHTML({ customer, kind = "completion", attachmentL
 
 // The one customer email sent at job completion / payment: greeting +
 // attachment line + invoice inline. PDFs ride as attachments, not in the body.
-export function jobSummaryEmailHTML({ invoice, customer, kind = "completion", attachmentLabels = [] }) {
+export function jobSummaryEmailHTML({ invoice, customer, kind = "completion", attachmentLabels = [], surchargeConfig = SURCHARGE_DEFAULTS }) {
   const intro = jobSummaryIntroHTML({ customer, kind, attachmentLabels });
-  const body = invoice ? invoiceSummaryHTML({ invoice, customer }) : "";
+  const body = invoice ? invoiceSummaryHTML({ invoice, customer, surchargeConfig }) : "";
   return combineEmailSections([intro + body]);
 }

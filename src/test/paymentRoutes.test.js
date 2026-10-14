@@ -7,11 +7,15 @@ import { owedCents, computeCharge, surchargeCentsFor, validateClientSurcharge, p
 // the invoice row + the card's funding type from Stripe.
 const getUser = vi.fn()
 let invoiceRow = null
+let appSettings = []
 const dbUpdate = vi.fn()
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     auth: { getUser: (...a) => getUser(...a) },
-    from: () => {
+    from: (table) => {
+      if (table === 'app_settings') {
+        return { select: () => ({ in: async () => ({ data: appSettings, error: null }) }) }
+      }
       const q = {
         select: () => q, eq: () => q,
         single: async () => ({ data: invoiceRow, error: invoiceRow ? null : { message: 'nf' } }),
@@ -61,6 +65,7 @@ const INV = { id: 'inv1', status: 'sent', parts_total: 60, labor_total: 40, tax_
 beforeEach(() => {
   vi.clearAllMocks()
   invoiceRow = { ...INV }
+  appSettings = []
   funding = 'credit'
   getUser.mockImplementation(async (t) => t === 'good'
     ? { data: { user: { email: 'genflow-qa-test@genshieldservice.com' } }, error: null }
@@ -134,6 +139,18 @@ describe('update-payment-intent', () => {
     expect(piUpdate.mock.calls[0][1].amount).toBe(10983)
     expect(piUpdate.mock.calls[0][1].payment_method).toBe('pm_1')
     expect(res.body).toMatchObject({ surcharge: 3.2, total: 109.83, funding: 'credit' })
+  })
+  it('rate comes from the shared setting (app_settings card_surcharge_rate)', async () => {
+    appSettings = [{ key: 'card_surcharge_rate', value: '2.5' }]
+    const res = mockRes()
+    await updateHandler(mockReq({ headers: STAFF, body }), res)
+    expect(piUpdate.mock.calls[0][1].amount).toBe(10663 + Math.round(10663 * 0.025))
+  })
+  it('a bad saved rate (above 4%) falls back to 3%', async () => {
+    appSettings = [{ key: 'card_surcharge_rate', value: '9' }]
+    const res = mockRes()
+    await updateHandler(mockReq({ headers: STAFF, body }), res)
+    expect(piUpdate.mock.calls[0][1].amount).toBe(10983)
   })
   it('debit card → no surcharge even if the client asks for one', async () => {
     funding = 'debit'

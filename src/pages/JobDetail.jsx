@@ -36,6 +36,7 @@ import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
 import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
+import { surchargeConfig, withResyncedSurcharge } from "@/lib/utils/surcharge";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
@@ -253,6 +254,7 @@ export default function JobDetail() {
   const queryClient = useQueryClient();
   const { isOnline } = useOffline();
   const { settings } = useSettings();
+  const surchargeCfg = surchargeConfig(settings);
   const { user } = useAuth();
   const { confirmDelete, use24h } = usePreferences();
 
@@ -785,8 +787,8 @@ export default function JobDetail() {
       if (existingInvoice && existingInvoice.status !== "paid") {
         const data = buildInvoiceData(freshParts, freshLabor);
         const patch = zero
-          ? { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString() }
-          : data;
+          ? { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString(), surcharge_amount: 0 }
+          : withResyncedSurcharge(data, existingInvoice, surchargeCfg);
         try {
           patchInvoiceCache(await withTimeout(db.Invoice.update(existingInvoice.id, patch), 20000, "Updating the invoice"));
         } catch (e) {
@@ -916,7 +918,7 @@ export default function JobDetail() {
       JSON.stringify(existingInvoice.line_items || []) === JSON.stringify(fresh.line_items);
     if (totalsUnchanged && itemsUnchanged) return;
 
-    db.Invoice.update(existingInvoice.id, fresh).then(patchInvoiceCache);
+    db.Invoice.update(existingInvoice.id, withResyncedSurcharge(fresh, existingInvoice, surchargeCfg)).then(patchInvoiceCache);
   }, [parts, labor, existingInvoice?.id, existingInvoice?.status, partsLoaded, laborLoaded]);
 
   // One invoice per job: guarded against double taps, re-checks the database
@@ -928,7 +930,7 @@ export default function JobDetail() {
       const current = existingInvoice || (await db.Invoice.filter({ job_id: id }))[0];
       let inv;
       if (current) {
-        inv = current.status === "paid" ? current : await db.Invoice.update(current.id, invoiceData);
+        inv = current.status === "paid" ? current : await db.Invoice.update(current.id, withResyncedSurcharge(invoiceData, current, surchargeCfg));
       } else {
         inv = await createOnce(db.Invoice, collectInvoiceId.current, {
           ...invoiceData, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
