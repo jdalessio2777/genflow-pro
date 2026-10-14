@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// notifyTeam imports the Supabase client; the HTML helpers under test need no network/env.
+vi.mock("@/lib/supabaseClient", () => ({ supabase: {} }));
 import {
   quoteEmailHTML, confirmationEmailHTML, completionEmailHTML, invoiceSummaryHTML,
   checklistSummaryHTML, jobSummaryEmailHTML, combineEmailSections, serviceNotesHTML,
