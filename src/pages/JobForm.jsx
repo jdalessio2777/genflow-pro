@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { createCalendarEvent, updateCalendarEvent } from "@/lib/googleCalendar";
+import { newRequestId, createOnce, showSaveError, dismissSaveError } from "@/lib/saveSafety";
 
 const JOB_TYPES = [
   { value: "maintenance",         label: "Maintenance" },
@@ -71,15 +72,24 @@ export default function JobForm() {
     queryFn: () => db.Customer.list("name"),
   });
 
-  const { isLoading: loadingJob } = useQuery({
+  // Fill the form ONCE from the saved job. A refetch (signal coming back,
+  // any invalidate) must never overwrite what the tech has typed (A-04).
+  const { data: savedJobRow, isLoading: loadingJob } = useQuery({
     queryKey: ["job", id],
-    queryFn: async () => {
-      const res = await db.Job.filter({ id });
-      if (res.length > 0) setForm(prev => ({ ...prev, ...res[0] }));
-      return res[0];
-    },
+    queryFn: async () => (await db.Job.filter({ id }))[0] ?? null,
     enabled: isEdit,
   });
+  const formLoaded = useRef(false);
+  useEffect(() => {
+    if (!isEdit || formLoaded.current || !savedJobRow) return;
+    formLoaded.current = true;
+    setForm(prev => ({ ...prev, ...savedJobRow }));
+  }, [isEdit, savedJobRow]);
+
+  // Fixed ids for this New Job screen: a Retry after a lost response finds the
+  // job/invoice it already created instead of making duplicates (A-03/F-05).
+  const createIds = useRef({ job: newRequestId(), invoice: newRequestId() });
+  const inFlight = useRef(false);
 
   useEffect(() => {
     if (preCustomer && customers.length > 0) {
@@ -104,14 +114,30 @@ export default function JobForm() {
         })
     );
 
+  // The customer comes from the database by id when the list hasn't loaded
+  // yet (slow signal), so a job is never saved with a blank name (KF-1).
+  const resolveCustomer = async (customerId) => {
+    const listed = customers.find(c => c.id === customerId);
+    if (listed) return listed;
+    const rows = await db.Customer.filter({ id: customerId });
+    if (!rows[0]) throw new Error("Customer not found");
+    return rows[0];
+  };
+
   const mutation = useMutation({
-    mutationFn: ({ data }) => isEdit
-      ? db.Job.update(id, cleanPayload(data))
-      : db.Job.create(cleanPayload(data)),
-    onSuccess: async (savedJob, { sendConfirmation }) => {
+    mutationFn: async ({ data }) => {
+      const jobCustomer = await resolveCustomer(data.customer_id);
+      const payload = cleanPayload({ ...data, customer_name: jobCustomer.name });
+      const savedJob = isEdit
+        ? await db.Job.update(id, payload)
+        : await createOnce(db.Job, createIds.current.job, payload);
+      return { savedJob, jobCustomer };
+    },
+    onSuccess: async ({ savedJob, jobCustomer }, { sendConfirmation }) => {
+      dismissSaveError("Job NOT saved");
       if (!isEdit) {
         try {
-          await db.Invoice.create({
+          await createOnce(db.Invoice, createIds.current.invoice, {
             job_id: savedJob.id,
             customer_id: savedJob.customer_id,
             customer_name: savedJob.customer_name,
@@ -119,13 +145,16 @@ export default function JobForm() {
             parts_total: 0, labor_total: 0, total: 0,
             line_items: [], notes: "", status: "draft",
           });
-        } catch (e) { /* silently fail */ }
+        } catch (e) {
+          // The job is saved; Collect Payment creates the invoice later if needed.
+          toast.warning(`Job saved, but its draft invoice wasn't created yet: ${e.message}`);
+        }
         notifyTeam({
-          subject: `New Job — ${form.title} · ${form.customer_name}`,
+          subject: `New Job — ${form.title} · ${jobCustomer.name}`,
           body: `
             <p style="font-size:14px;color:#1a1a1a;margin:0 0 4px 0;">${buildEventBadge("New Job Created", "blue")}</p>
             ${buildTable([
-              buildRow("Customer", form.customer_name),
+              buildRow("Customer", jobCustomer.name),
               buildRow("Job", form.title),
               buildRow("Type", form.job_type),
               buildRow("Assigned To", form.assigned_to_name || "Unassigned"),
@@ -138,7 +167,6 @@ export default function JobForm() {
         // The only other confirmation-send path is JobDetail's "Resend
         // Confirmation Email" banner (fix #4) — nothing else fires this email.
         if (sendConfirmation) {
-          const jobCustomer = customers.find(c => c.id === savedJob.customer_id);
           if (!jobCustomer?.email) {
             toast.error(`No email on file for ${jobCustomer?.name || "this customer"} — confirmation not sent`);
             await db.Job.update(savedJob.id, { confirmation_send_failed: true }).catch(() => {});
@@ -162,7 +190,7 @@ export default function JobForm() {
 
       // Calendar sync — non-fatal, runs after job is saved
       if (savedJob.scheduled_date && googleToken) {
-        const customer = customers.find(c => c.id === savedJob.customer_id);
+        const customer = jobCustomer;
         try {
           const calendarPromise = savedJob.calendar_event_id
             ? updateCalendarEvent(savedJob.calendar_event_id, savedJob, customer, googleToken)
@@ -191,11 +219,19 @@ export default function JobForm() {
       toast.success(isEdit ? "Job updated" : "Job created");
       navigate(isEdit ? `/jobs/${id}` : `/jobs/${savedJob.id}`);
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       haptics.error();
-      toast.error('Failed to save job: ' + (error.message || 'Unknown error'));
+      // Persistent, with Retry; the form keeps everything that was typed.
+      showSaveError("Job NOT saved", error, () => submit(variables));
     },
   });
+
+  // One save at a time — a ref, so even two taps in the same tick can't both start.
+  const submit = (variables) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    mutation.mutate(variables, { onSettled: () => { inFlight.current = false; } });
+  };
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -208,7 +244,7 @@ export default function JobForm() {
     e.preventDefault();
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
-    mutation.mutate({ data: form, sendConfirmation: false });
+    submit({ data: form, sendConfirmation: false });
   };
 
   const handleCreate = (sendConfirmation) => {
@@ -219,7 +255,7 @@ export default function JobForm() {
       toast.error('Set a scheduled date/time first, or use "Create & Skip Notification"');
       return;
     }
-    mutation.mutate({ data: form, sendConfirmation });
+    submit({ data: form, sendConfirmation });
   };
 
   if (loadingJob) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;

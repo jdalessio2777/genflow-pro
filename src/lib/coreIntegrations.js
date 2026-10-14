@@ -25,6 +25,18 @@ export const integrationsCore = {
     return { file_url: data.publicUrl };
   },
 
+  // Remove an uploaded file by its public URL (KF-2: deleting a photo row
+  // used to leave the file publicly reachable). Only files in our bucket.
+  async DeleteFile({ file_url }) {
+    const marker = `/storage/v1/object/public/${storageBucket}/`;
+    const i = String(file_url || '').indexOf(marker);
+    if (i === -1) return { skipped: true };
+    const path = decodeURIComponent(file_url.slice(i + marker.length).split('?')[0]);
+    const { error } = await supabase.storage.from(storageBucket).remove([path]);
+    if (error) throw error;
+    return { removed: path };
+  },
+
   // /api/send-email is staff-only: it needs the signed-in user's access token.
   // getSession() refreshes an expired access token before returning it, so
   // each send uses a current token.

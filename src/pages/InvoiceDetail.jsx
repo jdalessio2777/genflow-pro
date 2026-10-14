@@ -21,6 +21,7 @@ import StripePaymentModal from "@/components/payments/StripePaymentModal";
 import CheckNumberDialog from "@/components/payments/CheckNumberDialog";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { isZeroDollarInvoice, receiptEmailExpected } from "@/lib/utils/invoiceTotals";
+import { showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -57,6 +58,7 @@ export default function InvoiceDetail() {
   });
   const receiptWillEmail = receiptEmailExpected({ job: invoiceJob, invoice, customer: invoiceCustomer });
 
+  const recordGuard = useSaveGuard();
   const updateMutation = useMutation({
     mutationFn: (data) => db.Invoice.update(id, data),
     onSuccess: (updatedInvoice) => {
@@ -126,9 +128,28 @@ export default function InvoiceDetail() {
     }
   };
 
-  const markSent = () => { updateMutation.mutate({ status: "sent" }); toast.success("Invoice marked as sent"); };
+  // Every "mark paid" path goes through here (H-2): one at a time, "paid"
+  // only after the server saved it, and a failure stays on screen with Retry.
+  // onSuccess (receipt + team email) runs only after a confirmed save.
+  const recordPayment = (patch, { onSuccess } = {}) => recordGuard.run(async function attempt() {
+    try {
+      await updateMutation.mutateAsync(patch);
+    } catch (e) {
+      haptics.error();
+      showSaveError("Payment NOT recorded", e, () => recordGuard.run(attempt), { id: "record-payment-error" });
+      return false;
+    }
+    dismissSaveError("", { id: "record-payment-error" });
+    onSuccess?.();
+    return true;
+  });
+
+  const markSent = () => updateMutation.mutate({ status: "sent" }, {
+    onSuccess: () => toast.success("Invoice marked as sent"),
+    onError: (e) => showSaveError("Invoice NOT marked as sent", e, markSent, { id: "mark-sent-error" }),
+  });
   const markPaid = (method, reference) => {
-    updateMutation.mutate(
+    recordPayment(
       { status: "paid", payment_method: method, payment_reference: reference || null, paid_date: new Date().toISOString() },
       {
         onSuccess: () => {
@@ -155,8 +176,11 @@ export default function InvoiceDetail() {
     );
   };
 
+  // The card was already charged when this runs; if saving fails, the
+  // persistent "Payment NOT recorded" message with Retry is what keeps the
+  // invoice from staying unpaid (the webhook also records it on production).
   const markStripePaid = async ({ surchargeAmount, paymentIntentId }) => {
-    await updateMutation.mutateAsync(
+    await recordPayment(
       {
         status: "paid",
         payment_method: "stripe",
@@ -211,7 +235,7 @@ export default function InvoiceDetail() {
   const markStripeAppPaid = () => {
     const owedTotal = getOwedTotal();
     const txnId = stripeAppTxnId.trim();
-    updateMutation.mutate(
+    recordPayment(
       {
         status: "paid",
         payment_method: "stripe_app",
@@ -426,7 +450,7 @@ export default function InvoiceDetail() {
                   <AlertDialogTrigger asChild>
                     <Button
                       className="w-full rounded-xl h-11 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-                      disabled={!stripeAppTxnId.trim()}
+                      disabled={!stripeAppTxnId.trim() || recordGuard.busy}
                     >
                       <CheckCircle2 className="w-4 h-4" /> Record Stripe Payment
                     </Button>
@@ -467,6 +491,7 @@ export default function InvoiceDetail() {
                   key={method}
                   variant="outline"
                   className="rounded-xl capitalize h-11 border-green-300 dark:border-green-700 bg-white dark:bg-gray-800 hover:bg-green-100 dark:hover:bg-green-900/30"
+                  disabled={recordGuard.busy}
                   onClick={() => method === "check" ? setShowCheckNumberDialog(true) : markPaid(method)}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-1 text-green-600" /> {method}

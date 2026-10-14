@@ -31,6 +31,7 @@ import { useSettings } from "@/lib/useSettings";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
+import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
@@ -237,6 +238,10 @@ function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNote
     </Card>
   );
 }
+
+// Which autosaved notes box failed (for the persistent error message).
+const notesErrorLabel = (data) =>
+  data && "generator_notes" in data ? "Generator notes NOT saved" : "Invoice summary NOT saved";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -456,8 +461,14 @@ export default function JobDetail() {
     entity: 'Job',
     type: 'update',
     queryKeys: ['jobs'],
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      dismissSaveError(notesErrorLabel(variables?.data));
       queryClient.invalidateQueries({ queryKey: ["job", id] });
+    },
+    // Autosave failed: the text stays in the box; say so and offer Retry.
+    onError: (error, variables) => {
+      haptics.error();
+      showSaveError(notesErrorLabel(variables?.data), error, () => updateJobOffline.mutate(variables));
     },
   });
 
@@ -493,6 +504,12 @@ export default function JobDetail() {
     return `${m}:${String(sec).padStart(2,"0")}`;
   };
 
+  const statusGuard = useSaveGuard();
+  const collectGuard = useSaveGuard();
+  const scheduleNextGuard = useSaveGuard();
+  const scheduleNextId = useRef(newRequestId());
+  const collectInvoiceId = useRef(newRequestId());
+
   const getJobTotals = () => {
     const f = computeJobFinancials(parts, labor);
     return { partsCost: f.partsCost, partsPrice: f.partsTotal, laborCost: f.laborCost, laborPrice: f.laborTotal };
@@ -507,12 +524,15 @@ export default function JobDetail() {
     setScheduleNextOpen(true);
   };
 
-  const handleStatusChange = async (newStatus, extraFields = {}) => {
-    if (isClosed) return;
+  // Returns true only once the server has saved the new status. On failure
+  // nothing else runs (no team email, no customer update, no navigation) and
+  // a persistent error with Retry is shown (F-04).
+  const handleStatusChange = async (newStatus, extraFields = {}, { retry } = {}) => {
+    if (isClosed) return false;
+    const label = newStatus.replace("_", " ");
     const { partsCost, partsPrice, laborCost, laborPrice } = getJobTotals();
-    updateJobOffline.mutate({
-      entityId: id,
-      data: {
+    try {
+      await withTimeout(db.Job.update(id, {
         status: newStatus,
         total_parts_cost: partsCost, total_parts_price: partsPrice,
         total_labor_cost: laborCost, total_labor_price: laborPrice,
@@ -520,8 +540,15 @@ export default function JobDetail() {
         profit: (partsPrice + laborPrice) - (partsCost + laborCost),
         ...(newStatus === "completed" ? { completed_date: new Date().toISOString() } : {}),
         ...extraFields,
-      },
-    });
+      }), 20000, "Saving the job");
+    } catch (e) {
+      haptics.error();
+      showSaveError(`Job NOT marked ${label}`, e, retry || (() => statusGuard.run(() => handleStatusChange(newStatus, extraFields))), { id: "job-status-error" });
+      return false;
+    }
+    dismissSaveError("", { id: "job-status-error" });
+    queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["job", id] });
     if (newStatus === "completed" && ["maintenance", "battery_replacement"].includes(job.job_type)) {
       const customerUpdate = { last_service_date: new Date().toISOString() };
 
@@ -539,7 +566,10 @@ export default function JobDetail() {
         }
       }
 
-      db.Customer.update(job.customer_id, customerUpdate);
+      db.Customer.update(job.customer_id, customerUpdate).catch(e => {
+        showSaveError("Customer's last service date NOT saved", e, () => db.Customer.update(job.customer_id, customerUpdate)
+          .then(() => dismissSaveError("Customer's last service date NOT saved")).catch(() => {}));
+      });
     }
     const triggeredBy = getUserDisplayName(user);
     if (newStatus === "dispatched") {
@@ -557,12 +587,13 @@ export default function JobDetail() {
       notifyTeam({ subject: `Job Canceled — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Job Canceled", "red")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Reason", cancelReason || "No reason given")])}`, triggeredBy });
     }
     haptics.medium();
-    toast.success(`Job marked as ${newStatus.replace("_", " ")}`);
+    toast.success(`Job marked as ${label}`);
+    return true;
   };
 
-  const handleCancel = () => {
-    setCancelOpen(false);
-    handleStatusChange("canceled", { cancel_reason: cancelReason });
+  const handleCancel = async () => {
+    const ok = await statusGuard.run(() => handleStatusChange("canceled", { cancel_reason: cancelReason }));
+    if (ok) setCancelOpen(false);
   };
 
   // Resend for a job whose confirmation email failed or was never sent —
@@ -654,20 +685,27 @@ export default function JobDetail() {
     queryClient.invalidateQueries({ queryKey: ["job", id] });
   };
 
-  const doCompleteJob = async () => {
+  // The job is completed only once the server has saved it. Any failure
+  // (no signal, timeout, server error) keeps the dialog open with a
+  // persistent message and Retry; nothing is sent and nothing navigates
+  // (F-04, F-20, A-14). Every step is safe to repeat.
+  const doCompleteJob = () => statusGuard.run(async () => {
     setCompletingJob(true);
     try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("No connection");
+      }
       try {
-        await flushInvoiceNotes();
+        await withTimeout(flushInvoiceNotes(), 20000, "Saving the invoice summary");
       } catch (e) {
         haptics.error();
-        toast.error(`Couldn't save the invoice summary: ${e.message}`);
+        showSaveError("Job NOT completed — invoice summary not saved", e, doCompleteJob, { id: "job-complete-error" });
         return;
       }
-      const [freshParts, freshLabor] = await Promise.all([
+      const [freshParts, freshLabor] = await withTimeout(Promise.all([
         db.JobPart.filter({ job_id: id }),
         db.JobLabor.filter({ job_id: id }),
-      ]);
+      ]), 20000, "Loading the job");
       const fin = computeJobFinancials(freshParts, freshLabor);
       const zero = isZeroDollarJob(fin);
       if (existingInvoice && existingInvoice.status !== "paid") {
@@ -676,16 +714,17 @@ export default function JobDetail() {
           ? { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString() }
           : data;
         try {
-          patchInvoiceCache(await db.Invoice.update(existingInvoice.id, patch));
+          patchInvoiceCache(await withTimeout(db.Invoice.update(existingInvoice.id, patch), 20000, "Updating the invoice"));
         } catch (e) {
           haptics.error();
-          toast.error(`Couldn't update the invoice: ${e.message}`);
+          showSaveError("Job NOT completed — invoice not updated", e, doCompleteJob, { id: "job-complete-error" });
           return;
         }
       }
 
+      if (!(await handleStatusChange("completed", completionSnapshot || {}, { retry: doCompleteJob }))) return;
+      dismissSaveError("", { id: "job-complete-error" });
       setCompleteJobOpen(false);
-      await handleStatusChange("completed", completionSnapshot || {});
 
       if (customer?.email && emailOnComplete) {
         try {
@@ -698,7 +737,8 @@ export default function JobDetail() {
           else if (!r?.skipped) toast.success(`Summary sent to ${customer.email}`);
         } catch (e) {
           haptics.error();
-          toast.error(`Failed to send summary email: ${e.message}`);
+          // The job IS completed; the email can be re-sent from the job screen.
+          toast.error(`Job completed, but the summary email was NOT sent: ${e.message}. Use "Resend summary" on the job.`, { duration: Infinity, closeButton: true });
         }
         queryClient.invalidateQueries({ queryKey: ["job", id] });
       }
@@ -708,10 +748,13 @@ export default function JobDetail() {
       } else {
         navigate("/jobs");
       }
+    } catch (e) {
+      haptics.error();
+      showSaveError("Job NOT completed", e, doCompleteJob, { id: "job-complete-error" });
     } finally {
       setCompletingJob(false);
     }
-  };
+  });
 
   // Legacy stuck $0 jobs (completed before $0 invoices were auto-closed):
   // close the $0 invoice as paid / no_charge exactly like the completion path
@@ -802,19 +845,30 @@ export default function JobDetail() {
     db.Invoice.update(existingInvoice.id, fresh).then(patchInvoiceCache);
   }, [parts, labor, existingInvoice?.id, existingInvoice?.status, partsLoaded, laborLoaded]);
 
-  const handleCollectPayment = async () => {
-    const invoiceData = buildInvoiceData();
-    if (existingInvoice) {
-      await db.Invoice.update(existingInvoice.id, invoiceData);
-      navigate(`/invoices/${existingInvoice.id}`, { state: { fromJobId: id } });
-    } else {
-      const inv = await db.Invoice.create({
-        ...invoiceData, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
-        invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft",
-      });
+  // One invoice per job: guarded against double taps, re-checks the database
+  // for an existing invoice before creating, and creates with a fixed id so a
+  // Retry after a lost response can't make a second one (F-05).
+  const handleCollectPayment = () => collectGuard.run(async () => {
+    try {
+      const invoiceData = buildInvoiceData();
+      const current = existingInvoice || (await db.Invoice.filter({ job_id: id }))[0];
+      let inv;
+      if (current) {
+        inv = current.status === "paid" ? current : await db.Invoice.update(current.id, invoiceData);
+      } else {
+        inv = await createOnce(db.Invoice, collectInvoiceId.current, {
+          ...invoiceData, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
+          invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft",
+        });
+      }
+      dismissSaveError("", { id: "collect-payment-error" });
+      patchInvoiceCache(inv);
       navigate(`/invoices/${inv.id}`, { state: { fromJobId: id } });
+    } catch (e) {
+      haptics.error();
+      showSaveError("Invoice NOT opened", e, handleCollectPayment, { id: "collect-payment-error" });
     }
-  };
+  });
   const addServiceAgreement = async (type) => {
     const FALLBACK = {
       annual_air_cooled: {
@@ -1201,9 +1255,9 @@ export default function JobDetail() {
               {!isClosed && (
                 <div className="space-y-2">
                   {job.status === "scheduled" && (
-                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-600 hover:bg-cyan-700"
-                      onClick={() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() })}>
-                      <Navigation className="w-4 h-4" /> Dispatch — Head Out
+                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-600 hover:bg-cyan-700" disabled={statusGuard.busy}
+                      onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
+                      {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />} Dispatch — Head Out
                     </Button>
                   )}
                   {job.status === "dispatched" && (
@@ -1212,13 +1266,14 @@ export default function JobDetail() {
                         <Navigation className="w-3.5 h-3.5 shrink-0" />
                         <span>En route — tap when you arrive to start the clock</span>
                       </div>
-                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-500 hover:bg-amber-600"
-                        onClick={() => {
+                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-500 hover:bg-amber-600" disabled={statusGuard.busy}
+                        onClick={() => statusGuard.run(async () => {
                           const now = new Date().toISOString();
                           setOptimisticOnSiteTime(now);
-                          handleStatusChange("on_site", { on_site_time: now });
-                        }}>
-                        <MapPin className="w-4 h-4" /> Arrived — Start Clock
+                          // Clock only keeps running if the arrival was saved.
+                          if (!(await handleStatusChange("on_site", { on_site_time: now }))) setOptimisticOnSiteTime(null);
+                        })}>
+                        {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />} Arrived — Start Clock
                       </Button>
                     </>
                   )}
@@ -1268,7 +1323,7 @@ export default function JobDetail() {
                           )}
                         </>
                       ) : (
-                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment}>
+                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment} disabled={collectGuard.busy}>
                           <DollarSign className="w-4 h-4" /> Collect Payment Now
                         </Button>
                       )}
@@ -1297,7 +1352,7 @@ export default function JobDetail() {
                       <DialogContent className="max-w-sm">
                         <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
                         <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
-                        <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
+                        <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel} disabled={statusGuard.busy}>{statusGuard.busy ? "Canceling…" : "Confirm Cancel"}</Button>
                       </DialogContent>
                     </Dialog>
                   )}
@@ -1417,19 +1472,27 @@ export default function JobDetail() {
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); navigate("/jobs"); }}>Skip</Button>
-                    <Button className="flex-1 rounded-xl" onClick={async () => {
+                    <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
                       if (!nextDate) return;
-                      await db.Job.create({
-                        customer_id: job.customer_id, customer_name: job.customer_name,
-                        title: job.title, job_type: "maintenance", status: "scheduled",
-                        scheduled_date: new Date(nextDate).toISOString(),
-                        notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
-                      });
+                      try {
+                        // Fixed id: a double tap or a Retry can't create a second job (A-05).
+                        await createOnce(db.Job, scheduleNextId.current, {
+                          customer_id: job.customer_id, customer_name: job.customer_name,
+                          title: job.title, job_type: "maintenance", status: "scheduled",
+                          scheduled_date: new Date(nextDate).toISOString(),
+                          notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
+                        });
+                      } catch (e) {
+                        haptics.error();
+                        showSaveError("Next service NOT scheduled", e, () => scheduleNextGuard.run(scheduleIt), { id: "schedule-next-error" });
+                        return;
+                      }
+                      dismissSaveError("", { id: "schedule-next-error" });
                       setScheduleNextOpen(false);
                       toast.success("Next service scheduled");
                       queryClient.invalidateQueries({ queryKey: ["jobs"] });
                       navigate("/jobs");
-                    }}>Schedule It</Button>
+                    })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
                   </div>
                 </DialogContent>
               </Dialog>
