@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DollarSign, TrendingUp, TrendingDown, Receipt, Car, Plus, Trash2, FileText, Navigation, Truck, ChevronDown, ChevronUp, Loader2, Camera, ImagePlus, X } from "lucide-react";
 // Note: Truck still used in MileageTab
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -402,29 +401,36 @@ function ExpensesTab({ expenses }) {
         <div className="space-y-2">
           {[...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => (
             <Card key={exp.id} className="p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                  {exp.receipt_url ? (
-                    <a href={exp.receipt_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                      <img src={exp.receipt_url} alt="Receipt" className="w-10 h-10 rounded-lg object-cover border border-border" />
-                    </a>
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                      <Receipt className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{exp.description}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(exp.date)} · {exp.category}</p>
-                    {exp.author_name && <p className="text-[10px] text-muted-foreground">{exp.author_name}</p>}
+              {/* Title wraps to as many lines as it needs (never truncated);
+                  the amount stays pinned top-right and the meta row + delete
+                  button sit underneath, so amounts and dates line up across
+                  cards on every phone width. */}
+              <div className="flex items-start gap-2.5">
+                {exp.receipt_url ? (
+                  <a href={exp.receipt_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <img src={exp.receipt_url} alt="Receipt" className="w-10 h-10 rounded-lg object-cover border border-border" />
+                  </a>
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                    <Receipt className="w-4 h-4 text-muted-foreground" />
                   </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-sm font-bold text-red-600">{formatCurrency(exp.amount)}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8"
-                    onClick={() => { if (!confirmDelete || window.confirm("Delete this expense?")) deleteMutation.mutate(exp.id); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium min-w-0 break-words [overflow-wrap:anywhere]">{exp.description}</p>
+                    <span className="text-sm font-bold text-red-600 shrink-0 tabular-nums">{formatCurrency(exp.amount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground min-w-0">
+                      {formatDate(exp.date)} · {exp.category}
+                      {exp.author_name && <span className="text-[10px]"> · {exp.author_name}</span>}
+                    </p>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 -mr-1.5"
+                      aria-label="Delete expense"
+                      onClick={() => { if (!confirmDelete || window.confirm("Delete this expense?")) deleteMutation.mutate(exp.id); }}>
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
