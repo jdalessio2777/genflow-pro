@@ -32,7 +32,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
-import { removePartFromJob } from "@/lib/inventory";
+import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
 import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
@@ -624,10 +624,51 @@ export default function JobDetail() {
     return true;
   };
 
-  const handleCancel = async () => {
-    const ok = await statusGuard.run(() => handleStatusChange("canceled", { cancel_reason: cancelReason }));
-    if (ok) setCancelOpen(false);
+  // Decision 2: cancelling a job with parts asks which were used. Every part
+  // starts as "Return to stock". Order: cancel the job (nothing else happens
+  // if that fails), then put the returned parts back; each step resumes on
+  // Retry and the choices are kept until everything is saved.
+  const [partChoices, setPartChoices] = useState({}); // jobPart.id -> "return" | "used"
+  const cancelReturns = useRef(null); // { choices, progress: { [jobPartId]: {} }, ids: { [jobPartId]: returnId } }
+  const stockParts = parts.filter(p => p.part_id);
+  const choiceFor = (p) => partChoices[p.id] || "return";
+
+  const returnChosenParts = async (snapshot) => {
+    const toReturn = stockParts.filter(p => snapshot.choices[p.id] !== "used");
+    let returned = 0;
+    for (const p of toReturn) {
+      snapshot.progress[p.id] ||= {};
+      snapshot.ids[p.id] ||= newRequestId();
+      const pr = await returnPartToStock(p, { returnId: snapshot.ids[p.id] }, snapshot.progress[p.id]);
+      if (pr.qty > 0) returned += pr.qty;
+    }
+    return returned;
   };
+
+  const handleCancel = () => statusGuard.run(async function attempt() {
+    if (!cancelReturns.current) {
+      cancelReturns.current = { choices: Object.fromEntries(stockParts.map(p => [p.id, choiceFor(p)])), progress: {}, ids: {}, canceled: false };
+    }
+    const snap = cancelReturns.current;
+    if (!snap.canceled) {
+      // Until the cancel is saved the tech may still change the choices.
+      snap.choices = Object.fromEntries(stockParts.map(p => [p.id, choiceFor(p)]));
+      if (!(await handleStatusChange("canceled", { cancel_reason: cancelReason }, { retry: () => statusGuard.run(attempt) }))) return;
+      snap.canceled = true;
+      setCancelOpen(false);
+    }
+    try {
+      const n = await returnChosenParts(snap);
+      cancelReturns.current = null;
+      dismissSaveError("", { id: "cancel-returns-error" });
+      if (n > 0) toast.success(`${n} part${n === 1 ? "" : "s"} put back in stock`);
+    } catch (e) {
+      haptics.error();
+      showSaveError("Job canceled, but parts NOT put back in stock yet", e, () => statusGuard.run(attempt), { id: "cancel-returns-error" });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    }
+  });
 
   // Resend for a job whose confirmation email failed or was never sent —
   // the only other confirmation-send path is the "Create & Send
@@ -1385,6 +1426,29 @@ export default function JobDetail() {
                       <DialogContent className="max-w-sm">
                         <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
                         <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+                        {stockParts.length > 0 && (
+                          <div className="space-y-2" data-testid="cancel-parts">
+                            <p className="text-sm font-semibold">Were any of these used?</p>
+                            {stockParts.map(p => {
+                              const used = choiceFor(p) === "used";
+                              return (
+                                <div key={p.id} className="flex items-center justify-between gap-2 rounded-xl border border-border p-2">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">{p.name}</p>
+                                    <p className="text-xs text-muted-foreground">Qty {p.quantity}</p>
+                                  </div>
+                                  <div className="flex shrink-0 rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={`${p.name}: used or return`}>
+                                    {[["return", "Return to stock"], ["used", "Used"]].map(([v, label]) => (
+                                      <button key={v} type="button" role="radio" aria-checked={(v === "used") === used}
+                                        className={`min-h-[44px] px-2.5 rounded-md text-xs font-semibold ${(v === "used") === used ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+                                        onClick={() => setPartChoices(c => ({ ...c, [p.id]: v }))}>{label}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                         <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel} disabled={statusGuard.busy}>{statusGuard.busy ? "Canceling…" : "Confirm Cancel"}</Button>
                       </DialogContent>
                     </Dialog>

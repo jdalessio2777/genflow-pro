@@ -53,7 +53,9 @@ function aggregateByPart(rows) {
       });
     }
   }
-  return [...byPart.values()].sort((a, b) => b.quantity - a.quantity);
+  // Returns from cancelled jobs are negative rows (Decision 2); a part whose
+  // net use for the week is 0 or less wasn't used.
+  return [...byPart.values()].filter(p => p.quantity > 0).sort((a, b) => b.quantity - a.quantity);
 }
 
 // ─── email ──────────────────────────────────────────────────────────────────

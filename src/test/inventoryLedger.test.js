@@ -111,3 +111,40 @@ describe("inventory ledger", () => {
     expect(Object.keys(state.usage)).toHaveLength(0);
   });
 });
+
+const { returnPartToStock } = await import("@/lib/inventory");
+
+describe("Decision 2: cancel returns unused parts", () => {
+  it("return puts stock back and logs a matching negative usage row", async () => {
+    const { jobPart } = await addPartToJob(plan(1, 2));
+    expect(state.parts.p1.in_stock).toBe(3);
+    const pr = await returnPartToStock(jobPart, { returnId: "r1" });
+    expect(pr.qty).toBe(2);
+    expect(state.parts.p1.in_stock).toBe(5);
+    expect(state.usage.r1).toMatchObject({ part_id: "p1", job_id: "j1", quantity: -2 });
+    expect(Object.values(state.usage).reduce((s, u) => s + u.quantity, 0)).toBe(0);
+    expect(state.jobParts.jp1).toBeTruthy(); // line kept for job history
+  });
+
+  it("a Retry with the same return id never returns twice", async () => {
+    const { jobPart } = await addPartToJob(plan(1, 2));
+    await returnPartToStock(jobPart, { returnId: "r1" });
+    await returnPartToStock(jobPart, { returnId: "r1" }, {});
+    expect(state.parts.p1.in_stock).toBe(5);
+  });
+
+  it("deleting the cancelled job afterwards does not restock a second time", async () => {
+    const { jobPart } = await addPartToJob(plan(1, 2));
+    await returnPartToStock(jobPart, { returnId: "r1" });
+    await removePartFromJob(jobPart);
+    expect(state.parts.p1.in_stock).toBe(5);
+    expect(Object.keys(state.usage)).toHaveLength(0);
+  });
+
+  it("a line with no usage row (legacy) returns nothing", async () => {
+    state.jobParts.old = { id: "old", job_id: "j1", part_id: "p1", quantity: 2 };
+    const pr = await returnPartToStock(state.jobParts.old, { returnId: "r9" });
+    expect(pr.qty).toBe(0);
+    expect(state.parts.p1.in_stock).toBe(5);
+  });
+});
