@@ -80,10 +80,12 @@ export default function JobForm() {
     enabled: isEdit,
   });
   const formLoaded = useRef(false);
+  const [formFilled, setFormFilled] = useState(!isEdit);
   useEffect(() => {
     if (!isEdit || formLoaded.current || !savedJobRow) return;
     formLoaded.current = true;
     setForm(prev => ({ ...prev, ...savedJobRow }));
+    setFormFilled(true);
   }, [isEdit, savedJobRow]);
 
   // Fixed ids for this New Job screen: a Retry after a lost response finds the
@@ -236,6 +238,9 @@ export default function JobForm() {
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
   const handleCustomerChange = (customerId) => {
+    // The picker reports "" while its list is still loading; never let that
+    // wipe the job's customer (found in batch-1 verification on slow signal).
+    if (!customerId) return;
     const c = customers.find(c => c.id === customerId);
     setForm(prev => ({ ...prev, customer_id: customerId, customer_name: c?.name || "" }));
   };
@@ -258,7 +263,7 @@ export default function JobForm() {
     submit({ data: form, sendConfirmation });
   };
 
-  if (loadingJob) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  if (loadingJob || !formFilled) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
 
   return (
     <div>

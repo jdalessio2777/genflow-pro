@@ -68,4 +68,14 @@ describe("JobForm weak signal", () => {
     expect(jobCreate.mock.calls[0][0]).toMatchObject({ customer_id: "c1", customer_name: "Real Name" });
     expect(jobCreate.mock.calls[0][0].id).toMatch(/[0-9a-f-]{36}/);
   });
+
+  it("edit Save works while the customer list is still loading (batch-1 regression)", async () => {
+    const { container } = renderAt("/jobs/j1/edit", "/jobs/:id/edit");
+    await waitFor(() => {
+      if (![...container.querySelectorAll("textarea")].some(t => t.value === "original note")) throw new Error("not loaded");
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save/i }));
+    await waitFor(() => expect(jobUpdate).toHaveBeenCalled());
+    expect(jobUpdate.mock.calls[0][1]).toMatchObject({ customer_id: "c1", customer_name: "Real Name", notes: "original note" });
+  });
 });
