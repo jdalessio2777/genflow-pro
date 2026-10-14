@@ -10,7 +10,8 @@ import { formatCurrency } from '@/lib/utils/format';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
-import { SURCHARGE_RATE } from '@/lib/utils/paymentAmounts';
+import { useSettings } from '@/lib/useSettings';
+import { surchargeConfig, surchargeCents, surchargeLabel } from '@/lib/utils/surcharge';
 
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
@@ -47,8 +48,10 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
 
   const baseAmount = invoice.total || 0;
 
+  // Preview only; the server locks the real amount (same shared config).
+  const { settings } = useSettings();
   const previewSurcharge = funding === 'credit'
-    ? Math.round(baseAmount * SURCHARGE_RATE * 100) / 100
+    ? surchargeCents(Math.round(baseAmount * 100), surchargeConfig(settings)) / 100
     : 0;
   const previewTotal = baseAmount + previewSurcharge;
 
@@ -184,7 +187,7 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
   // ── Render ────────────────────────────────────────────────────────────────────
 
   const fundingLabel = funding === 'credit'
-    ? 'Credit card — 3% surcharge applies'
+    ? `${surchargeLabel(surchargeConfig(settings)).replace('Credit card surcharge', 'Credit card — surcharge')} applies`
     : funding === 'debit'
     ? 'Debit card — no surcharge'
     : funding === 'prepaid'
@@ -219,7 +222,7 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
         {isComplete && (
           <div className={`flex justify-between transition-opacity ${isEstimate ? 'opacity-50' : ''}`}>
             <span className="text-muted-foreground">
-              Card surcharge (3%)
+              {surchargeLabel(surchargeConfig(settings))}
               {isEstimate && <span className="ml-1 text-xs">(est.)</span>}
             </span>
             <span>{funding === 'credit' ? formatCurrency(displaySurcharge) : '$0.00'}</span>
