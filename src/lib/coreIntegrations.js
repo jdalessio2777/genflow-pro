@@ -1,6 +1,13 @@
 import { supabase } from '@/lib/supabaseClient';
+import { toast } from 'sonner';
 
 const storageBucket = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'uploads';
+
+// Auth failures mean the email definitely did not go out. Shown as a toast that
+// stays until dismissed (one at a time, by id) on top of the caller's own error.
+function showEmailNotSent(reason) {
+  toast.error(`Email NOT sent: ${reason}`, { id: 'email-not-sent-auth', duration: Infinity, closeButton: true });
+}
 
 /**
  * Drop-in replacements for Base44 `integrations.Core` helpers (storage + edge functions).
@@ -18,14 +25,31 @@ export const integrationsCore = {
     return { file_url: data.publicUrl };
   },
 
+  // /api/send-email is staff-only: it needs the signed-in user's access token.
+  // getSession() refreshes an expired access token before returning it, so
+  // each send uses a current token.
   async SendEmail({ to, subject, html, internal = false }) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      showEmailNotSent('your sign-in has expired. Sign in again, then resend.');
+      const err = new Error('Not signed in');
+      err.status = 401;
+      throw err;
+    }
     const resp = await fetch('/api/send-email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ to, subject, html, internal }),
     });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data.error || 'Failed to send email');
+    if (!resp.ok) {
+      if (resp.status === 401) showEmailNotSent('your sign-in has expired. Sign in again, then resend.');
+      if (resp.status === 403) showEmailNotSent("this account isn't allowed to send email.");
+      const err = new Error(data.error || 'Failed to send email');
+      err.status = resp.status;
+      throw err;
+    }
     return data;
   },
 
@@ -33,6 +57,8 @@ export const integrationsCore = {
   // resolve themselves within seconds. Retries immediately, then after 3s,
   // then after 10s — 3 attempts total — before giving up. Throws the last
   // error once all attempts are exhausted, same contract as SendEmail.
+  // 4xx errors (signed out, not allowed, bad request) won't fix themselves,
+  // so they aren't retried.
   async SendEmailWithRetry({ to, subject, html, internal = false }, delays = [3000, 10000]) {
     let lastError;
     for (let attempt = 0; attempt <= delays.length; attempt++) {
@@ -40,6 +66,7 @@ export const integrationsCore = {
         return await this.SendEmail({ to, subject, html, internal });
       } catch (e) {
         lastError = e;
+        if (e.status && e.status >= 400 && e.status < 500) break;
         if (attempt < delays.length) {
           await new Promise(resolve => setTimeout(resolve, delays[attempt]));
         }
