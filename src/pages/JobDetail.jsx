@@ -689,6 +689,27 @@ export default function JobDetail() {
       ]), 20000, "Loading the job");
       const fin = computeJobFinancials(freshParts, freshLabor);
       const zero = isZeroDollarJob(fin);
+      // Every completion email carries the invoice (PAID / UNPAID + amount
+      // due). Jobs created in the app always have one; a job that somehow has
+      // none (old data, other entry paths) gets it now — same fixed id as
+      // Collect Payment, so a Retry can't make a second one.
+      if (!existingInvoice) {
+        const data = buildInvoiceData(freshParts, freshLabor);
+        try {
+          const current = (await withTimeout(db.Invoice.filter({ job_id: id }), 20000, "Loading the invoice"))[0];
+          if (!current) {
+            patchInvoiceCache(await withTimeout(createOnce(db.Invoice, collectInvoiceId.current, {
+              ...data, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
+              invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`,
+              ...(zero ? { status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString(), surcharge_amount: 0 } : { status: "draft" }),
+            }), 20000, "Creating the invoice"));
+          }
+        } catch (e) {
+          haptics.error();
+          showSaveError("Job NOT completed — invoice not created", e, doCompleteJob, { id: "job-complete-error" });
+          return;
+        }
+      }
       if (existingInvoice && existingInvoice.status !== "paid") {
         const data = buildInvoiceData(freshParts, freshLabor);
         const patch = zero
