@@ -67,18 +67,27 @@ function BusinessTab({ settings, setSetting, isSaving }) {
 }
 
 // ─── OPERATIONS TAB ───────────────────────────────────────────────────────────
-// Credit card surcharge settings (Part 2). Unset = code defaults (3%, not
-// taxable). Save writes only these two keys, and only when changed.
+// Credit card surcharge settings. The surcharge equals Stripe's fee
+// (rate + fixed fee) on the amount charged — NJ caps it at processing cost.
+// Unset = code defaults (2.7% + $0.05, not taxable). Save writes only the
+// keys that changed.
 function CardSurchargeSettings({ settings, setSetting }) {
   const cfg = surchargeConfig(settings);
   const [rate, setRate] = useState(String(Math.round(cfg.rate * 10000) / 100));
+  const [fixed, setFixed] = useState(cfg.fixed.toFixed(2));
   const [taxable, setTaxable] = useState(cfg.taxable);
   const pct = parseFloat(rate);
-  const valid = Number.isFinite(pct) && pct >= 0 && pct <= 4;
-  const changed = valid && (Math.abs(pct / 100 - cfg.rate) > 1e-9 || taxable !== cfg.taxable);
+  const fee = parseFloat(fixed);
+  const validRate = Number.isFinite(pct) && pct >= 0 && pct <= 4;
+  const validFixed = Number.isFinite(fee) && fee >= 0 && fee <= 1;
+  const rateChanged = validRate && Math.abs(pct / 100 - cfg.rate) > 1e-9;
+  const fixedChanged = validFixed && Math.abs(fee - cfg.fixed) > 1e-9;
+  const changed = validRate && validFixed && (rateChanged || fixedChanged || taxable !== cfg.taxable);
   const save = () => {
-    if (!valid) { toast.error("Enter a rate from 0 to 4%"); return; }
-    if (Math.abs(pct / 100 - cfg.rate) > 1e-9) setSetting("card_surcharge_rate", String(pct));
+    if (!validRate) { toast.error("Enter a rate from 0 to 4%"); return; }
+    if (!validFixed) { toast.error("Enter a fixed fee from $0.00 to $1.00"); return; }
+    if (rateChanged) setSetting("card_surcharge_rate", String(pct));
+    if (fixedChanged) setSetting("card_surcharge_fixed", String(fee));
     if (taxable !== cfg.taxable) setSetting("card_surcharge_taxable", String(taxable));
     toast.success("Card surcharge settings saved");
   };
@@ -93,11 +102,18 @@ function CardSurchargeSettings({ settings, setSetting }) {
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
           </div>
         </div>
-        <label className="flex items-center gap-2 min-h-[44px] text-sm">
-          <Switch checked={taxable} onCheckedChange={setTaxable} aria-label="Surcharge is taxable" /> Taxable
-        </label>
+        <div>
+          <Label className="text-xs">Fixed fee per charge</Label>
+          <div className="relative mt-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+            <Input type="text" inputMode="decimal" value={fixed} onChange={e => setFixed(e.target.value)} className="pl-7" aria-label="Fixed fee per charge" />
+          </div>
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground">Used by the invoice's "Credit card surcharge" button and the in-app card form. Applied to the total after discounts and tax.</p>
+      <label className="flex items-center gap-2 min-h-[44px] text-sm">
+        <Switch checked={taxable} onCheckedChange={setTaxable} aria-label="Surcharge is taxable" /> Taxable
+      </label>
+      <p className="text-xs text-muted-foreground">Set these to your Stripe processing fee. The surcharge is exactly that fee on the amount charged, never more (NJ caps it at your cost). Used by the invoice's "Credit card surcharge" button, Charge via Stripe App and the in-app card form.</p>
       <Button onClick={save} disabled={!changed} className="w-full rounded-xl">Save surcharge settings</Button>
     </Card>
   );

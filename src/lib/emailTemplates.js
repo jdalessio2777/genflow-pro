@@ -584,7 +584,7 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
               <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.tax_amount)}</td>
             </tr>` : ''}
             ${invoice.surcharge_amount > 0 ? `<tr>
-              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">${surchargeLabel(surchargeConfig)}</td>
+              <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;color:#555;">${surchargeLabel()}</td>
               <td style="padding:5px 0;font-size:13px;border-bottom:1px solid #eee;text-align:right;">${fmt(invoice.surcharge_amount)}</td>
             </tr>` : ''}
             <tr>

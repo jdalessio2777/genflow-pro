@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyCors, isAllowedOrigin, requireStaff } from './_lib/staffAuth.js';
 import { computeCharge, validateClientSurcharge } from '../src/lib/utils/paymentAmounts.js';
-import { surchargeConfig } from '../src/lib/utils/surcharge.js';
+import { surchargeConfig, SURCHARGE_SETTING_KEYS } from '../src/lib/utils/surcharge.js';
 
 async function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -16,7 +16,7 @@ async function readJsonBody(req) {
 }
 
 // Staff-only. Locks the final amount before the card is charged: the server
-// reads the card's funding type from Stripe (credit → 3% surcharge; debit,
+// reads the card's funding type from Stripe (credit → surcharge = Stripe's fee; debit,
 // prepaid, unknown → none) and the base from the invoice row. Any amount or
 // surcharge in the request is ignored; a negative/non-numeric surcharge is
 // rejected as tampering.
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     const { data: invoice, error } = await supabase
       .from('invoices')
-      .select('id, total, parts_total, labor_total, tax_amount, status')
+      .select('*')
       .eq('id', invoice_id)
       .single();
 
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
     // Same rate/taxable settings as the invoice screen's surcharge button.
     const { data: settingsRows } = await supabase
       .from('app_settings').select('key, value')
-      .in('key', ['card_surcharge_rate', 'card_surcharge_taxable']);
+      .in('key', SURCHARGE_SETTING_KEYS);
     const charge = computeCharge(invoice, funding, surchargeConfig(settingsRows || []));
     if (!charge.ok) return res.status(charge.status).json({ error: charge.error });
 

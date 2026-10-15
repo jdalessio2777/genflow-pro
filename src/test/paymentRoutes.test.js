@@ -75,7 +75,8 @@ beforeEach(() => {
 describe('paymentAmounts', () => {
   it('owed = parts + labor + tax in cents; surcharge credit-only', () => {
     expect(owedCents(INV)).toBe(10663)
-    expect(surchargeCentsFor(10663, 'credit')).toBe(320)
+    // (0.027 x 10663 + 5) / 0.973 = 301.03 -> 301; cap 0.027 x 10964 + 5 = 301.03 ok
+    expect(surchargeCentsFor(10663, 'credit')).toBe(301)
     for (const f of ['debit', 'prepaid', 'unknown', null]) expect(surchargeCentsFor(10663, f)).toBe(0)
   })
   it('refuses paid, zero, negative and stale invoices', () => {
@@ -83,7 +84,7 @@ describe('paymentAmounts', () => {
     expect(computeCharge({ ...INV, parts_total: 0, labor_total: 0, tax_amount: 0, total: 0 }).ok).toBe(false)
     expect(computeCharge({ ...INV, parts_total: -200, total: -93.37 }).ok).toBe(false)
     expect(computeCharge({ ...INV, total: 1 }).status).toBe(409)
-    expect(computeCharge(INV, 'credit')).toMatchObject({ ok: true, baseCents: 10663, surchargeCents: 320, totalCents: 10983 })
+    expect(computeCharge(INV, 'credit')).toMatchObject({ ok: true, baseCents: 10663, surchargeCents: 301, totalCents: 10964 })
   })
   it('client surcharge: negative / NaN rejected; absent ok', () => {
     expect(validateClientSurcharge(undefined).ok).toBe(true)
@@ -132,25 +133,26 @@ describe('update-payment-intent', () => {
     expect(res.statusCode).toBe(400)
     expect(piUpdate).not.toHaveBeenCalled()
   })
-  it('credit card → server adds 3%; client surcharge/amount ignored', async () => {
+  it('credit card → server adds the Stripe fee; client surcharge/amount ignored', async () => {
     const res = mockRes()
     await updateHandler(mockReq({ headers: STAFF, body: { ...body, surcharge_amount: 0, amount: 1, total: 1 } }), res)
     expect(res.statusCode).toBe(200)
-    expect(piUpdate.mock.calls[0][1].amount).toBe(10983)
+    expect(piUpdate.mock.calls[0][1].amount).toBe(10964)
     expect(piUpdate.mock.calls[0][1].payment_method).toBe('pm_1')
-    expect(res.body).toMatchObject({ surcharge: 3.2, total: 109.83, funding: 'credit' })
+    expect(res.body).toMatchObject({ surcharge: 3.01, total: 109.64, funding: 'credit' })
   })
   it('rate comes from the shared setting (app_settings card_surcharge_rate)', async () => {
     appSettings = [{ key: 'card_surcharge_rate', value: '2.5' }]
     const res = mockRes()
     await updateHandler(mockReq({ headers: STAFF, body }), res)
-    expect(piUpdate.mock.calls[0][1].amount).toBe(10663 + Math.round(10663 * 0.025))
+    // 2.5% + 5c: (266.575 + 5) / 0.975 = 278.54 -> 279; cap 278.55 -> over -> 278
+    expect(piUpdate.mock.calls[0][1].amount).toBe(10663 + 278)
   })
-  it('a bad saved rate (above 4%) falls back to 3%', async () => {
+  it('a bad saved rate (above 4%) falls back to the 2.7% default', async () => {
     appSettings = [{ key: 'card_surcharge_rate', value: '9' }]
     const res = mockRes()
     await updateHandler(mockReq({ headers: STAFF, body }), res)
-    expect(piUpdate.mock.calls[0][1].amount).toBe(10983)
+    expect(piUpdate.mock.calls[0][1].amount).toBe(10964)
   })
   it('debit card → no surcharge even if the client asks for one', async () => {
     funding = 'debit'
@@ -180,5 +182,26 @@ describe('stripe-webhook', () => {
     const res = mockRes()
     await webhookHandler(mockReq({ headers: { 'stripe-signature': 's' }, body: {} }), res)
     expect(dbUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'paid', surcharge_amount: 3.2, total: 109.83 }))
+  })
+})
+
+describe('partial payments (only once invoices.amount_paid exists)', () => {
+  it('card charges only the balance; the surcharge is on the balance', () => {
+    const inv = { ...INV, amount_paid: 50 }
+    // balance 5663: (152.901 + 5)/0.973 = 162.28 -> 162; cap 0.027 x 5825 + 5 = 162.28 ok
+    expect(computeCharge(inv, 'credit')).toMatchObject({ ok: true, baseCents: 5663, surchargeCents: 162, totalCents: 5825 })
+    expect(computeCharge(inv, 'debit')).toMatchObject({ baseCents: 5663, surchargeCents: 0 })
+    expect(paymentCoversInvoice(5663, inv)).toBe(true)
+    expect(paymentCoversInvoice(5662, inv)).toBe(false)
+  })
+  it('without the column nothing changes', () => {
+    expect(computeCharge(INV, 'debit').baseCents).toBe(10663)
+  })
+  it('webhook settles the balance: amount_paid = owed, surcharge = received − balance', async () => {
+    invoiceRow = { ...INV, status: 'partial', amount_paid: 50 }
+    webhookEvent = { type: 'payment_intent.succeeded', data: { object: { id: 'pi_2', amount_received: 5825, metadata: { invoice_id: 'inv1' } } } }
+    const res = mockRes()
+    await webhookHandler(mockReq({ headers: { 'stripe-signature': 's' }, body: {} }), res)
+    expect(dbUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'paid', surcharge_amount: 1.62, total: 108.25, amount_paid: 106.63 }))
   })
 })

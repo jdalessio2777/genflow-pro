@@ -212,7 +212,7 @@ export default function InvoiceDetail() {
                 buildRow("Customer", invoice.customer_name),
                 buildRow("Invoice", invoice.invoice_number),
                 buildRow("Amount", `$${(invoice.total || 0).toFixed(2)}`),
-                surchargeAmount > 0 ? buildRow("Surcharge (3%)", `$${surchargeAmount.toFixed(2)}`) : "",
+                surchargeAmount > 0 ? buildRow("Card surcharge", `$${surchargeAmount.toFixed(2)}`) : "",
                 buildRow("Total Charged", `$${((invoice.total || 0) + surchargeAmount).toFixed(2)}`),
                 buildRow("Method", "Stripe (credit/debit card)"),
                 buildRow("Date", new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
@@ -230,7 +230,9 @@ export default function InvoiceDetail() {
   const getOwedTotal = () => (invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0);
   // What the customer pays now: owed + the credit card surcharge line, if
   // one was added on this screen. The Stripe App flow charges exactly this.
-  const getAmountDue = () => Math.round((getOwedTotal() + (Number(invoice.surcharge_amount) || 0)) * 100) / 100;
+  // The surcharge is recomputed from the shared formula (Stripe's fee on the
+  // amount charged), never taken from the stored figure.
+  const getAmountDue = () => Math.round((getOwedTotal() + (Number(invoice.surcharge_amount) > 0 ? surchargeFor(invoice, surchargeCfg) : 0)) * 100) / 100;
 
   // Credit card surcharge button (Part 2): added like a discount — a tap,
   // a credit-card check, one-tap remove. Stored in invoices.surcharge_amount

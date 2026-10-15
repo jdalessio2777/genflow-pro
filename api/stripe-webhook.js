@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { owedCents, paymentCoversInvoice } from '../src/lib/utils/paymentAmounts.js';
+import { balanceCentsOf, supportsPartialPayments } from '../src/lib/utils/surcharge.js';
 
 async function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -44,7 +45,7 @@ export default async function handler(req, res) {
 
     const { data: invoice } = await supabase
       .from('invoices')
-      .select('id, status, total, parts_total, labor_total, tax_amount, stripe_payment_intent_id')
+      .select('*')
       .eq('id', invoiceId)
       .single();
 
@@ -66,7 +67,10 @@ export default async function handler(req, res) {
         'received', received, 'owed', owedCents(invoice));
       return res.status(200).json({ received: true, skipped: 'underpaid' });
     }
-    const base = owedCents(invoice);
+    // A card payment always settles the whole balance (after any recorded
+    // partial payment); the surcharge is what was received above that.
+    const owed = owedCents(invoice);
+    const base = balanceCentsOf(invoice);
     const surchargeAmount = (received - base) / 100;
 
     await supabase.from('invoices').update({
@@ -75,7 +79,8 @@ export default async function handler(req, res) {
       paid_date: new Date().toISOString(),
       stripe_payment_intent_id: pi.id,
       surcharge_amount: surchargeAmount,
-      total: received / 100,
+      total: (owed + received - base) / 100,
+      ...(supportsPartialPayments(invoice) ? { amount_paid: owed / 100 } : {}),
     }).eq('id', invoiceId);
 
     console.log('[stripe-webhook] invoice marked paid via webhook:', invoiceId, 'pi:', pi.id);

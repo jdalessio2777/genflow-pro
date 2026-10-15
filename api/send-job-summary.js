@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from './_lib/sendEmail.js';
 import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './_lib/jobSummary.js';
-import { surchargeConfig } from '../src/lib/utils/surcharge.js';
+import { surchargeConfig, SURCHARGE_SETTING_KEYS } from '../src/lib/utils/surcharge.js';
 import { isAllowedEmail } from '../src/lib/allowedUsers.js';
 import { invoiceTotalCents } from '../src/lib/utils/invoiceTotals.js';
 
@@ -126,9 +126,9 @@ export default async function handler(req, res) {
       db.from('job_documents').select('*').eq('job_id', jobId).eq('status', 'completed').order('created_at', { ascending: true }),
       db.from('job_agreements').select('*').eq('job_id', jobId).maybeSingle(),
     ]);
-    // Card surcharge rate/taxable (same settings as the app and card routes).
+    // Card surcharge rate/fixed/taxable (same settings as the app and card routes).
     const { data: surchargeRows } = await db.from('app_settings').select('key, value')
-      .in('key', ['card_surcharge_rate', 'card_surcharge_taxable']);
+      .in('key', SURCHARGE_SETTING_KEYS);
     const invoice = (invoices || [])[0] || null;
     // Per-document toggles from the Complete Job dialog. Only this job's
     // completed documents are ever candidates (loaded by job_id above), so a

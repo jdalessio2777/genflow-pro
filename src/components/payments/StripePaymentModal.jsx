@@ -11,7 +11,7 @@ import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import { useSettings } from '@/lib/useSettings';
-import { surchargeConfig, surchargeCents, surchargeLabel } from '@/lib/utils/surcharge';
+import { surchargeConfig, surchargeCents, surchargeLabel, balanceCentsOf } from '@/lib/utils/surcharge';
 
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
@@ -46,12 +46,13 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
   const [lockedTotal, setLockedTotal] = useState(null);
   const [lockError, setLockError] = useState(null);
 
-  const baseAmount = invoice.total || 0;
+  // What is still owed (the whole invoice unless part was already paid).
+  const baseAmount = balanceCentsOf(invoice) / 100;
 
   // Preview only; the server locks the real amount (same shared config).
   const { settings } = useSettings();
   const previewSurcharge = funding === 'credit'
-    ? surchargeCents(Math.round(baseAmount * 100), surchargeConfig(settings)) / 100
+    ? surchargeCents(balanceCentsOf(invoice), surchargeConfig(settings)) / 100
     : 0;
   const previewTotal = baseAmount + previewSurcharge;
 
@@ -187,7 +188,7 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
   // ── Render ────────────────────────────────────────────────────────────────────
 
   const fundingLabel = funding === 'credit'
-    ? `${surchargeLabel(surchargeConfig(settings)).replace('Credit card surcharge', 'Credit card — surcharge')} applies`
+    ? 'Credit card — surcharge applies'
     : funding === 'debit'
     ? 'Debit card — no surcharge'
     : funding === 'prepaid'
@@ -222,7 +223,7 @@ function PaymentForm({ invoice, clientSecret, paymentIntentId, onSuccess, onClos
         {isComplete && (
           <div className={`flex justify-between transition-opacity ${isEstimate ? 'opacity-50' : ''}`}>
             <span className="text-muted-foreground">
-              {surchargeLabel(surchargeConfig(settings))}
+              {surchargeLabel()}
               {isEstimate && <span className="ml-1 text-xs">(est.)</span>}
             </span>
             <span>{funding === 'credit' ? formatCurrency(displaySurcharge) : '$0.00'}</span>

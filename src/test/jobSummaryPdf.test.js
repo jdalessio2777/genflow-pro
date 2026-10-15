@@ -175,3 +175,15 @@ describe('buildJobSummaryEmail', () => {
     expect(buildSubject({ kind: 'completion', invoice: null, checklistCount: 0 })).toBe('Service Summary — GenShield')
   })
 })
+
+describe('Item 3: email never trusts a phone-written surcharge', () => {
+  it('unpaid invoice: a tampered surcharge is recomputed with the Stripe-fee formula', () => {
+    // $100 part + NJ tax 6.63 = 106.63 -> (287.901 + 5)/0.973 = 301.03 -> $3.01
+    const inv = { status: 'sent', parts_total: 100, labor_total: 0, tax_amount: 6.63, total: 106.63, surcharge_amount: 50, line_items: [] }
+    expect(invoiceForEmail({ invoice: inv, parts: [{ total_price: 100 }], labor: [] }).surcharge_amount).toBe(3.01)
+  })
+  it('paid invoice keeps what was charged', () => {
+    const inv = { status: 'paid', parts_total: 100, labor_total: 0, tax_amount: 0, total: 102.82, surcharge_amount: 2.82, paid_date: '2026-10-15T12:00:00Z', line_items: [] }
+    expect(invoiceForEmail({ invoice: inv, parts: [{ total_price: 100 }], labor: [] }).surcharge_amount).toBe(2.82)
+  })
+})

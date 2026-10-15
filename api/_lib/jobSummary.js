@@ -2,7 +2,7 @@
 // completed checklist + (if signed during this job) the maintenance agreement
 // as PDF attachments. Pure (no I/O) so it can be unit-tested.
 import { jobSummaryEmailHTML } from '../../src/lib/emailTemplates.js';
-import { SURCHARGE_DEFAULTS, withResyncedSurcharge } from '../../src/lib/utils/surcharge.js';
+import { SURCHARGE_DEFAULTS, withResyncedSurcharge, surchargeFor } from '../../src/lib/utils/surcharge.js';
 import { computeJobFinancials, TAX_RATE } from '../../src/lib/utils/jobFinancials.js';
 import { buildInvoiceLineItems, invoiceTotalCents, isZeroDollarInvoice } from '../../src/lib/utils/invoiceTotals.js';
 import { buildChecklistPdf, checklistFilename } from './pdf/checklistPdf.js';
@@ -38,6 +38,10 @@ export function invoiceForEmail({ invoice, parts = [], labor = [], notes, surcha
       }, inv, surchargeConfig);
       if (!(Number(inv.surcharge_amount) > 0) || freshCents <= 0) inv = { ...inv, surcharge_amount: 0 };
     }
+    // A surcharge on an unpaid invoice was written by the phone: always
+    // recompute it here from the shared formula (never trust the stored
+    // figure). Paid invoices show what was actually charged.
+    if (Number(inv.surcharge_amount) > 0) inv = { ...inv, surcharge_amount: surchargeFor(inv, surchargeConfig) };
   }
   if (isZeroDollarInvoice(inv)) {
     inv = { ...inv, line_items: buildInvoiceLineItems(parts, labor, { includeNoChargeParts: true }) };
