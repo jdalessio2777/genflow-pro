@@ -629,10 +629,16 @@ export default function JobDetail() {
   };
   // Back from "Collect now" (Complete dialog → invoice → payment recorded):
   // reopen the Complete dialog once. Paid in full now → no collect prompt.
+  // Waits past the page transition: AnimatePresence briefly renders this
+  // route inside the EXITING page too, and that throwaway copy must not
+  // consume the state (its timer is cancelled when it unmounts).
   useEffect(() => {
     if (!location.state?.openComplete || !job) return;
-    navigate(location.pathname, { replace: true, state: {} });
-    if (job.status === "on_site" || job.status === "in_progress") openCompleteJob();
+    const t = setTimeout(() => {
+      navigate(location.pathname, { replace: true, state: {} });
+      if (job.status === "on_site" || job.status === "in_progress") openCompleteJob();
+    }, 400);
+    return () => clearTimeout(t);
   }, [location.state?.openComplete, job?.id]);
 
 
