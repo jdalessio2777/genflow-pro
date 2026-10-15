@@ -1,4 +1,4 @@
-import { isZeroDollarInvoice } from './utils/invoiceTotals.js'
+import { isZeroDollarInvoice, invoiceTotalCents } from './utils/invoiceTotals.js'
 import { partChargeTotal } from './utils/jobFinancials.js'
 import { SURCHARGE_DEFAULTS, surchargeLabel } from './utils/surcharge.js'
 // Escaping lives in one shared module (also used by the printable Service
@@ -509,9 +509,16 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
        </div>`
     : "";
 
+  // Item 1c: the email states plainly whether it is PAID (and how), UNPAID
+  // (and how much), or partly paid (paid so far + balance due).
+  const totalCents = invoiceTotalCents(invoice)
+  const isPartial = !invoice.paid_date && invoice.status === "partial" && Number(invoice.amount_paid) > 0
+  const paidSoFar = isPartial ? Math.round(Number(invoice.amount_paid) * 100) / 100 : 0
+  const amountDue = Math.max(0, totalCents / 100 - paidSoFar)
   const paymentLine = invoice.paid_date
-    ? `PAID — ${fmtDate(invoice.paid_date)}${invoice.payment_method ? ` (${escapeHtml(invoice.payment_method)}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""})` : ""}`
-    : "PAYMENT DUE";
+    ? `PAID — ${fmtDate(invoice.paid_date)}${invoice.payment_method ? ` (${escapeHtml(fmtPaymentMethod(invoice.payment_method))}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""})` : ""}`
+    : totalCents < 0 ? "PAYMENT DUE" // credit invoice: original wording
+    : isPartial ? `PARTIALLY PAID — ${fmt(amountDue)} DUE` : `UNPAID — ${fmt(amountDue)} DUE`;
 
   return `<div>
     <div style="background:#0D1014;color:white;padding:22px 24px;border-radius:8px;margin-bottom:20px;">
@@ -590,7 +597,15 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
             <tr>
               <td style="padding:9px 0 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;">Total</td>
               <td style="padding:9px 0 0;font-size:15px;font-weight:bold;border-top:2px solid #0D1014;text-align:right;color:#0D1014;">${fmt((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</td>
+            </tr>${isPartial ? `
+            <tr>
+              <td style="padding:5px 0;font-size:13px;color:#555;">Paid so far</td>
+              <td style="padding:5px 0;font-size:13px;text-align:right;">−${fmt(paidSoFar)}</td>
             </tr>
+            <tr>
+              <td style="padding:5px 0;font-size:14px;font-weight:bold;color:#b45309;">Balance due</td>
+              <td style="padding:5px 0;font-size:14px;font-weight:bold;text-align:right;color:#b45309;">${fmt(amountDue)}</td>
+            </tr>` : ''}
           </table>
         </td>
       </tr>
@@ -616,10 +631,14 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
         </td>
       </tr>
     </table>` : `
-    <div style="background:#f4f5f7;border:1px solid #dde1e7;border-radius:8px;padding:12px;margin-bottom:16px;">
+    ${totalCents < 0 ? `<div style="background:#f4f5f7;border:1px solid #dde1e7;border-radius:8px;padding:12px;margin-bottom:16px;">
       <p style="font-size:11px;font-weight:bold;color:#3f4753;margin:0 0 4px 0;">PAYMENT DUE</p>
       <p style="font-size:12px;color:#5b6472;margin:0;">Cash · Check (payable to GenShield) · Zelle · Venmo · Card</p>
-    </div>`}
+    </div>` : `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:16px;">
+      <p style="font-size:12px;font-weight:bold;color:#92400e;margin:0 0 4px 0;">${isPartial ? `BALANCE DUE: ${fmt(amountDue)}` : `UNPAID — AMOUNT DUE: ${fmt(amountDue)}`}</p>
+      ${isPartial ? `<p style="font-size:12px;color:#92400e;margin:0 0 4px 0;">Paid so far: ${fmt(paidSoFar)}</p>` : ""}
+      <p style="font-size:12px;color:#5b6472;margin:0;">Cash · Check (payable to GenShield) · Zelle · Venmo · Card</p>
+    </div>`}`}
     ${signatureHTML}
   </div>`;
 }
@@ -757,6 +776,46 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
   </div>`;
 }
 
+// Item 1d: the short "Payment received" receipt for a payment recorded after
+// the job's completion email went out. No line items (the customer already
+// has the invoice): amount, method, what's still due, and the signature if one
+// was collected (incl. one collected after completion).
+export function paymentReceiptHTML({ invoice, customer }) {
+  const first = String(customer?.name || "").trim().split(/\s+/)[0] || "there"
+  const totalCents = invoiceTotalCents(invoice)
+  const paidInFull = invoice.status === "paid" || (!!invoice.paid_date && invoice.status !== "partial")
+  const paid = paidInFull ? totalCents / 100 : Math.round(Number(invoice.amount_paid || 0) * 100) / 100
+  const balance = paidInFull ? 0 : Math.max(0, totalCents / 100 - paid)
+  const row = (label, value, strong = false) => `<tr>
+      <td style="padding:6px 0;font-size:13px;color:#555;border-bottom:1px solid #eee;${strong ? "font-weight:bold;color:#0D1014;" : ""}">${label}</td>
+      <td style="padding:6px 0;font-size:13px;text-align:right;border-bottom:1px solid #eee;${strong ? "font-weight:bold;color:#0D1014;" : ""}">${value}</td>
+    </tr>`
+  const method = invoice.payment_method ? `${escapeHtml(fmtPaymentMethod(invoice.payment_method))}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""}` : "—"
+  const signatureHTML = invoice.customer_signature
+    ? `<div style="margin-top:16px;border-top:1px solid #ddd;padding-top:12px;">
+         <p style="font-size:11px;color:#888;margin:0 0 8px 0;">CUSTOMER SIGNATURE</p>
+         <img src="${safeImageSrc(invoice.customer_signature)}" style="max-height:56px;border:1px solid #eee;border-radius:6px;padding:4px;" />
+       </div>`
+    : ""
+  return `<div>
+    <p style="font-size:14px;color:#1a1a1a;margin:0 0 6px 0;">Hi ${escapeHtml(first)},</p>
+    <p style="font-size:13px;color:#444;margin:0 0 18px 0;">We received your payment — thank you!</p>
+    <div style="background:#0D1014;color:white;padding:16px 20px;border-radius:8px;margin-bottom:16px;">
+      <p style="font-size:16px;font-weight:bold;margin:0;letter-spacing:1px;">GEN<span style="color:#E03010;">SHIELD</span> <span style="font-size:12px;font-weight:normal;color:#A8B4C4;letter-spacing:0;">· Payment received</span></p>
+      <p style="font-size:12px;color:#A8B4C4;margin:4px 0 0 0;">Invoice ${escapeHtml(invoice.invoice_number)}</p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      ${row("Invoice total", fmt(totalCents / 100))}
+      ${invoice.surcharge_amount > 0 ? row(surchargeLabel(), fmt(invoice.surcharge_amount)) : ""}
+      ${row("Payment method", method)}
+      ${paidInFull && invoice.paid_date ? row("Date", fmtDate(invoice.paid_date)) : ""}
+      ${row(paidInFull ? "Paid" : "Paid so far", fmt(paid), true)}
+      ${paidInFull ? row("Balance", "Paid in full ✓", true) : row("Balance due", fmt(balance), true)}
+    </table>
+    ${signatureHTML}
+  </div>`
+}
+
 // Short greeting + "what's attached" line placed above the inline invoice in
 // the single job-completion email (and the pay-later receipt).
 export function jobSummaryIntroHTML({ customer, kind = "completion", attachmentLabels = [] }) {
@@ -777,6 +836,7 @@ export function jobSummaryIntroHTML({ customer, kind = "completion", attachmentL
 // The one customer email sent at job completion / payment: greeting +
 // attachment line + invoice inline. PDFs ride as attachments, not in the body.
 export function jobSummaryEmailHTML({ invoice, customer, kind = "completion", attachmentLabels = [], surchargeConfig = SURCHARGE_DEFAULTS }) {
+  if (kind === "receipt" && invoice) return combineEmailSections([paymentReceiptHTML({ invoice, customer })]);
   const intro = jobSummaryIntroHTML({ customer, kind, attachmentLabels });
   const body = invoice ? invoiceSummaryHTML({ invoice, customer, surchargeConfig }) : "";
   return combineEmailSections([intro + body]);

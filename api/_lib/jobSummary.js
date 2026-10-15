@@ -70,7 +70,10 @@ export function buildSubject({ kind, invoice, checklistCount }) {
 }
 
 export async function buildJobSummaryEmail({ kind = 'completion', job, customer, invoice, parts = [], labor = [], documents = [], agreement = null, surchargeConfig = SURCHARGE_DEFAULTS }) {
-  const inv = invoiceForEmail({ invoice, parts, labor, notes: job ? (job.invoice_notes ?? '') : undefined, surchargeConfig });
+  let inv = invoiceForEmail({ invoice, parts, labor, notes: job ? (job.invoice_notes ?? '') : undefined, surchargeConfig });
+  // Item 2: the job's signature is the source of truth (it can be collected
+  // before completion or later, after the invoice snapshot was taken).
+  if (inv && job?.customer_signature) inv = { ...inv, customer_signature: job.customer_signature };
   const attachments = [];
   const attachmentLabels = [];
 

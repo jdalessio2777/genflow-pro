@@ -23,13 +23,17 @@ import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { isZeroDollarInvoice, receiptEmailExpected } from "@/lib/utils/invoiceTotals";
 import { showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
 import { useSettings } from "@/lib/useSettings";
-import { surchargeConfig, surchargeFor, surchargeLabel } from "@/lib/utils/surcharge";
+import { surchargeConfig, surchargeFor, surchargeLabel, balanceCentsOf, owedCentsOf, amountPaidCentsOf, supportsPartialPayments } from "@/lib/utils/surcharge";
+import { Switch } from "@/components/ui/switch";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const fromJobId = location.state?.fromJobId;
+  // Opened from the Complete dialog's "Collect now": after the payment is
+  // recorded, go back to the job and reopen Complete (Item 1b).
+  const completeAfter = !!location.state?.completeAfter;
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [showStripeModal, setShowStripeModal] = useState(false);
@@ -37,6 +41,11 @@ export default function InvoiceDetail() {
   const [stripeAppTxnId, setStripeAppTxnId] = useState("");
   const [showCheckNumberDialog, setShowCheckNumberDialog] = useState(false);
   const [resending, setResending] = useState(false);
+  // Item 1d: the pay-later receipt can be skipped at the moment of payment.
+  const [emailReceipt, setEmailReceipt] = useState(true);
+  // Partial payments (only once invoices.amount_paid exists): blank = the
+  // whole balance.
+  const [payAmount, setPayAmount] = useState("");
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
@@ -110,7 +119,7 @@ export default function InvoiceDetail() {
     if (!invoice?.job_id) return;
     // Known no-email case (e.g. legacy job whose completion email never went
     // out): don't even ask the server. Unknown (job not loaded) -> server decides.
-    if (receiptWillEmail === false) return;
+    if (receiptWillEmail === false || !emailReceipt) return;
     try {
       const r = await sendJobSummaryEmail({ jobId: invoice.job_id, kind: "receipt" });
       if (r?.id && !r.skipped) toast.success(`Receipt emailed to ${r.to}`);
@@ -147,6 +156,9 @@ export default function InvoiceDetail() {
     }
     dismissSaveError("", { id: "record-payment-error" });
     onSuccess?.();
+    if (completeAfter && invoice?.job_id && patch.status === "paid") {
+      navigate(`/jobs/${invoice.job_id}`, { replace: true, state: { openComplete: true } });
+    }
     return true;
   });
 
@@ -155,12 +167,29 @@ export default function InvoiceDetail() {
     onError: (e) => showSaveError("Invoice NOT marked as sent", e, markSent, { id: "mark-sent-error" }),
   });
   const markPaid = (method, reference) => {
+    // Partial payment (column present + an amount below the balance).
+    const balanceCents = balanceCentsOf(invoice);
+    const entered = Math.round(parseFloat(String(payAmount).replace(/[$,\s]/g, "")) * 100);
+    const partial = supportsPartialPayments(invoice) && payAmount.trim() !== "" && Number.isFinite(entered) && entered > 0 && entered < balanceCents;
+    if (supportsPartialPayments(invoice) && payAmount.trim() !== "" && !(Number.isFinite(entered) && entered > 0 && entered <= balanceCents)) {
+      toast.error(`Enter an amount from $0.01 to ${formatCurrency(balanceCents / 100)}`);
+      return;
+    }
+    if (partial) {
+      const paidSoFar = (amountPaidCentsOf(invoice) + entered) / 100;
+      recordPayment(
+        { status: "partial", amount_paid: paidSoFar, payment_method: method, payment_reference: reference || null },
+        { onSuccess: () => { haptics.success(); setPayAmount(""); toast.success(`${formatCurrency(entered / 100)} recorded — ${formatCurrency((balanceCents - entered) / 100)} still due`); sendReceiptIfNeeded(); } }
+      );
+      return;
+    }
     // A card surcharge doesn't belong on a cash/check/Zelle/Venmo payment.
     let surcharge = Number(invoice.surcharge_amount) || 0;
     if (surcharge > 0 && window.confirm(`This invoice has a credit card surcharge (${formatCurrency(surcharge)}). Remove it? ${method} is not a credit card payment.`)) surcharge = 0;
-    const paidTotal = Math.round((getOwedTotal() + surcharge) * 100) / 100;
+    else if (surcharge > 0) surcharge = surchargeFor(invoice, surchargeCfg);
+    const paidTotal = Math.round((owedCentsOf(invoice) / 100 + surcharge) * 100) / 100;
     recordPayment(
-      { status: "paid", payment_method: method, payment_reference: reference || null, paid_date: new Date().toISOString(), surcharge_amount: surcharge, total: paidTotal },
+      { status: "paid", payment_method: method, payment_reference: reference || null, paid_date: new Date().toISOString(), surcharge_amount: surcharge, total: paidTotal, ...(supportsPartialPayments(invoice) ? { amount_paid: owedCentsOf(invoice) / 100 } : {}) },
       {
         onSuccess: () => {
           haptics.success();
@@ -197,7 +226,8 @@ export default function InvoiceDetail() {
         paid_date: new Date().toISOString(),
         surcharge_amount: surchargeAmount,
         stripe_payment_intent_id: paymentIntentId,
-        total: (invoice.total || 0) + surchargeAmount,
+        total: Math.round((owedCentsOf(invoice) / 100 + surchargeAmount) * 100) / 100,
+        ...(supportsPartialPayments(invoice) ? { amount_paid: owedCentsOf(invoice) / 100 } : {}),
       },
       {
         onSuccess: () => {
@@ -227,7 +257,9 @@ export default function InvoiceDetail() {
 
   // Base + tax only — what's owed before any card surcharge. The in-app
   // card form adds its own (server-computed) surcharge on top of this.
-  const getOwedTotal = () => (invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0);
+  // What is still owed: the whole invoice, or the balance after a recorded
+  // partial payment.
+  const getOwedTotal = () => balanceCentsOf(invoice) / 100;
   // What the customer pays now: owed + the credit card surcharge line, if
   // one was added on this screen. The Stripe App flow charges exactly this.
   // The surcharge is recomputed from the shared formula (Stripe's fee on the
@@ -269,8 +301,11 @@ export default function InvoiceDetail() {
         payment_method: "stripe_app",
         paid_date: new Date().toISOString(),
         stripe_payment_intent_id: txnId,
-        // Paid amount recorded = what was charged in the Stripe app.
-        total: owedTotal,
+        // Paid amount recorded = what was charged in the Stripe app (the
+        // balance + the recomputed surcharge).
+        surcharge_amount: Number(invoice.surcharge_amount) > 0 ? surchargeFor(invoice, surchargeCfg) : 0,
+        total: Math.round((owedCentsOf(invoice) / 100 + (Number(invoice.surcharge_amount) > 0 ? surchargeFor(invoice, surchargeCfg) : 0)) * 100) / 100,
+        ...(supportsPartialPayments(invoice) ? { amount_paid: owedCentsOf(invoice) / 100 } : {}),
       },
       {
         onSuccess: () => {
@@ -303,7 +338,11 @@ export default function InvoiceDetail() {
   // Exactly $0.00 (integer cents): nothing to collect — hide every payment
   // option. Negative and > $0 invoices are unaffected.
   const isNoCharge = isZeroDollarInvoice(invoice);
-  const canCollect = (invoice.status === "draft" || invoice.status === "sent") && !isNoCharge;
+  const canCollect = ["draft", "sent", "partial"].includes(invoice.status) && !isNoCharge;
+  const partialEnabled = supportsPartialPayments(invoice);
+  const paidSoFar = amountPaidCentsOf(invoice) / 100;
+  // Signature: the job's (collected any time) — the invoice copy may predate it.
+  const signature = invoiceJob?.customer_signature || invoice.customer_signature;
 
   return (
     <div>
@@ -389,6 +428,12 @@ export default function InvoiceDetail() {
               </div>
             )}
             <div className="flex justify-between text-base font-bold pt-1 border-t"><span>Total</span><span>{formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
+            {invoice.status === "partial" && (
+              <>
+                <div className="flex justify-between text-sm" data-testid="paid-so-far"><span className="text-muted-foreground">Paid so far</span><span>−{formatCurrency(paidSoFar)}</span></div>
+                <div className="flex justify-between text-sm font-semibold text-amber-700 dark:text-amber-300" data-testid="balance-due"><span>Balance due</span><span>{formatCurrency(getAmountDue())}</span></div>
+              </>
+            )}
           </div>
           {canCollect && !(invoice.surcharge_amount > 0) && (
             <AlertDialog open={surchargeAsk} onOpenChange={setSurchargeAsk}>
@@ -454,6 +499,18 @@ export default function InvoiceDetail() {
           <Button variant="outline" className="w-full rounded-xl gap-2 h-11" onClick={markSent}>
             <Send className="w-4 h-4" /> Mark as Sent
           </Button>
+        )}
+
+        {canCollect && receiptWillEmail && (
+          // Item 1d: completed job → collecting sends a short "Payment
+          // received" receipt. One switch for every payment method below.
+          <Card className="p-3 flex items-center justify-between gap-3" data-testid="receipt-toggle">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Email "Payment received" receipt</p>
+              <p className="text-xs text-muted-foreground truncate">{emailReceipt ? `To ${invoiceCustomer?.email}` : "Off — no email for this payment"}</p>
+            </div>
+            <Switch checked={emailReceipt} onCheckedChange={setEmailReceipt} aria-label="Email payment received receipt" />
+          </Card>
         )}
 
         {canCollect && (
@@ -545,9 +602,20 @@ export default function InvoiceDetail() {
               {receiptWillEmail === false
                 ? "The customer will not be emailed — the payment is only recorded."
                 : receiptWillEmail
-                  ? `A payment receipt will be emailed to ${invoiceCustomer?.email}.`
+                  ? (emailReceipt ? `A short "Payment received" receipt will be emailed to ${invoiceCustomer?.email}.` : "Receipt email switched off — the payment is only recorded.")
                   : "\u00a0"}
             </p>
+            {partialEnabled && (
+              <div className="mb-3">
+                <Label className="text-xs text-green-900 dark:text-green-100">Amount received</Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                  <Input type="text" inputMode="decimal" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                    placeholder={getOwedTotal().toFixed(2)} className="pl-7 rounded-xl bg-white dark:bg-gray-800" aria-label="Amount received" />
+                </div>
+                <p className="text-[11px] text-green-700 dark:text-green-300 mt-1">Leave blank for the full {formatCurrency(getOwedTotal())}. Less records a partial payment.</p>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2">
               {["cash", "check", "zelle", "venmo", "other"].map(method => (
                 <Button
@@ -564,11 +632,11 @@ export default function InvoiceDetail() {
           </Card>
         )}
 
-        {invoice.customer_signature && (
+        {signature && (
           <Card className="p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Customer Signature</p>
             <div className="border rounded-xl overflow-hidden bg-white dark:bg-gray-800 p-2">
-              <img src={invoice.customer_signature} alt="Customer signature" className="w-full max-h-24 object-contain" />
+              <img src={signature} alt="Customer signature" className="w-full max-h-24 object-contain" />
             </div>
             {invoice.paid_date && (
               <p className="text-xs text-muted-foreground mt-1">Collected {formatDate(invoice.created_date)}</p>

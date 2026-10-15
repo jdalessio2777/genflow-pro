@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
 import { integrationsCore } from "@/lib/coreIntegrations";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
@@ -15,112 +15,7 @@ import { formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import { PLANS, TERMS, UNIT_TYPE_LABEL } from "@/lib/agreementTerms";
-import { initSignatureCanvas } from "@/lib/signatureCanvas";
-import SignatureGuideOverlay from "@/components/ui/SignatureGuideOverlay";
-
-function SignatureCanvas({ onSave }) {
-  const canvasRef = useRef(null);
-  const isDrawing = useRef(false);
-  const [slideClass, setSlideClass] = useState("translate-y-full");
-  const [gone, setGone] = useState(false);
-  const isPortrait = typeof window !== "undefined" && window.innerWidth < window.innerHeight;
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setSlideClass("translate-y-0"));
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
-
-  // Background + pen only; the "Sign here" guide is a DOM overlay so it
-  // never ends up in the exported PNG.
-  const initCanvas = (canvas) => initSignatureCanvas(canvas);
-
-  const canvasCallbackRef = (canvas) => {
-    if (canvas && canvas !== canvasRef.current) {
-      canvasRef.current = canvas;
-      initCanvas(canvas);
-    }
-  };
-
-  const getPos = (e, canvas) => {
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
-    return {
-      x: (touch.clientX - rect.left) * (canvas.width / rect.width),
-      y: (touch.clientY - rect.top) * (canvas.height / rect.height),
-    };
-  };
-
-  const startDraw = (e) => { e.preventDefault(); isDrawing.current = true; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); };
-  const draw = (e) => { e.preventDefault(); if (!isDrawing.current) return; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.lineTo(pos.x, pos.y); ctx.stroke(); };
-  const stopDraw = (e) => { e.preventDefault(); isDrawing.current = false; };
-
-  const clear = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    initCanvas(canvas);
-  };
-
-  const handleDone = () => {
-    const dataUrl = canvasRef.current.toDataURL("image/png");
-    setSlideClass("translate-y-full");
-    setTimeout(() => {
-      setGone(true);
-      onSave(dataUrl);
-    }, 300);
-  };
-
-  if (gone) return null;
-
-  const cw = typeof window !== "undefined" ? Math.round(window.innerWidth * 0.85) : 560;
-  const ch = typeof window !== "undefined" ? Math.round(window.innerHeight * 0.50) : 280;
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
-    >
-      <div
-        style={{ transition: "transform 0.3s ease-out" }}
-        className={`transform ${slideClass} flex flex-col items-center gap-4 w-full px-4`}
-      >
-        <p style={{ color: "#ffffff", fontSize: "1rem", fontWeight: 600, letterSpacing: "0.02em" }}>Customer Signature</p>
-
-        <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
-          <canvas
-            ref={canvasCallbackRef}
-            width={cw}
-            height={ch}
-            style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
-            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-          />
-          <SignatureGuideOverlay />
-        </div>
-
-        {isPortrait && (
-          <p style={{ color: "#9ca3af", fontSize: "0.75rem" }}>Rotate device for more space</p>
-        )}
-
-        <div style={{ display: "flex", gap: "12px", width: "100%", maxWidth: `${cw}px` }}>
-          <button
-            onClick={clear}
-            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#374151", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-          >
-            Clear
-          </button>
-          <button
-            onClick={handleDone}
-            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#D32C2C", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+import SignaturePad from "@/components/signature/SignaturePad";
 
 export default function MembershipAgreement() {
   const { id } = useParams();
@@ -471,7 +366,7 @@ export default function MembershipAgreement() {
               <p className="text-xs text-muted-foreground mb-2 text-center italic">
                 By signing, {customer.name} agrees to the terms and conditions reviewed above
               </p>
-              <SignatureCanvas onSave={handleSign} />
+              <SignaturePad onSave={handleSign} />
             </div>
 
             {updateCustomer.isPending && (

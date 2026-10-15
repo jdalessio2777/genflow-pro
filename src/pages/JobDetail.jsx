@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
+import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import StatusBadge from "@/components/ui/StatusBadge";
 import RewardBadge from "@/components/ui/RewardBadge";
@@ -36,123 +36,13 @@ import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
 import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
-import { surchargeConfig, withResyncedSurcharge } from "@/lib/utils/surcharge";
+import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
-import { initSignatureCanvas } from "@/lib/signatureCanvas";
-import SignatureGuideOverlay from "@/components/ui/SignatureGuideOverlay";
-
-function SignatureCanvas({ onSave }) {
-  const canvasRef = useRef(null);
-  const isDrawing = useRef(false);
-  const [dismissed, setDismissed] = useState(false);
-  const [slideClass, setSlideClass] = useState("translate-y-full");
-  const isPortrait = typeof window !== "undefined" && window.innerWidth < window.innerHeight;
-
-  // Slide-up animation on mount
-  useEffect(() => {
-    const t = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setSlideClass("translate-y-0"));
-    });
-    return () => cancelAnimationFrame(t);
-  }, []);
-
-  // Background + pen only; the "Sign here" guide is a DOM overlay so it
-  // never ends up in the exported PNG.
-  const initCanvas = (canvas) => initSignatureCanvas(canvas);
-
-  const canvasCallbackRef = (canvas) => {
-    if (canvas && canvas !== canvasRef.current) {
-      canvasRef.current = canvas;
-      initCanvas(canvas);
-    }
-  };
-
-  const getPos = (e, canvas) => {
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
-    return {
-      x: (touch.clientX - rect.left) * (canvas.width / rect.width),
-      y: (touch.clientY - rect.top) * (canvas.height / rect.height),
-    };
-  };
-
-  const startDraw = (e) => { e.preventDefault(); isDrawing.current = true; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); };
-  const draw = (e) => { e.preventDefault(); if (!isDrawing.current) return; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.lineTo(pos.x, pos.y); ctx.stroke(); };
-  const stopDraw = (e) => { e.preventDefault(); isDrawing.current = false; };
-
-  const clear = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    initCanvas(canvas);
-  };
-
-  const handleDone = () => {
-    const dataUrl = canvasRef.current.toDataURL("image/png");
-    setSlideClass("translate-y-full");
-    setTimeout(() => {
-      setDismissed(true);
-      onSave(dataUrl);
-    }, 300);
-  };
-
-  if (dismissed) return null;
-
-  const cw = typeof window !== "undefined" ? Math.round(window.innerWidth * 0.85) : 560;
-  const ch = typeof window !== "undefined" ? Math.round(window.innerHeight * 0.50) : 280;
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
-    >
-      <div
-        style={{ transition: "transform 0.3s ease-out" }}
-        className={`transform ${slideClass} flex flex-col items-center gap-4 w-full px-4`}
-      >
-        {/* Label */}
-        <p style={{ color: "#ffffff", fontSize: "1rem", fontWeight: 600, letterSpacing: "0.02em" }}>Customer Signature</p>
-
-        {/* Canvas */}
-        <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
-          <canvas
-            ref={canvasCallbackRef}
-            width={cw}
-            height={ch}
-            style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
-            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-          />
-          <SignatureGuideOverlay />
-        </div>
-
-        {/* Portrait hint */}
-        {isPortrait && (
-          <p style={{ color: "#9ca3af", fontSize: "0.75rem" }}>Rotate device for more space</p>
-        )}
-
-        {/* Bottom action bar */}
-        <div style={{ display: "flex", gap: "12px", width: "100%", maxWidth: `${cw}px` }}>
-          <button
-            onClick={clear}
-            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#374151", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-          >
-            Clear
-          </button>
-          <button
-            onClick={handleDone}
-            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#D32C2C", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+import JobSignatureButton from "@/components/signature/JobSignatureButton";
 
 // One attachment row in the Complete Job dialog: checkbox-style toggle,
 // ON = attach this PDF to the completion email.
@@ -177,7 +67,7 @@ function AttachmentToggle({ label, on, onToggle }) {
   );
 }
 
-function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
+function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment, signatureSlot }) {
   const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
 
   return (
@@ -235,8 +125,9 @@ function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNote
           placeholder="Fault codes, battery voltage, oil condition..."
         />
       </div>
+      {signatureSlot && <div className="mt-2">{signatureSlot}</div>}
       {onCollectPayment && (
-        <Button className="w-full rounded-xl gap-1.5 h-10 mt-2 bg-green-600 hover:bg-green-700" onClick={onCollectPayment}>
+        <Button className="w-full rounded-xl gap-1.5 h-11 mt-2 bg-green-600 hover:bg-green-700" onClick={onCollectPayment}>
           <DollarSign className="w-4 h-4" /> Collect Payment
         </Button>
       )}
@@ -251,6 +142,7 @@ const notesErrorLabel = (data) =>
 export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { isOnline } = useOffline();
   const { settings } = useSettings();
@@ -261,7 +153,6 @@ export default function JobDetail() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [sigOpen, setSigOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef(null);
   const [invoiceNotes, setInvoiceNotes] = useState("");
@@ -736,6 +627,14 @@ export default function JobDetail() {
     setIncludeAgreementPdf(true);
     setCompleteJobOpen(true);
   };
+  // Back from "Collect now" (Complete dialog → invoice → payment recorded):
+  // reopen the Complete dialog once. Paid in full now → no collect prompt.
+  useEffect(() => {
+    if (!location.state?.openComplete || !job) return;
+    navigate(location.pathname, { replace: true, state: {} });
+    if (job.status === "on_site" || job.status === "in_progress") openCompleteJob();
+  }, [location.state?.openComplete, job?.id]);
+
 
   const patchInvoiceCache = (updated) => {
     queryClient.setQueryData(["job-invoice", id], (old) =>
@@ -924,7 +823,16 @@ export default function JobDetail() {
   // One invoice per job: guarded against double taps, re-checks the database
   // for an existing invoice before creating, and creates with a fixed id so a
   // Retry after a lost response can't make a second one (F-05).
-  const handleCollectPayment = () => collectGuard.run(async () => {
+  // Item 2: one save path for every Collect Signature button. Resolves only
+  // after the server saved it (JobSignatureButton shows "Signature saved").
+  const saveJobSignature = (sig) => new Promise((resolve, reject) => {
+    updateJob.mutate({ customer_signature: sig }, { onSuccess: resolve, onError: reject });
+  });
+
+  // completeAfter: opened from the Complete dialog's "Collect now" — after the
+  // payment is recorded the invoice screen brings the tech back here and the
+  // Complete dialog reopens (now paid → no prompt, one combined email).
+  const handleCollectPayment = ({ completeAfter = false } = {}) => collectGuard.run(async () => {
     try {
       const invoiceData = buildInvoiceData();
       const current = existingInvoice || (await db.Invoice.filter({ job_id: id }))[0];
@@ -939,10 +847,10 @@ export default function JobDetail() {
       }
       dismissSaveError("", { id: "collect-payment-error" });
       patchInvoiceCache(inv);
-      navigate(`/invoices/${inv.id}`, { state: { fromJobId: id } });
+      navigate(`/invoices/${inv.id}`, { state: { fromJobId: id, completeAfter } });
     } catch (e) {
       haptics.error();
-      showSaveError("Invoice NOT opened", e, handleCollectPayment, { id: "collect-payment-error" });
+      showSaveError("Invoice NOT opened", e, () => handleCollectPayment({ completeAfter }), { id: "collect-payment-error" });
     }
   });
   const addServiceAgreement = async (type) => {
@@ -1003,6 +911,17 @@ export default function JobDetail() {
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
   // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
   const isNoChargeJob = partsLoaded && laborLoaded && isZeroDollarJob(computeJobFinancials(parts, labor));
+  // Item 1: Collect Payment from On Site onward while the job is open, and
+  // after completion. Paid in full = nothing left to collect.
+  const jobIsOpenOnSite = job.status === "on_site" || job.status === "in_progress";
+  const invoicePaidInFull = existingInvoice?.status === "paid";
+  const invoicePartlyPaid = existingInvoice?.status === "partial";
+  const balanceDue = existingInvoice ? balanceCentsOf(existingInvoice) / 100 : computeJobFinancials(parts, labor).total;
+  // Item 2: the one signature control, placed above Collect Payment (or above
+  // Close / Complete on $0 jobs) and in the Notes tab.
+  const signatureButton = (
+    <JobSignatureButton signature={job.customer_signature} onSave={saveJobSignature} disabled={isClosed} />
+  );
   // Legacy stuck $0 job (completed, $0 invoice never closed) -> offer a
   // no-email close. Same strict $0.00-in-cents guard is re-run on click.
   const showCloseNoCharge = partsLoaded && laborLoaded &&
@@ -1264,11 +1183,10 @@ export default function JobDetail() {
               <LiveTotalBar
                 parts={parts}
                 labor={labor}
-                invoiceNotes={invoiceNotes}
-                onNotesChange={handleNotesChange}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
-                onCollectPayment={!isClosed && !isNoChargeJob && existingInvoice?.status !== "paid" ? handleCollectPayment : undefined}
+                onCollectPayment={jobIsOpenOnSite && !isNoChargeJob && !invoicePaidInFull ? () => handleCollectPayment() : undefined}
+                signatureSlot={jobIsOpenOnSite && !isNoChargeJob ? signatureButton : null}
                 isSaving={updateJob.isPending}
               />
 
@@ -1353,7 +1271,8 @@ export default function JobDetail() {
                       </Button>
                     </>
                   )}
-                  {(job.status === "on_site" || job.status === "in_progress") && (
+                  {jobIsOpenOnSite && isNoChargeJob && signatureButton}
+                  {jobIsOpenOnSite && (
                     <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
                       onClick={openCompleteJob}>
                       <CheckCircle2 className="w-4 h-4" /> Complete Job
@@ -1370,6 +1289,7 @@ export default function JobDetail() {
                           🛡️ Customer Sign Protection Agreement
                         </Button>
                       )}
+                      {signatureButton}
                       {existingInvoice?.status === "paid" && existingInvoice?.payment_method === "no_charge" ? (
                         <Card className="p-3 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
                           <p className="text-sm font-semibold text-green-800 dark:text-green-200 flex items-center gap-1.5">
@@ -1399,8 +1319,8 @@ export default function JobDetail() {
                           )}
                         </>
                       ) : (
-                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment} disabled={collectGuard.busy}>
-                          <DollarSign className="w-4 h-4" /> Collect Payment Now
+                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={() => handleCollectPayment()} disabled={collectGuard.busy}>
+                          <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
                         </Button>
                       )}
                       {customer?.email && job.completion_send_failed && (
@@ -1502,10 +1422,17 @@ export default function JobDetail() {
                       <p className="text-xs font-semibold">No charge — {formatCurrency(0)}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect. The invoice will be closed as no charge.</p>
                     </div>
-                  ) : existingInvoice && existingInvoice.status !== "paid" && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5">
-                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">⚠ Invoice is still unpaid</p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">You can complete the job and collect payment later.</p>
+                  ) : !invoicePaidInFull && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5" data-testid="complete-unpaid-box">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                        {invoicePartlyPaid ? `⚠ Partly paid — ${formatCurrency(balanceDue)} still due` : `⚠ Unpaid — ${formatCurrency(balanceDue)} due`}
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">Collect now, or complete it as unpaid and collect later.</p>
+                    </div>
+                  )}
+                  {invoicePaidInFull && !isNoChargeJob && (
+                    <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-green-800 dark:text-green-200">✓ Paid in full</p>
                     </div>
                   )}
 
@@ -1526,7 +1453,7 @@ export default function JobDetail() {
                       {emailOnComplete && (
                         <ul className="text-xs text-muted-foreground space-y-1 px-1">
                           {existingInvoice && (
-                            <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} (in the email)</li>
+                            <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} in the email — {isNoChargeJob ? "no charge" : invoicePaidInFull ? "PAID" : invoicePartlyPaid ? `${formatCurrency(balanceDue)} balance due` : `UNPAID, ${formatCurrency(balanceDue)} due`}</li>
                           )}
                           {completedDocuments.map(doc => (
                             <AttachmentToggle
@@ -1546,18 +1473,34 @@ export default function JobDetail() {
                     <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
                   )}
 
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
-                    <Button
-                      className="flex-1 rounded-xl gap-1.5 bg-green-600 hover:bg-green-700"
-                      disabled={completingJob}
-                      onClick={doCompleteJob}
-                    >
-                      {completingJob
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
-                        : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
-                    </Button>
-                  </div>
+                  {!isNoChargeJob && !invoicePaidInFull ? (
+                    // Unpaid / partly paid: collect now, or complete as unpaid.
+                    <div className="space-y-2 mt-2">
+                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" disabled={completingJob || collectGuard.busy}
+                        onClick={() => { setCompleteJobOpen(false); handleCollectPayment({ completeAfter: true }); }}>
+                        <DollarSign className="w-4 h-4" /> Collect now
+                      </Button>
+                      <Button variant="outline" className="w-full rounded-xl gap-1.5 h-11" disabled={completingJob} onClick={doCompleteJob}>
+                        {completingJob
+                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                          : <><CheckCircle2 className="w-4 h-4" /> Complete as unpaid</>}
+                      </Button>
+                      <Button variant="ghost" className="w-full rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+                      <Button
+                        className="flex-1 rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
+                        disabled={completingJob}
+                        onClick={doCompleteJob}
+                      >
+                        {completingJob
+                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                          : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
+                      </Button>
+                    </div>
+                  )}
                 </DialogContent>
               </Dialog>
 
@@ -1963,40 +1906,16 @@ export default function JobDetail() {
                 </Card>
               )}
 
-              {/* Customer signature */}
-              {(job.status === "in_progress" || job.status === "completed" || job.status === "invoiced") && (
-                <Card className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="text-sm font-semibold">Customer Signature</p>
-                      <p className="text-xs text-muted-foreground">{job.customer_signature ? "Signature on file" : "Not yet collected"}</p>
-                    </div>
-                    {!isClosed && (
-                      <Dialog open={sigOpen} onOpenChange={setSigOpen}>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant={job.customer_signature ? "outline" : "default"} className="rounded-xl text-xs h-8 gap-1.5">
-                            <PenLine className="w-3 h-3" />
-                            {job.customer_signature ? "Re-sign" : "Collect Signature"}
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-sm">
-                          <DialogHeader><DialogTitle>Customer Signature</DialogTitle></DialogHeader>
-                          <p className="text-sm text-muted-foreground text-center italic">Please sign below to confirm work was completed satisfactorily</p>
-                          <SignatureCanvas onSave={function saveSignature(sig) {
-                            // "Saved" only after the server has it; on failure the
-                            // signature is kept and Retry re-sends it (H-2).
-                            updateJob.mutate({ customer_signature: sig }, {
-                              onSuccess: () => { haptics.success(); dismissSaveError("", { id: "signature-error" }); setSigOpen(false); toast.success("Signature saved"); },
-                              onError: (e) => { haptics.error(); showSaveError("Signature NOT saved", e, () => saveSignature(sig), { id: "signature-error" }); },
-                            });
-                          }} />
-                        </DialogContent>
-                      </Dialog>
-                    )}
+              {/* Customer signature — same control as above Collect Payment (Item 2) */}
+              {["on_site", "in_progress", "completed", "invoiced"].includes(job.status) && (
+                <Card className="p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold">Customer Signature</p>
+                    <p className="text-xs text-muted-foreground">{job.customer_signature ? "Signature on file" : "Not yet collected"}</p>
                   </div>
-                  {job.customer_signature && (
+                  {isClosed ? (job.customer_signature && (
                     <img src={job.customer_signature} alt="Customer signature" className="w-full max-h-24 object-contain rounded-xl border border-border bg-muted/20" />
-                  )}
+                  )) : signatureButton}
                 </Card>
               )}
             </div>

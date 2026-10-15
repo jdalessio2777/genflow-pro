@@ -19,7 +19,8 @@ describe('invoiceSummaryHTML — every invoice that is not exactly $0.00 is byte
     expect(invoiceSummaryHTML({ invoice: goldenCases.unpaid, customer: null })).toBe(golden.no_customer_unpaid)
   })
   it('golden fixture still covers paid and unpaid cases', () => {
-    expect(golden.unpaid).toContain('PAYMENT DUE')
+    expect(golden.unpaid).toContain('UNPAID — $306.60 DUE')
+    expect(golden.unpaid).toContain('UNPAID — AMOUNT DUE: $306.60')
     expect(golden.paid_cash).toContain('✓ PAID — THANK YOU!')
     expect(golden.unpaid_negative).toContain('PAYMENT DUE') // negative total keeps the existing path
   })
@@ -124,9 +125,9 @@ describe('invoiceSummaryHTML — exactly $0.00', () => {
   })
   it('rounding-to-zero totals take the $0 path; 1 cent does not', () => {
     const tiny = invoiceSummaryHTML({ invoice: { ...zeroInvoice, labor_total: 0.004, paid_date: null }, customer: goldenCustomer })
-    expect(tiny).not.toContain('PAYMENT DUE')
+    expect(tiny).not.toMatch(/PAYMENT DUE|UNPAID/)
     const cent = invoiceSummaryHTML({ invoice: { ...zeroInvoice, labor_total: 0.01, paid_date: null }, customer: goldenCustomer })
-    expect(cent).toContain('PAYMENT DUE')
+    expect(cent).toContain('UNPAID — $0.01 DUE')
   })
 })
 
@@ -137,10 +138,33 @@ describe('jobSummaryEmailHTML', () => {
     expect(html).toContain('Attached (PDF): Annual Maintenance Checklist, Signed Maintenance Agreement.')
     expect(html).toContain(golden.unpaid)
   })
-  it('receipt wording for pay-later receipts', () => {
+  it('pay-later receipt is the SHORT "Payment received" email (Item 1d): no line items', () => {
     const html = jobSummaryEmailHTML({ invoice: goldenCases.paid_cash, customer: goldenCustomer, kind: 'receipt' })
     expect(html).toContain('We received your payment')
-    expect(html).toContain(golden.paid_cash)
+    expect(html).toContain('Payment received')
+    expect(html).toContain('Paid in full ✓')
+    expect(html).toContain('Cash')
+    expect(html).not.toContain('<th')            // no line-item table
     expect(html).not.toContain('Attached (PDF)')
+  })
+  it('partial receipt shows paid so far and balance due', () => {
+    const inv = { ...goldenCases.unpaid, status: 'partial', amount_paid: 100, payment_method: 'cash' }
+    const html = jobSummaryEmailHTML({ invoice: inv, customer: goldenCustomer, kind: 'receipt' })
+    expect(html).toContain('Paid so far')
+    expect(html).toContain('$100.00')
+    expect(html).toContain('Balance due')
+    expect(html).toContain('$206.60')   // 306.60 - 100
+  })
+  it('combined email states PAID + method, UNPAID + amount, or partial + balance (Item 1c)', () => {
+    const paid = jobSummaryEmailHTML({ invoice: { ...goldenCases.paid_stripe_surcharge, payment_method: 'stripe_app' }, customer: goldenCustomer })
+    expect(paid).toContain('PAID — ')
+    expect(paid).toContain('(Card)')
+    expect(paid).toContain('Credit card surcharge')
+    const unpaid = jobSummaryEmailHTML({ invoice: goldenCases.unpaid, customer: goldenCustomer })
+    expect(unpaid).toContain('UNPAID — AMOUNT DUE: $306.60')
+    const partial = jobSummaryEmailHTML({ invoice: { ...goldenCases.unpaid, status: 'partial', amount_paid: 100 }, customer: goldenCustomer })
+    expect(partial).toContain('PARTIALLY PAID — $206.60 DUE')
+    expect(partial).toContain('Paid so far')
+    expect(partial).toContain('BALANCE DUE: $206.60')
   })
 })
