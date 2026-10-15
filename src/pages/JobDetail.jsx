@@ -1316,7 +1316,7 @@ export default function JobDetail() {
                           🛡️ Customer Sign Protection Agreement
                         </Button>
                       )}
-                      {signatureButton}
+                      {!(isNoChargeJob && showCloseNoCharge) && signatureButton}
                       {existingInvoice?.status === "paid" && existingInvoice?.payment_method === "no_charge" ? (
                         <Card className="p-3 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
                           <p className="text-sm font-semibold text-green-800 dark:text-green-200 flex items-center gap-1.5">
@@ -1339,6 +1339,7 @@ export default function JobDetail() {
                               <p className="text-xs text-muted-foreground mt-0.5">Invoice is still open. Close it as no charge, or resend the summary email.</p>
                             )}
                           </Card>
+                          {showCloseNoCharge && signatureButton}
                           {showCloseNoCharge && (
                             <Button className="w-full rounded-xl gap-1.5 h-11" onClick={() => setCloseNoChargeOpen(true)}>
                               <CheckCircle2 className="w-4 h-4" /> Close as No Charge (no email)

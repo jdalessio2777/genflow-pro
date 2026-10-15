@@ -46,6 +46,10 @@ export default function InvoiceDetail() {
   // Partial payments (only once invoices.amount_paid exists): blank = the
   // whole balance.
   const [payAmount, setPayAmount] = useState("");
+  // Set the moment a full payment is confirmed saved: hides every payment
+  // option right away, so a tap landing in the gap before the refetched
+  // (paid) invoice renders can't record it twice (Batch 3 independent check).
+  const [paidHere, setPaidHere] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ["invoice", id],
@@ -149,6 +153,7 @@ export default function InvoiceDetail() {
   const recordPayment = (patch, { onSuccess } = {}) => recordGuard.run(async function attempt() {
     try {
       await updateMutation.mutateAsync(patch);
+      if (patch.status === "paid") setPaidHere(true);
     } catch (e) {
       haptics.error();
       showSaveError("Payment NOT recorded", e, () => recordGuard.run(attempt), { id: "record-payment-error" });
@@ -338,7 +343,7 @@ export default function InvoiceDetail() {
   // Exactly $0.00 (integer cents): nothing to collect — hide every payment
   // option. Negative and > $0 invoices are unaffected.
   const isNoCharge = isZeroDollarInvoice(invoice);
-  const canCollect = ["draft", "sent", "partial"].includes(invoice.status) && !isNoCharge;
+  const canCollect = ["draft", "sent", "partial"].includes(invoice.status) && !isNoCharge && !paidHere;
   const partialEnabled = supportsPartialPayments(invoice);
   const paidSoFar = amountPaidCentsOf(invoice) / 100;
   // Signature: the job's (collected any time) — the invoice copy may predate it.
