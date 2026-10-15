@@ -21,6 +21,13 @@ export const STOCK_LABEL = {
   unknown: "In stock",
 };
 
+// Short stock text for part pickers (Add Part search): a negative count
+// reads "Recount", never "-2 in stock".
+export function stockShortText(inStock) {
+  const n = Number(inStock ?? 0);
+  return stockStatus(n) === "recount" ? "Recount" : `${n} in stock`;
+}
+
 const plural = (n, word) => `${n} part${n === 1 ? "" : "s"} ${word}`;
 
 // Dashboard alert headline: a recount outranks out-of-stock, which outranks

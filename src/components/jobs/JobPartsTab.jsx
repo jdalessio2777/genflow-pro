@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Minus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { partChargeTotal } from "@/lib/utils/jobFinancials";
-import { stockStatus } from "@/lib/utils/stockStatus";
+import { stockStatus, stockShortText } from "@/lib/utils/stockStatus";
 import { usePreferences } from "@/hooks/usePreferences";
 import { suggestedSalePrice } from "@/lib/utils/partsManaged";
 import { saveCatalogPrice, applySavedPrice } from "@/lib/catalogPrices";
@@ -361,7 +361,11 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
               ) : (
                 <p className="text-xs text-muted-foreground">No price</p>
               )}
-              <p className={`text-xs ${stock > 0 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>{stock} in stock</p>
+              {stockStatus(stock) === "recount" ? (
+                <p className="text-xs font-semibold text-red-600 dark:text-red-400" data-testid="search-stock-recount">{stockShortText(stock)}</p>
+              ) : (
+                <p className={`text-xs ${stock > 0 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>{stockShortText(stock)}</p>
+              )}
             </div>
           </div>
         </Card>

@@ -15,3 +15,14 @@ describe("Decision 3: negative stock means Recount", () => {
     expect(stockAlertText([{ in_stock: 1 }, { in_stock: 2 }])).toBe("2 parts running low");
   });
 });
+
+describe("stockShortText (Add Part search)", () => {
+  it("negative stock reads Recount, never '-2 in stock'", async () => {
+    const { stockShortText } = await import("../lib/utils/stockStatus.js");
+    expect(stockShortText(-2)).toBe("Recount");
+    expect(stockShortText(-1)).toBe("Recount");
+    expect(stockShortText(0)).toBe("0 in stock");
+    expect(stockShortText(5)).toBe("5 in stock");
+    expect(stockShortText(null)).toBe("0 in stock");
+  });
+});
