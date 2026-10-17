@@ -1020,7 +1020,7 @@ export default function JobDetail() {
                 {job.title}
               </p>
               <div className="flex items-center gap-1.5 min-w-0">
-                <p className="text-white/90 text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+                <p className="text-white text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
                 <RewardBadge show={customer?.pending_reward} />
               </div>
             </div>
@@ -1029,7 +1029,7 @@ export default function JobDetail() {
             {job.status === "on_site" && (
               <div className="text-right">
                 <p className="font-mono text-white text-lg font-bold tracking-wider">{formatElapsed(elapsedSeconds)}</p>
-                <p className="text-white/90 text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
+                <p className="text-white text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
               </div>
             )}
             {canEditOrCancel && (
