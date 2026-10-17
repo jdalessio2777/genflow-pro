@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
 import { useUrlState } from "@/hooks/useUrlState";
+import { useSheetHistory } from "@/lib/sheetHistory";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, DollarSign, Send, X } from "lucide-react";
 import { haptics } from "@/lib/haptics";
@@ -19,6 +20,8 @@ export default function Invoices() {
   const [filter, setFilter] = useUrlState("filter", "all");
   const [payingInvoice, setPayingInvoice] = useState(null);
   const [showCheckNumberDialog, setShowCheckNumberDialog] = useState(false);
+  // The "How was this paid?" sheet: a back swipe closes it (F-10).
+  useSheetHistory(!!payingInvoice && !showCheckNumberDialog, () => setPayingInvoice(null));
   const queryClient = useQueryClient();
 
   const { data: invoices = [], isLoading } = useQuery({

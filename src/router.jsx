@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import PageNotFound from "./lib/PageNotFound";
 import AppLayout from "./components/layout/AppLayout";
+import RouteError from "./components/layout/RouteError";
 import {
   ROUTE_META, recordNavigation, markNavigating, markSettled, setAppRouter,
 } from "@/lib/navigation";
@@ -109,6 +110,7 @@ const appRoutes = ROUTE_META.map(({ path, parent, tab }) => {
 export const routes = [
   {
     element: <RootLayout />,
+    errorElement: <RouteError />,
     children: [
       { path: "/login", element: <Login /> },
       { path: "/auth/callback", element: <AuthCallback /> },

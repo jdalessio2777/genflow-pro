@@ -502,7 +502,8 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
     ...(customers || [])
       .filter(c => c.address)
       .map(c => ({ label: `📍 ${c.name}`, value: c.address, customerName: c.name })),
-  ];
+  // An empty value (no home address set) crashes the Select (Radix forbids "").
+  ].filter(o => o.value);
 
   const getAddressShortName = (address) => {
     if (address === effectiveHomeAddress) return "Home";
