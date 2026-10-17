@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { escapeHtml } from '../src/lib/utils/escapeHtml.js';
+import { stockStatus } from '../src/lib/utils/stockStatus.js';
 import { sendEmail } from './_lib/sendEmail.js';
 
 // ─── period helper ─────────────────────────────────────────────────────────
@@ -52,7 +54,9 @@ function aggregateByPart(rows) {
       });
     }
   }
-  return [...byPart.values()].sort((a, b) => b.quantity - a.quantity);
+  // Returns from cancelled jobs are negative rows (Decision 2); a part whose
+  // net use for the week is 0 or less wasn't used.
+  return [...byPart.values()].filter(p => p.quantity > 0).sort((a, b) => b.quantity - a.quantity);
 }
 
 // ─── email ──────────────────────────────────────────────────────────────────
@@ -61,8 +65,10 @@ function stockBadge(part) {
   // Respect the first_managed_at exclusion: never show a status badge for a
   // legacy/never-actively-managed part, even if it happens to show up here.
   if (!part.first_managed_at) return '';
-  const isOut = part.in_stock <= 0;
-  const isLow = part.in_stock > 0 && part.in_stock <= 2;
+  const status = stockStatus(part.in_stock);
+  if (status === 'recount') return `<span style="color:#991b1b;font-weight:700;">RECOUNT (${part.in_stock})</span>`;
+  const isOut = status === 'out';
+  const isLow = status === 'low';
   if (isOut) return `<span style="color:#991b1b;font-weight:700;">OUT (${part.in_stock})</span>`;
   if (isLow) return `<span style="color:#9a3412;font-weight:700;">LOW (${part.in_stock})</span>`;
   return `<span style="color:#166534;">${part.in_stock} in stock</span>`;
@@ -72,8 +78,8 @@ function buildHTML(usage, label) {
   const rows = usage.length
     ? usage.map(p => `
       <tr>
-        <td style="padding:6px 10px;border:1px solid #e5e5e5;">${p.name}${p.part_number ? ` <span style="color:#999;">#${p.part_number}</span>` : ''}</td>
-        <td style="padding:6px 10px;border:1px solid #e5e5e5;text-align:center;font-weight:700;">${p.quantity}</td>
+        <td style="padding:6px 10px;border:1px solid #e5e5e5;">${escapeHtml(p.name)}${p.part_number ? ` <span style="color:#999;">#${escapeHtml(p.part_number)}</span>` : ''}</td>
+        <td style="padding:6px 10px;border:1px solid #e5e5e5;text-align:center;font-weight:700;">${escapeHtml(p.quantity)}</td>
         <td style="padding:6px 10px;border:1px solid #e5e5e5;text-align:right;">${stockBadge(p)}</td>
       </tr>`).join('')
     : `<tr><td colspan="3" style="padding:12px;text-align:center;color:#888;">No parts logged as used this week.</td></tr>`;

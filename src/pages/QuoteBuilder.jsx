@@ -12,6 +12,9 @@ import PageHeader from "@/components/layout/PageHeader";
 import { Search, UserPlus, X, Plus, Trash2, Send, Loader2, Package, Clock, Zap, Wrench, ChevronLeft } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { toast } from "sonner";
+import { memberDiscountRateFor } from "@/lib/utils/membership";
+import { isAgreementRate, isPlaceholderRate } from "@/lib/utils/laborPricing";
+import { computeQuoteTotals, priceQuoteLine, memberSavings } from "@/lib/utils/quoteTotals";
 
 const ITEM_FOLDERS = [
   { key: "parts", label: "Parts", icon: Package, color: "bg-blue-100 text-blue-700" },
@@ -30,7 +33,9 @@ export default function QuoteBuilder() {
   const [prospect, setProspect] = useState({ name: "", phone: "", email: "", address: "" });
 
   // Line items (local until sent)
-  const [lineItems, setLineItems] = useState([]); // { id (local), type, description, quantity, unit_price, total_price, source_part_id, source_labor_rate_id }
+  // Lines keep their catalog base price; the member price is applied from the
+  // selected customer (same rules as jobs), so changing customer re-prices.
+  const [lineItems, setLineItems] = useState([]); // { id (local), type, base_description, base_unit_price, quantity, discountable, source_part_id, source_labor_rate_id }
   const [folder, setFolder] = useState(null);
   const [partSearch, setPartSearch] = useState("");
   const [customLine, setCustomLine] = useState({ description: "", amount: "" });
@@ -65,30 +70,43 @@ export default function QuoteBuilder() {
   const addLine = (item) => setLineItems(prev => [...prev, { ...item, id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}` }]);
   const removeLine = (id) => setLineItems(prev => prev.filter(l => l.id !== id));
 
+  const memberDiscountRate = memberDiscountRateFor(selectedCustomer);
+  const pricedLines = lineItems.map(l => priceQuoteLine(l, memberDiscountRate));
+  // Same function as job/invoice totals: NJ tax included in Total Due (H-3).
+  const { subtotal, taxAmount, total } = computeQuoteTotals(pricedLines);
+  const savings = memberSavings(lineItems, memberDiscountRate);
+
   const addPart = (p) => addLine({
-    type: "part", description: p.name, quantity: 1, unit_price: p.price || 0, total_price: p.price || 0, source_part_id: p.id,
+    // Catalog sale price lives in parts.default_price (there is no parts.price column).
+    type: "part", base_description: p.name, quantity: 1, base_unit_price: Number(p.default_price) || 0, discountable: true, source_part_id: p.id,
   });
 
   const addRate = (r) => {
     if (r.type === "hourly") {
-      addLine({ type: "labor", description: `${r.name} (1h)`, quantity: 1, unit_price: r.rate || 0, total_price: r.rate || 0, source_labor_rate_id: r.id });
+      addLine({ type: "labor", base_description: `${r.name} (1h)`, quantity: 1, base_unit_price: r.rate || 0, discountable: true, source_labor_rate_id: r.id });
+    } else if (r.category === "discounts") {
+      // % of the current subtotal, like on a job; never re-discounted.
+      const pct = parseFloat((r.notes || "").match(/(\d+(?:\.\d+)?)\s*%/)?.[1]) || 0;
+      const amount = pct > 0 ? -Math.round(subtotal * pct) / 100 : 0;
+      addLine({ type: "labor", base_description: r.name, quantity: 1, base_unit_price: amount, discountable: false, source_labor_rate_id: r.id });
     } else {
-      addLine({ type: "labor", description: r.name, quantity: 1, unit_price: r.flat_price || 0, total_price: r.flat_price || 0, source_labor_rate_id: r.id });
+      // Service agreements are a fixed price — never member-discounted.
+      addLine({ type: "labor", base_description: r.name, quantity: 1, base_unit_price: r.flat_price || 0, discountable: !isAgreementRate(r), source_labor_rate_id: r.id });
     }
   };
 
   const addCustom = () => {
     const amount = parseFloat(customLine.amount);
     if (!customLine.description.trim() || isNaN(amount)) { toast.error("Enter a description and amount"); return; }
-    addLine({ type: "custom", description: customLine.description.trim(), quantity: 1, unit_price: amount, total_price: amount });
+    // A typed price is what the tech chose; it isn't re-discounted.
+    addLine({ type: "custom", base_description: customLine.description.trim(), quantity: 1, base_unit_price: amount, discountable: false });
     setCustomLine({ description: "", amount: "" });
   };
 
-  const total = lineItems.reduce((s, l) => s + (l.total_price || 0), 0);
-
-  const hourlyRates = rates.filter(r => r.type === "hourly");
-  const flatRates = rates.filter(r => r.type === "flat_rate" && r.category !== "maintenance");
-  const maintenanceRates = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
+  const offeredRates = rates.filter(r => !isPlaceholderRate(r));
+  const hourlyRates = offeredRates.filter(r => r.type === "hourly");
+  const flatRates = offeredRates.filter(r => r.type === "flat_rate" && r.category !== "maintenance");
+  const maintenanceRates = offeredRates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
   const filteredParts = partSearch.trim()
     ? parts.filter(p => p.name?.toLowerCase().includes(partSearch.toLowerCase()) || p.part_number?.toLowerCase().includes(partSearch.toLowerCase())).slice(0, 25)
     : [];
@@ -109,7 +127,7 @@ export default function QuoteBuilder() {
       });
 
       // 2. Attach line items
-      await Promise.all(lineItems.map(l => db.QuoteLineItem.create({
+      await Promise.all(pricedLines.map(l => db.QuoteLineItem.create({
         quote_id: quote.id,
         type: l.type,
         description: l.description,
@@ -128,7 +146,7 @@ export default function QuoteBuilder() {
         name: prospect.name, email: prospect.email, phone: prospect.phone, address: prospect.address,
       };
       const recipientEmail = selectedCustomer?.email || prospect.email;
-      const emailLineItems = lineItems.map(l => ({
+      const emailLineItems = pricedLines.map(l => ({
         description: l.description,
         qty: l.type === "part" ? `×${l.quantity}` : "—",
         amount: l.total_price,
@@ -141,8 +159,9 @@ export default function QuoteBuilder() {
           customer: customerForEmail,
           job: { id: quote.id, job_type: null },
           lineItems: emailLineItems,
-          subtotal: total,
-          discount: 0,
+          subtotal,
+          tax: taxAmount,
+          memberSavings: savings,
           total,
           scopeNotes: scopeNotes.trim() || null,
           // approveUrl intentionally omitted — no approval link in this flow
@@ -270,7 +289,7 @@ export default function QuoteBuilder() {
                       {p.part_number && <p className="text-xs text-muted-foreground">#{p.part_number}</p>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm font-semibold">{formatCurrency(p.price)}</span>
+                      <span className="text-sm font-semibold">{formatCurrency(p.default_price)}</span>
                       <Plus className="w-4 h-4 text-primary" />
                     </div>
                   </div>
@@ -343,7 +362,7 @@ export default function QuoteBuilder() {
           {/* Added items */}
           {lineItems.length > 0 && (
             <div className="pt-2 border-t border-border space-y-2">
-              {lineItems.map(l => (
+              {pricedLines.map(l => (
                 <div key={l.id} className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{l.description}</p>
@@ -355,9 +374,14 @@ export default function QuoteBuilder() {
                   </Button>
                 </div>
               ))}
-              <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
-                <span className="text-sm font-semibold">Total</span>
-                <span className="text-lg font-bold text-primary">{formatCurrency(total)}</span>
+              <div className="pt-2 mt-1 border-t border-border space-y-1" data-testid="quote-totals">
+                <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                {savings > 0 && <div className="flex items-center justify-between text-xs text-green-700 dark:text-green-400"><span>Member savings included</span><span>{formatCurrency(savings)}</span></div>}
+                <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">NJ Sales Tax (6.625%)</span><span>{formatCurrency(taxAmount)}</span></div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-sm font-semibold">Total Due</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(total)}</span>
+                </div>
               </div>
             </div>
           )}

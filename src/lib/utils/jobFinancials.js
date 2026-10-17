@@ -6,9 +6,17 @@ export const TAX_RATE = 0.06625; // NJ sales tax
 // job_labor rows with a negative total_price (per the discount feature);
 // discountLines/discountTotal pull them out individually for display,
 // laborGross is labor before discounts.
+// What a job_parts row adds to the customer's bill. A "No Charge" line
+// (charge_for_part === false) is hidden on the invoice, so it must never add
+// to any total — even if an older edit left a non-zero total_price on the row.
+export function partChargeTotal(p) {
+  if (!p || p.charge_for_part === false) return 0;
+  return p.total_price || 0;
+}
+
 export function computeJobFinancials(parts, labor) {
   const partsCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
-  const partsTotal = parts.reduce((s, p) => s + (p.total_price || 0), 0);
+  const partsTotal = parts.reduce((s, p) => s + partChargeTotal(p), 0);
   const laborCost = labor.reduce((s, l) => s + (l.total_cost || 0), 0);
   const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0);
   const discountLines = labor

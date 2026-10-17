@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { stockStatus, stockAlertText } from "@/lib/utils/stockStatus";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { renewalEmailHTML, renewalEmailSubject } from "@/lib/emailTemplates/renewalEmail";
 import { Link } from "react-router-dom";
@@ -8,7 +9,8 @@ import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText,
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
-import { formatTime } from "@/lib/formatTime";
+import { formatTime, formatDateTime } from "@/lib/formatTime";
+import { sortJobs, isJobOverdue, etDateKey } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
 import { isManaged } from "@/lib/utils/partsManaged";
@@ -141,8 +143,9 @@ export default function Dashboard() {
     queryKey: ["parts-catalog"],
     queryFn: () => db.Part.list("name"),
   });
-  const lowStockParts = parts.filter(p =>
-    isManaged(p) && ((p.in_stock !== undefined && p.in_stock !== null && p.in_stock <= 2) || p.reorder_flagged)
+  // Includes parts needing a recount (stock below 0) — see stockAlertText.
+  const lowStockParts = parts.filter(p => stockStatus(p.in_stock) === "recount" ||
+    (isManaged(p) && (["out", "low"].includes(stockStatus(p.in_stock)) || p.reorder_flagged))
   );
 
   function getServiceStatus(customer) {
@@ -175,13 +178,12 @@ export default function Dashboard() {
     .sort((a, b) => a._svc.daysUntilDue - b._svc.daysUntilDue)
     .slice(0, 5);
 
-  const today = new Date().toDateString();
-  const todayJobs = jobs.filter(j => {
-    if (!j.scheduled_date) return false;
-    return new Date(j.scheduled_date).toDateString() === today && ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status);
-  }).sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+  const todayKey = etDateKey(new Date());
+  const todayJobs = sortJobs(jobs.filter(j =>
+    etDateKey(j.scheduled_date) === todayKey && ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)
+  ));
 
-  const activeJobs = jobs.filter(j => ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status));
+  const activeJobs = sortJobs(jobs.filter(j => ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)));
   const completedJobs = jobs.filter(j => j.status === "completed" || j.status === "invoiced");
   const totalRevenue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.total || 0), 0);
   const totalProfit = completedJobs.reduce((s, j) => s + (j.profit || 0), 0);
@@ -353,8 +355,14 @@ export default function Dashboard() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
+                        <p className={`text-xs mt-0.5 ${isJobOverdue(job) ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                          {job.scheduled_date ? formatDateTime(job.scheduled_date, use24h) : "No date set"}
+                        </p>
                       </div>
-                      <StatusBadge status={job.status} />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isJobOverdue(job) && <StatusBadge status="overdue" />}
+                        <StatusBadge status={job.status} />
+                      </div>
                     </div>
                   </div>
                 </Link>
@@ -541,9 +549,7 @@ export default function Dashboard() {
                         <Package className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-orange-800 dark:text-orange-200">
-                            {lowStockParts.filter(p => p.in_stock <= 0).length > 0
-                              ? `${lowStockParts.filter(p => p.in_stock <= 0).length} part${lowStockParts.filter(p => p.in_stock <= 0).length > 1 ? "s" : ""} out of stock`
-                              : `${lowStockParts.length} part${lowStockParts.length > 1 ? "s" : ""} running low`}
+                            {stockAlertText(lowStockParts)}
                           </p>
                           <p className="text-xs text-orange-700 dark:text-orange-300 truncate">
                             {lowStockParts.slice(0, 2).map(p => p.name).join(", ")}

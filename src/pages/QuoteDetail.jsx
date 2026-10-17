@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
@@ -8,6 +9,7 @@ import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink } fro
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { jobFromApprovedQuote } from "@/lib/quoteToJob";
+import { computeQuoteTotals, agreementTypeForRate } from "@/lib/utils/quoteTotals";
 
 const STATUS_STYLES = {
   draft: "bg-gray-100 text-gray-700",
@@ -38,7 +40,9 @@ export default function QuoteDetail() {
     enabled: !!quote?.customer_id,
   });
 
-  const total = lineItems.reduce((s, l) => s + (l.total_price || 0), 0);
+  // Same totals as jobs/invoices (H-3): NJ tax included in Total Due.
+  const { subtotal, taxAmount, total } = computeQuoteTotals(lineItems);
+  const approving = useRef(false);
   const name = customer?.name || quote?.prospect_name;
   const email = customer?.email || quote?.prospect_email;
   const phone = customer?.phone || quote?.prospect_phone;
@@ -79,19 +83,30 @@ export default function QuoteDetail() {
 
       const job = await db.Job.create(jobFromApprovedQuote(quote, { customerId: finalCustomerId, customerName }));
 
+      // Lines keep the quoted price (already member-priced). Catalog parts
+      // keep their catalog link and cost; agreement lines keep the signing
+      // requirement (B-01/B-02).
+      const [catalogParts, catalogRates] = await Promise.all([
+        Promise.all(lineItems.filter(l => l.source_part_id).map(l => db.Part.filter({ id: l.source_part_id }))).then(r => r.flat()),
+        Promise.all(lineItems.filter(l => l.source_labor_rate_id).map(l => db.LaborRate.filter({ id: l.source_labor_rate_id }))).then(r => r.flat()),
+      ]);
       await Promise.all(lineItems.map(l => {
         if (l.type === "part") {
+          const cat = catalogParts.find(p => p.id === l.source_part_id);
+          const qty = l.quantity || 1;
           return db.JobPart.create({
             job_id: job.id,
             name: l.description,
-            quantity: l.quantity || 1,
+            quantity: qty,
             price: l.unit_price || 0,
-            cost: 0,
+            cost: Number(cat?.cost) || 0,
             total_price: l.total_price || 0,
-            total_cost: 0,
+            total_cost: (Number(cat?.cost) || 0) * qty,
             charge_for_part: true,
+            part_id: cat?.id || null,
           });
         }
+        const rate = catalogRates.find(r => r.id === l.source_labor_rate_id);
         return db.JobLabor.create({
           job_id: job.id,
           description: l.description,
@@ -100,6 +115,7 @@ export default function QuoteDetail() {
           flat_rate_cost: 0,
           total_price: l.total_price || 0,
           total_cost: 0,
+          ...(agreementTypeForRate(rate) ? { requires_agreement: agreementTypeForRate(rate) } : {}),
         });
       }));
 
@@ -172,9 +188,13 @@ export default function QuoteDetail() {
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-2 mt-2 border-t border-border">
-            <span className="text-sm font-semibold">Total</span>
-            <span className="text-lg font-bold text-primary">{formatCurrency(total)}</span>
+          <div className="pt-2 mt-2 border-t border-border space-y-1" data-testid="quote-totals">
+            <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+            <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">NJ Sales Tax (6.625%)</span><span>{formatCurrency(taxAmount)}</span></div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-sm font-semibold">Total Due</span>
+              <span className="text-lg font-bold text-primary">{formatCurrency(total)}</span>
+            </div>
           </div>
         </Card>
 
@@ -211,7 +231,12 @@ export default function QuoteDetail() {
             <Button
               className="flex-1 rounded-xl gap-1.5"
               disabled={approveMutation.isPending || declineMutation.isPending}
-              onClick={() => approveMutation.mutate()}
+              onClick={() => {
+                // One approval only: a double tap must not create two jobs.
+                if (approving.current) return;
+                approving.current = true;
+                approveMutation.mutate(undefined, { onSettled: () => { approving.current = false; } });
+              }}
             >
               {approveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Mark Approved
             </Button>

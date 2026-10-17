@@ -8,7 +8,9 @@
 //
 //  - completion: sent once per job (atomic claim on jobs.completion_email_sent_at
 //    + Resend Idempotency-Key). Invoice inline, checklists + agreement as PDFs.
-//  - receipt:    sent once per invoice (atomic claim on invoices.receipt_sent_at)
+//  - receipt:    the short "Payment received" email. Paid in full: sent once
+//                per invoice (atomic claim on invoices.receipt_sent_at). Partial
+//                payment (invoices.amount_paid, migration batch3): one per amount.
 //    and ONLY when the invoice was paid after the completion email already went
 //    out unpaid. Paid-before-completion jobs get no receipt (the completion
 //    email already said PAID). Stripe webhook never sends — the UI paths call
@@ -18,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from './_lib/sendEmail.js';
 import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './_lib/jobSummary.js';
+import { surchargeConfig, SURCHARGE_SETTING_KEYS } from '../src/lib/utils/surcharge.js';
 import { isAllowedEmail } from '../src/lib/allowedUsers.js';
 import { invoiceTotalCents } from '../src/lib/utils/invoiceTotals.js';
 
@@ -125,6 +128,9 @@ export default async function handler(req, res) {
       db.from('job_documents').select('*').eq('job_id', jobId).eq('status', 'completed').order('created_at', { ascending: true }),
       db.from('job_agreements').select('*').eq('job_id', jobId).maybeSingle(),
     ]);
+    // Card surcharge rate/fixed/taxable (same settings as the app and card routes).
+    const { data: surchargeRows } = await db.from('app_settings').select('key, value')
+      .in('key', SURCHARGE_SETTING_KEYS);
     const invoice = (invoices || [])[0] || null;
     // Per-document toggles from the Complete Job dialog. Only this job's
     // completed documents are ever candidates (loaded by job_id above), so a
@@ -141,6 +147,13 @@ export default async function handler(req, res) {
       const c = await claim(db, 'jobs', job.id, 'completion_email_sent_at');
       if (!c.claimed) return res.status(200).json({ ok: true, skipped: 'already_sent' });
       if (!c.noColumn) claimed = ['jobs', job.id, 'completion_email_sent_at'];
+    } else if (kind === 'receipt' && invoice?.status === 'partial') {
+      // Partial payment (needs invoices.amount_paid): one short receipt per
+      // recorded amount. No DB claim (each partial payment gets its own); the
+      // Resend Idempotency-Key below includes the amount paid so far, so a
+      // double tap / retry can't send twice.
+      if (!(Number(invoice.amount_paid) > 0)) return res.status(200).json({ ok: true, skipped: 'not_paid' });
+      if (!job.completion_email_sent_at) return res.status(200).json({ ok: true, skipped: 'completion_email_not_sent' });
     } else if (kind === 'receipt') {
       if (!invoice || invoice.status !== 'paid' || !invoice.paid_date) return res.status(200).json({ ok: true, skipped: 'not_paid' });
       if (invoice.payment_method === 'no_charge' || invoiceTotalCents(invoice) <= 0) return res.status(200).json({ ok: true, skipped: 'no_charge' });
@@ -159,6 +172,7 @@ export default async function handler(req, res) {
       email = await buildJobSummaryEmail({
         kind, job, customer, invoice, parts: parts || [], labor: labor || [], documents: selectedDocs,
         agreement: kind === 'receipt' ? null : agreement,
+        surchargeConfig: surchargeConfig(surchargeRows || []),
       });
     } catch (e) {
       if (claimed) await release(db, ...claimed);
@@ -178,6 +192,7 @@ export default async function handler(req, res) {
     // key with a different body, and the jobs.completion_email_sent_at claim
     // already guarantees one completion email per job.
     const idempotencyKey = kind === 'completion' ? `job-completion-${job.id}-${selectionKey(selectedDocs, !!agreement)}`
+      : kind === 'receipt' && invoice.status === 'partial' ? `invoice-receipt-${invoice.id}-p${Math.round(Number(invoice.amount_paid) * 100)}`
       : kind === 'receipt' ? `invoice-receipt-${invoice.id}`
       : `job-resend-${job.id}-${nonce}`;
     let result;

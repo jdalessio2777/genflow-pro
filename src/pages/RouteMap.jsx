@@ -9,9 +9,10 @@ import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
 import { formatTime } from "@/lib/formatTime";
 import { usePreferences } from "@/hooks/usePreferences";
+import { sortJobs, etDateKey } from "@/lib/utils/jobSort";
 
 export default function RouteMap() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState(() => etDateKey(new Date()));
   const [techView, setTechView] = useState("all");
   const { use24h } = usePreferences();
 
@@ -26,16 +27,13 @@ export default function RouteMap() {
   });
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
 
-  const todayJobs = jobs
+  const todayJobs = sortJobs(jobs
     .filter(j => {
-      if (!j.scheduled_date) return false;
-      const jobDate = new Date(j.scheduled_date).toISOString().split("T")[0];
-      if (jobDate !== selectedDate) return false;
+      if (etDateKey(j.scheduled_date) !== selectedDate) return false;
       if (!["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)) return false;
       if (techView !== "all" && j.assigned_to_name && j.assigned_to_name !== techView) return false;
       return true;
-    })
-    .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+    }));
 
   const jobsWithAddress = todayJobs.filter(j => customerMap[j.customer_id]?.address);
 
@@ -85,7 +83,7 @@ export default function RouteMap() {
             className="flex-1 h-10 rounded-xl border border-input bg-background px-3 text-sm"
           />
           <Button variant="outline" size="sm" className="rounded-xl h-10"
-            onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}>
+            onClick={() => setSelectedDate(etDateKey(new Date()))}>
             Today
           </Button>
         </div>

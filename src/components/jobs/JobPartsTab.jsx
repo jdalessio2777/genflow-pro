@@ -8,10 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Minus, Trash2, Package, ChevronRight, ChevronLeft, Pencil, Check, X, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { partChargeTotal } from "@/lib/utils/jobFinancials";
+import { stockStatus, stockShortText } from "@/lib/utils/stockStatus";
 import { usePreferences } from "@/hooks/usePreferences";
-import { firstManagedPatch, suggestedSalePrice } from "@/lib/utils/partsManaged";
+import { suggestedSalePrice } from "@/lib/utils/partsManaged";
+import { saveCatalogPrice, applySavedPrice } from "@/lib/catalogPrices";
 import { matchesPart, searchParts, sanitizeQuantityInput, parseQuantity } from "@/lib/utils/partsSearch";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
+import { addPartToJob, removePartFromJob } from "@/lib/inventory";
+import { createOnce, newRequestId, showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
 
 const PART_CATEGORIES = [
   { key: "air_filters", label: "Air Filters", icon: "🌬️" },
@@ -118,39 +124,58 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
   const [partSearch, setPartSearch] = useState("");
   const partSearchRef = useRef(null);
 
-  const createMutation = useMutation({
-    mutationFn: (data) => db.JobPart.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
-      setOpen(false);
-      setPartsFolder(null);
-      setUpdateCatalogPrice(false);
-      setSaleTouchedInConfirm(false);
-      setPartSearch("");
-      setForm(emptyForm());
-      toast.success("Part added");
-    },
-    onError: (err) => toast.error("Failed to add part: " + err.message),
-  });
+  // Add/remove run through the inventory ledger (src/lib/inventory.js) with
+  // weak-signal safety (src/lib/saveSafety.js): one save at a time, success
+  // only after the server confirmed every step, a persistent error with Retry
+  // that resumes where it stopped, and the dialog keeps what was typed.
+  const addGuard = useSaveGuard();
+  const removeGuard = useSaveGuard();
+  const pendingAdd = useRef(null); // { formKey, plan, progress } kept across a failed attempt
+  const pendingRemovals = useRef(new Map()); // jobPart.id -> progress
 
-  const deleteMutation = useMutation({
-    mutationFn: (id) => db.JobPart.delete(id),
-    onSuccess: () => {
+  const finishAdd = () => {
+    queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
+    queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    setOpen(false);
+    setPartsFolder(null);
+    setUpdateCatalogPrice(false);
+    setSaleTouchedInConfirm(false);
+    setPartSearch("");
+    setForm(emptyForm());
+    toast.success("Part added");
+  };
+
+  const removePart = (part) => removeGuard.run(async function attempt() {
+    const progress = pendingRemovals.current.get(part.id) || {};
+    pendingRemovals.current.set(part.id, progress);
+    try {
+      await removePartFromJob(part, progress);
+      pendingRemovals.current.delete(part.id);
+      dismissSaveError("", { id: `remove-part-${part.id}` });
+      toast.success(progress.stock ? `Part removed — ${part.quantity} put back in stock` : "Part removed");
+    } catch (e) {
+      haptics.error();
+      showSaveError(progress.deleted ? `"${part.name}" removed, but stock NOT put back yet` : `"${part.name}" NOT removed`, e,
+        () => removeGuard.run(attempt), { id: `remove-part-${part.id}` });
+    } finally {
       queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
-      toast.success("Part removed");
-    },
+      queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    }
   });
 
   const updatePriceMutation = useMutation({
-    mutationFn: ({ id, price, quantity }) =>
-      db.JobPart.update(id, { price, total_price: price * quantity }),
+    mutationFn: ({ id, price, quantity, charge_for_part }) => {
+      // A No Charge line is never billed; its price can't be edited.
+      if (charge_for_part === false) throw new Error("No Charge parts can't be priced");
+      return db.JobPart.update(id, { price, total_price: price * quantity });
+    },
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
       setOverriddenPriceIds(prev => new Set(prev).add(id));
       setEditingPriceId(null);
       toast.success("Price updated");
     },
-    onError: () => toast.error("Failed to update price"),
+    onError: (err) => toast.error("Failed to update price: " + (err?.message || "try again")),
   });
 
   const startEditingPrice = (part) => {
@@ -161,7 +186,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
   const commitPriceEdit = (part) => {
     const newPrice = parseFloat(editingPriceValue);
     if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
-    updatePriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity });
+    updatePriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity, charge_for_part: part.charge_for_part });
   };
 
   const cancelPriceEdit = () => {
@@ -169,99 +194,101 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     setEditingPriceValue("");
   };
 
-  const saveCatalogMutation = useMutation({
-    mutationFn: (data) => db.Part.create(data),
-  });
-
-  const handleAdd = async () => {
+  const handleAdd = () => addGuard.run(async function attempt() {
     if (!form.name.trim()) { toast.error("Part name required"); return; }
     if (form.charge_for_part && (!form.price || form.price <= 0)) {
       toast.error("Enter a price or turn off 'Charge for part'"); return;
     }
 
-    // Parse the qty draft exactly once — the job_parts row, inventory
-    // decrement and usage log all use this same value.
-    const qty = parseQuantity(form.quantity);
-    const basePrice = form.charge_for_part ? form.price : 0;
-    const effectivePrice = isMember && form.charge_for_part
-      ? Math.round(basePrice * memberDiscountRate * 100) / 100
-      : basePrice;
-
-    // Save to catalog first if toggled on
-    let savedPartId = null;
-    if (form.save_to_catalog && form.name.trim()) {
-      try {
-        const newPart = await saveCatalogMutation.mutateAsync({
+    // A failed attempt for this same form is resumed, never repeated: the
+    // job line, catalog part and usage row have fixed ids, and finished
+    // steps are skipped (no double stock decrement).
+    const formKey = JSON.stringify(form);
+    if (!pendingAdd.current || pendingAdd.current.formKey !== formKey) {
+      // Parse the qty draft exactly once — the job_parts row, inventory
+      // decrement and usage log all use this same value.
+      const qty = parseQuantity(form.quantity);
+      const basePrice = form.charge_for_part ? form.price : 0;
+      const effectivePrice = isMember && form.charge_for_part
+        ? Math.round(basePrice * memberDiscountRate * 100) / 100
+        : basePrice;
+      const newCatalogPart = form.save_to_catalog && !form.part_id;
+      const catalogPartId = newCatalogPart ? newRequestId() : null;
+      pendingAdd.current = {
+        formKey,
+        newCatalogPart: newCatalogPart ? {
           name: form.name.trim(),
           part_number: form.part_number.trim() || null,
           description: form.description.trim() || null,
           cost: form.cost || 0,
           default_price: form.price || 0,
           category: form.category,
-          in_stock: 0,
+          // Bought for this job: it arrives and is used, so the ledger
+          // records +qty then -qty (stock ends at 0 with one usage row).
+          in_stock: qty,
           ...(form.price > 0 ? { first_managed_at: new Date().toISOString() } : {}),
-        });
-        savedPartId = newPart?.id || null;
-        queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
-      } catch {
-        // silently fail — still add to job even if catalog save fails
-      }
+        } : null,
+        plan: {
+          jobPartId: newRequestId(),
+          usageId: newRequestId(),
+          qty,
+          stockPartId: catalogPartId || form.part_id || null,
+          jobPart: {
+            job_id: jobId,
+            name: form.name.trim(),
+            part_number: form.part_number.trim() || null,
+            description: form.description.trim() || null,
+            cost: form.cost || 0,
+            price: effectivePrice,
+            quantity: qty,
+            part_id: catalogPartId || form.part_id,
+            charge_for_part: form.charge_for_part,
+            total_cost: (form.cost || 0) * qty,
+            total_price: effectivePrice * qty,
+          },
+        },
+        catalogPartId,
+        progress: {},
+      };
     }
+    const pending = pendingAdd.current;
 
-    createMutation.mutate({
-      job_id: jobId,
-      name: form.name.trim(),
-      part_number: form.part_number.trim() || null,
-      description: form.description.trim() || null,
-      cost: form.cost || 0,
-      price: effectivePrice,
-      quantity: qty,
-      part_id: savedPartId || form.part_id,
-      charge_for_part: form.charge_for_part,
-      total_cost: (form.cost || 0) * qty,
-      total_price: effectivePrice * qty,
-    });
-
-    // Auto-deduct from inventory if added from catalog
-    if (form.part_id) {
-      const catalogPart = catalogParts.find(p => p.id === form.part_id);
-      if (catalogPart) {
-        const currentStock = catalogPart.in_stock ?? 0;
-        const newStock = Math.max(0, currentStock - qty);
-        db.Part.update(form.part_id, {
-          in_stock: newStock,
-          reorder_flagged: newStock === 0 ? true : (catalogPart.reorder_flagged || false),
-        });
-        queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    try {
+      if (pending.newCatalogPart && !pending.progress.catalog) {
+        await createOnce(db.Part, pending.catalogPartId, pending.newCatalogPart);
+        pending.progress.catalog = true;
       }
+      await addPartToJob(pending.plan, pending.progress);
+    } catch (e) {
+      haptics.error();
+      showSaveError(pending.progress.jobPart ? "Part added, but stock/usage NOT updated yet" : "Part NOT added", e,
+        () => addGuard.run(attempt), { id: "add-part-error" });
+      queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
+      return;
     }
+    pendingAdd.current = null;
+    dismissSaveError("", { id: "add-part-error" });
 
     // Tech explicitly opted to carry a manually-typed cost/price forward to future jobs
+    // Same save path as the Catalog price editor (src/lib/catalogPrices.js).
     if (updateCatalogPrice && form.part_id && (form.price !== form.catalogPrice || form.cost !== form.catalogCost)) {
-      const catalogPartForPrice = catalogParts.find(p => p.id === form.part_id) || {};
-      const catalogPatch = {};
-      if (form.price !== form.catalogPrice) catalogPatch.default_price = form.price;
-      if (form.cost !== form.catalogCost) catalogPatch.cost = form.cost;
-      db.Part.update(form.part_id, {
-        ...catalogPatch,
-        ...(catalogPatch.default_price !== undefined ? firstManagedPatch(catalogPartForPrice) : {}),
-      }).then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
+      const catalogPartForPrice = catalogParts.find(p => p.id === form.part_id) || { id: form.part_id, default_price: form.catalogPrice, cost: form.catalogCost };
+      const partName = form.name.trim();
+      saveCatalogPrice("part", catalogPartForPrice, {
+        price: form.price !== form.catalogPrice ? Math.round((Number(form.price) || 0) * 100) / 100 : null,
+        cost: form.cost !== form.catalogCost ? Math.round((Number(form.cost) || 0) * 100) / 100 : null,
+      })
+        .then((res) => {
+          applySavedPrice(queryClient, "part", form.part_id, res.patch);
+          if (res.message) toast.success(`Catalog updated for future jobs: ${res.message}`);
+        })
+        .catch((err) => {
+          console.error("Catalog price save failed", form.part_id, err);
+          toast.error(`Part added, but the catalog price for "${partName}" was NOT updated`);
+        });
     }
-
-    // Usage log for the weekly "what got used" report — one row per part
-    // added to a job, whether or not it's charged. Nothing to log against a
-    // fully custom part that was never saved to (or sourced from) the catalog.
-    const usageLogPartId = savedPartId || form.part_id;
-    if (usageLogPartId) {
-      db.PartsUsageLog.create({
-        part_id: usageLogPartId,
-        job_id: jobId,
-        quantity: qty,
-      }).catch(() => {
-        // non-critical — never block adding the part to the job over a logging failure
-      });
-    }
-  };
+    finishAdd();
+  });
 
   // Single entry point for picking a catalog part — used by the category
   // list, the in-dialog search results and the page-level search results, so
@@ -334,7 +361,11 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
               ) : (
                 <p className="text-xs text-muted-foreground">No price</p>
               )}
-              <p className={`text-xs ${stock > 0 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>{stock} in stock</p>
+              {stockStatus(stock) === "recount" ? (
+                <p className="text-xs font-semibold text-red-600 dark:text-red-400" data-testid="search-stock-recount">{stockShortText(stock)}</p>
+              ) : (
+                <p className={`text-xs ${stock > 0 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>{stockShortText(stock)}</p>
+              )}
             </div>
           </div>
         </Card>
@@ -348,7 +379,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     ) : null;
 
   const totalCost = parts.reduce((s, p) => s + (p.total_cost || 0), 0);
-  const totalPrice = parts.reduce((s, p) => s + (p.total_price || 0), 0);
+  const totalPrice = parts.reduce((s, p) => s + partChargeTotal(p), 0);
 
   return (
     <div className="space-y-3">
@@ -587,8 +618,8 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                     </p>
                   </div>
                 )}
-                <Button onClick={handleAdd} className="w-full rounded-xl h-11 gap-2" disabled={createMutation.isPending || saveCatalogMutation.isPending}>
-                  {createMutation.isPending ? "Adding..." : "Add Part to Job"}
+                <Button onClick={handleAdd} className="w-full rounded-xl h-11 gap-2" disabled={addGuard.busy}>
+                  {addGuard.busy ? "Adding..." : "Add Part to Job"}
                 </Button>
               </div>
             )}
@@ -600,7 +631,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <p className="text-sm font-semibold">{form.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {form.part_number ? <span className="font-mono">#{form.part_number} · </span> : null}
-                    {catalogParts.find(p => p.id === form.part_id)?.in_stock ?? 0} in stock · Selected from catalog
+                    {(() => { const n = catalogParts.find(p => p.id === form.part_id)?.in_stock ?? 0; return stockStatus(n) === "recount" ? `Recount needed (${n})` : `${n} in stock`; })()} · Selected from catalog
                   </p>
                 </Card>
                 <div>
@@ -613,7 +644,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <div>
                     <Label className="text-xs">Cost</Label>
                     <Input
-                      type="number" step="0.01" value={form.cost} onFocus={e => e.target.select()}
+                      type="number" inputMode="decimal" step="0.01" min="0" value={form.cost} onFocus={e => e.target.select()}
                       onChange={e => {
                         const newCost = parseFloat(e.target.value) || 0;
                         const catalogPart = catalogParts.find(p => p.id === form.part_id);
@@ -630,7 +661,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <div>
                     <Label className="text-xs">Price</Label>
                     <Input
-                      type="number" step="0.01" value={form.price} onFocus={e => e.target.select()}
+                      type="number" inputMode="decimal" step="0.01" min="0" value={form.price} onFocus={e => e.target.select()}
                       onChange={e => { setSaleTouchedInConfirm(true); setForm(f => ({...f, price: parseFloat(e.target.value) || 0})); }}
                       className="mt-1"
                     />
@@ -685,8 +716,8 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                     </p>
                   </div>
                 )}
-                <Button onClick={handleAdd} className="w-full rounded-xl h-12 text-base" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? "Adding..." : `Add ${parseQuantity(form.quantity)} to Job`}
+                <Button onClick={handleAdd} className="w-full rounded-xl h-12 text-base" disabled={addGuard.busy}>
+                  {addGuard.busy ? "Adding..." : `Add ${parseQuantity(form.quantity)} to Job`}
                 </Button>
               </div>
             )}
@@ -760,7 +791,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   ) : (
                     <>
                       <div className="text-right">
-                        <span className="text-sm font-semibold">{formatCurrency(part.total_price)}</span>
+                        <span className="text-sm font-semibold">{formatCurrency(partChargeTotal(part))}</span>
                         {overriddenPriceIds.has(part.id) && (
                           <p className="text-[10px] text-muted-foreground leading-none mt-0.5">edited</p>
                         )}
@@ -775,7 +806,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                           <Pencil className="w-3 h-3" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) { deleteMutation.mutate(part.id); } }}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" disabled={removeGuard.busy} onClick={() => { if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) { removePart(part); } }}>
                         <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </>

@@ -37,8 +37,16 @@ describe('job summary email carries the customer-facing Invoice Summary (jobs.in
     'completion, $0': { kind: 'completion', invoice: invZero, labor: zeroLabor },
     'completion, >$0 unpaid': { kind: 'completion', invoice: invUnpaid, labor },
     'completion, >$0 paid': { kind: 'completion', invoice: invPaid, labor },
-    'receipt, >$0 paid': { kind: 'receipt', invoice: invPaid, labor },
   }
+  // Item 1d: the pay-later receipt is the short "Payment received" email —
+  // no line items or service notes (they went out in the completion email).
+  it('receipt: short, never carries service or internal notes', async () => {
+    const job = { ...baseJob, invoice_notes: 'Replaced starter & battery' }
+    const { html } = await buildJobSummaryEmail({ kind: 'receipt', job, customer, invoice: { ...invPaid, notes: 'x' }, labor })
+    expect(html).toContain('Payment received')
+    expect(html).not.toContain('SERVICE NOTES')
+    for (const m of INTERNAL) expect(html).not.toContain(m)
+  })
   for (const [name, c] of Object.entries(cases)) {
     it(`${name}: present from the job even when the invoice snapshot is empty`, async () => {
       const job = { ...baseJob, invoice_notes: 'Replaced starter & battery\nAll tests passed' }

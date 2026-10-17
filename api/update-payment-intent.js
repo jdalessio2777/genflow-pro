@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { applyCors, isAllowedOrigin, requireStaff } from './_lib/staffAuth.js';
+import { computeCharge, validateClientSurcharge } from '../src/lib/utils/paymentAmounts.js';
+import { surchargeConfig, SURCHARGE_SETTING_KEYS } from '../src/lib/utils/surcharge.js';
 
 async function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -12,19 +15,28 @@ async function readJsonBody(req) {
   });
 }
 
+// Staff-only. Locks the final amount before the card is charged: the server
+// reads the card's funding type from Stripe (credit → surcharge = Stripe's fee; debit,
+// prepaid, unknown → none) and the base from the invoice row. Any amount or
+// surcharge in the request is ignored; a negative/non-numeric surcharge is
+// rejected as tampering.
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  applyCors(req, res, 'POST, OPTIONS');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'OPTIONS') return res.status(isAllowedOrigin(req.headers.origin) ? 204 : 403).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: 'Origin not allowed' });
 
-  const { payment_intent_id, invoice_id, surcharge_amount } = await readJsonBody(req);
+  const auth = await requireStaff(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
-  if (!payment_intent_id || !invoice_id || surcharge_amount === undefined) {
-    return res.status(400).json({ error: 'payment_intent_id, invoice_id, and surcharge_amount required' });
+  const { payment_intent_id, invoice_id, payment_method_id, surcharge_amount } = await readJsonBody(req);
+
+  if (!payment_intent_id || !invoice_id || !payment_method_id) {
+    return res.status(400).json({ error: 'payment_intent_id, invoice_id, and payment_method_id required' });
   }
+  const clientCheck = validateClientSurcharge(surcharge_amount);
+  if (!clientCheck.ok) return res.status(clientCheck.status).json({ error: clientCheck.error });
 
   try {
     const supabase = createClient(
@@ -34,7 +46,7 @@ export default async function handler(req, res) {
 
     const { data: invoice, error } = await supabase
       .from('invoices')
-      .select('id, total')
+      .select('*')
       .eq('id', invoice_id)
       .single();
 
@@ -49,17 +61,37 @@ export default async function handler(req, res) {
     if (pi.metadata?.invoice_id !== invoice_id) {
       return res.status(403).json({ error: 'PaymentIntent does not match invoice' });
     }
+    if (pi.status === 'succeeded' || pi.status === 'canceled') {
+      return res.status(400).json({ error: `Payment already ${pi.status}` });
+    }
 
-    const maxSurcharge = Math.round(invoice.total * 0.03 * 100) / 100;
-    const appliedSurcharge = Math.min(Number(surcharge_amount), maxSurcharge);
-    const newAmountCents = Math.round((invoice.total + appliedSurcharge) * 100);
+    const pm = await stripe.paymentMethods.retrieve(payment_method_id);
+    const funding = pm?.card?.funding || 'unknown';
 
+    // Same rate/taxable settings as the invoice screen's surcharge button.
+    const { data: settingsRows } = await supabase
+      .from('app_settings').select('key, value')
+      .in('key', SURCHARGE_SETTING_KEYS);
+    const charge = computeCharge(invoice, funding, surchargeConfig(settingsRows || []));
+    if (!charge.ok) return res.status(charge.status).json({ error: charge.error });
+
+    // Pin the card that was checked, so the amount matches the card charged.
     await stripe.paymentIntents.update(payment_intent_id, {
-      amount: newAmountCents,
-      metadata: { surcharge_amount: String(appliedSurcharge) },
+      amount: charge.totalCents,
+      payment_method: payment_method_id,
+      metadata: {
+        surcharge_amount: (charge.surchargeCents / 100).toFixed(2),
+        base_amount: (charge.baseCents / 100).toFixed(2),
+        card_funding: funding,
+      },
     });
 
-    return res.status(200).json({ ok: true, surcharge: appliedSurcharge, total: invoice.total + appliedSurcharge });
+    return res.status(200).json({
+      ok: true,
+      funding,
+      surcharge: charge.surchargeCents / 100,
+      total: charge.totalCents / 100,
+    });
   } catch (err) {
     console.error('[update-payment-intent]', err.message);
     return res.status(500).json({ error: err.message });

@@ -2,6 +2,7 @@
 // completed checklist + (if signed during this job) the maintenance agreement
 // as PDF attachments. Pure (no I/O) so it can be unit-tested.
 import { jobSummaryEmailHTML } from '../../src/lib/emailTemplates.js';
+import { SURCHARGE_DEFAULTS, withResyncedSurcharge, surchargeFor } from '../../src/lib/utils/surcharge.js';
 import { computeJobFinancials, TAX_RATE } from '../../src/lib/utils/jobFinancials.js';
 import { buildInvoiceLineItems, invoiceTotalCents, isZeroDollarInvoice } from '../../src/lib/utils/invoiceTotals.js';
 import { buildChecklistPdf, checklistFilename } from './pdf/checklistPdf.js';
@@ -16,7 +17,7 @@ export const MAX_EMAIL_BYTES = 30 * 1024 * 1024;
 // fixes) is refreshed from the job rows. A $0 invoice always gets its line
 // items rebuilt from the job so it is never an empty table, including
 // "No charge" parts.
-export function invoiceForEmail({ invoice, parts = [], labor = [], notes }) {
+export function invoiceForEmail({ invoice, parts = [], labor = [], notes, surchargeConfig = SURCHARGE_DEFAULTS }) {
   if (!invoice) return null;
   // Raw Supabase rows have created_at; the templates (written for the client's
   // normalized rows, src/lib/db.js) read created_date.
@@ -27,13 +28,20 @@ export function invoiceForEmail({ invoice, parts = [], labor = [], notes }) {
     const f = computeJobFinancials(parts, labor);
     const freshCents = Math.round(f.total * 100);
     if (freshCents !== invoiceTotalCents({ ...inv, surcharge_amount: 0 })) {
-      inv = {
+      // A credit card surcharge added on the invoice screen is recomputed on
+      // the fresh totals (never dropped, never added).
+      inv = withResyncedSurcharge({
         ...inv,
         parts_total: f.partsTotal, labor_total: f.laborTotal, tax_amount: f.taxAmount, tax_rate: TAX_RATE,
-        total: f.total, surcharge_amount: 0,
+        total: f.total,
         line_items: buildInvoiceLineItems(parts, labor, { includeNoChargeParts: freshCents === 0 }),
-      };
+      }, inv, surchargeConfig);
+      if (!(Number(inv.surcharge_amount) > 0) || freshCents <= 0) inv = { ...inv, surcharge_amount: 0 };
     }
+    // A surcharge on an unpaid invoice was written by the phone: always
+    // recompute it here from the shared formula (never trust the stored
+    // figure). Paid invoices show what was actually charged.
+    if (Number(inv.surcharge_amount) > 0) inv = { ...inv, surcharge_amount: surchargeFor(inv, surchargeConfig) };
   }
   if (isZeroDollarInvoice(inv)) {
     inv = { ...inv, line_items: buildInvoiceLineItems(parts, labor, { includeNoChargeParts: true }) };
@@ -61,8 +69,11 @@ export function buildSubject({ kind, invoice, checklistCount }) {
   return `${parts.join(' & ')} — GenShield`;
 }
 
-export async function buildJobSummaryEmail({ kind = 'completion', job, customer, invoice, parts = [], labor = [], documents = [], agreement = null }) {
-  const inv = invoiceForEmail({ invoice, parts, labor, notes: job ? (job.invoice_notes ?? '') : undefined });
+export async function buildJobSummaryEmail({ kind = 'completion', job, customer, invoice, parts = [], labor = [], documents = [], agreement = null, surchargeConfig = SURCHARGE_DEFAULTS }) {
+  let inv = invoiceForEmail({ invoice, parts, labor, notes: job ? (job.invoice_notes ?? '') : undefined, surchargeConfig });
+  // Item 2: the job's signature is the source of truth (it can be collected
+  // before completion or later, after the invoice snapshot was taken).
+  if (inv && job?.customer_signature) inv = { ...inv, customer_signature: job.customer_signature };
   const attachments = [];
   const attachmentLabels = [];
 
@@ -84,7 +95,7 @@ export async function buildJobSummaryEmail({ kind = 'completion', job, customer,
     }
   }
 
-  const html = jobSummaryEmailHTML({ invoice: inv, customer, kind, attachmentLabels });
+  const html = jobSummaryEmailHTML({ invoice: inv, customer, kind, attachmentLabels, surchargeConfig });
   const subject = buildSubject({ kind, invoice: inv, checklistCount: attachments.length - (agreement && kind !== 'receipt' ? 1 : 0) });
   const totalBytes = Buffer.byteLength(html, 'utf8') + attachments.reduce((s, a) => s + a.content.length, 0);
   return { subject, html, attachments, attachmentLabels, totalBytes, invoice: inv };

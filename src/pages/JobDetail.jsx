@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, PenLine, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
+import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import StatusBadge from "@/components/ui/StatusBadge";
 import RewardBadge from "@/components/ui/RewardBadge";
@@ -16,9 +16,10 @@ import JobPartsTab from "@/components/jobs/JobPartsTab";
 import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
-import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
-import { TAX_RATE, computeJobFinancials } from "@/lib/utils/jobFinancials";
+import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { TAX_RATE, computeJobFinancials, partChargeTotal } from "@/lib/utils/jobFinancials";
 import { formatTime, toDatetimeLocalValue } from "@/lib/formatTime";
+import { sortJobs } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
@@ -30,122 +31,18 @@ import { useSettings } from "@/lib/useSettings";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
+import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
+import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
+import { useAddJobLabor } from "@/lib/useAddJobLabor";
+import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
+import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
+import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
-import { initSignatureCanvas } from "@/lib/signatureCanvas";
-import SignatureGuideOverlay from "@/components/ui/SignatureGuideOverlay";
-
-function SignatureCanvas({ onSave }) {
-  const canvasRef = useRef(null);
-  const isDrawing = useRef(false);
-  const [dismissed, setDismissed] = useState(false);
-  const [slideClass, setSlideClass] = useState("translate-y-full");
-  const isPortrait = typeof window !== "undefined" && window.innerWidth < window.innerHeight;
-
-  // Slide-up animation on mount
-  useEffect(() => {
-    const t = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setSlideClass("translate-y-0"));
-    });
-    return () => cancelAnimationFrame(t);
-  }, []);
-
-  // Background + pen only; the "Sign here" guide is a DOM overlay so it
-  // never ends up in the exported PNG.
-  const initCanvas = (canvas) => initSignatureCanvas(canvas);
-
-  const canvasCallbackRef = (canvas) => {
-    if (canvas && canvas !== canvasRef.current) {
-      canvasRef.current = canvas;
-      initCanvas(canvas);
-    }
-  };
-
-  const getPos = (e, canvas) => {
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
-    return {
-      x: (touch.clientX - rect.left) * (canvas.width / rect.width),
-      y: (touch.clientY - rect.top) * (canvas.height / rect.height),
-    };
-  };
-
-  const startDraw = (e) => { e.preventDefault(); isDrawing.current = true; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); };
-  const draw = (e) => { e.preventDefault(); if (!isDrawing.current) return; const canvas = canvasRef.current; const ctx = canvas.getContext("2d"); const pos = getPos(e, canvas); ctx.lineTo(pos.x, pos.y); ctx.stroke(); };
-  const stopDraw = (e) => { e.preventDefault(); isDrawing.current = false; };
-
-  const clear = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    initCanvas(canvas);
-  };
-
-  const handleDone = () => {
-    const dataUrl = canvasRef.current.toDataURL("image/png");
-    setSlideClass("translate-y-full");
-    setTimeout(() => {
-      setDismissed(true);
-      onSave(dataUrl);
-    }, 300);
-  };
-
-  if (dismissed) return null;
-
-  const cw = typeof window !== "undefined" ? Math.round(window.innerWidth * 0.85) : 560;
-  const ch = typeof window !== "undefined" ? Math.round(window.innerHeight * 0.50) : 280;
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
-    >
-      <div
-        style={{ transition: "transform 0.3s ease-out" }}
-        className={`transform ${slideClass} flex flex-col items-center gap-4 w-full px-4`}
-      >
-        {/* Label */}
-        <p style={{ color: "#ffffff", fontSize: "1rem", fontWeight: 600, letterSpacing: "0.02em" }}>Customer Signature</p>
-
-        {/* Canvas */}
-        <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
-          <canvas
-            ref={canvasCallbackRef}
-            width={cw}
-            height={ch}
-            style={{ background: "#ffffff", borderRadius: "12px", display: "block", touchAction: "none" }}
-            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-          />
-          <SignatureGuideOverlay />
-        </div>
-
-        {/* Portrait hint */}
-        {isPortrait && (
-          <p style={{ color: "#9ca3af", fontSize: "0.75rem" }}>Rotate device for more space</p>
-        )}
-
-        {/* Bottom action bar */}
-        <div style={{ display: "flex", gap: "12px", width: "100%", maxWidth: `${cw}px` }}>
-          <button
-            onClick={clear}
-            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#374151", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-          >
-            Clear
-          </button>
-          <button
-            onClick={handleDone}
-            style={{ flex: 1, height: "44px", borderRadius: "12px", background: "#D32C2C", color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+import JobSignatureButton from "@/components/signature/JobSignatureButton";
 
 // One attachment row in the Complete Job dialog: checkbox-style toggle,
 // ON = attach this PDF to the completion email.
@@ -170,7 +67,7 @@ function AttachmentToggle({ label, on, onToggle }) {
   );
 }
 
-function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment }) {
+function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment, signatureSlot }) {
   const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
 
   return (
@@ -228,8 +125,9 @@ function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNote
           placeholder="Fault codes, battery voltage, oil condition..."
         />
       </div>
+      {signatureSlot && <div className="mt-2">{signatureSlot}</div>}
       {onCollectPayment && (
-        <Button className="w-full rounded-xl gap-1.5 h-10 mt-2 bg-green-600 hover:bg-green-700" onClick={onCollectPayment}>
+        <Button className="w-full rounded-xl gap-1.5 h-11 mt-2 bg-green-600 hover:bg-green-700" onClick={onCollectPayment}>
           <DollarSign className="w-4 h-4" /> Collect Payment
         </Button>
       )}
@@ -237,19 +135,24 @@ function LiveTotalBar({ parts, labor, invoiceNotes, onNotesChange, generatorNote
   );
 }
 
+// Which autosaved notes box failed (for the persistent error message).
+const notesErrorLabel = (data) =>
+  data && "generator_notes" in data ? "Generator notes NOT saved" : "Invoice summary NOT saved";
+
 export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { isOnline } = useOffline();
   const { settings } = useSettings();
+  const surchargeCfg = surchargeConfig(settings);
   const { user } = useAuth();
   const { confirmDelete, use24h } = usePreferences();
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [sigOpen, setSigOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef(null);
   const [invoiceNotes, setInvoiceNotes] = useState("");
@@ -340,8 +243,8 @@ export default function JobDetail() {
     queryFn: () => db.Job.filter({ customer_id: job?.customer_id }, "-created_date"),
     enabled: !!job?.customer_id,
   });
-  const previousJobs = customerHistory
-    .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status))
+  const previousJobs = sortJobs(customerHistory
+    .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status)))
     .slice(0, 10);
 
   useEffect(() => {
@@ -422,7 +325,11 @@ export default function JobDetail() {
   };
 
   const updatePartPriceMutation = useMutation({
-    mutationFn: ({ id, price, quantity }) => db.JobPart.update(id, { price, total_price: price * quantity }),
+    mutationFn: ({ id, price, quantity, charge_for_part }) => {
+      // A No Charge line is hidden on the invoice, so it can never carry a price.
+      if (charge_for_part === false) throw new Error("No Charge parts can't be priced");
+      return db.JobPart.update(id, { price, total_price: price * quantity });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-parts", id] });
       setEditingPartPriceId(null);
@@ -444,15 +351,21 @@ export default function JobDetail() {
   const commitPartPriceEdit = (part) => {
     const newPrice = parseFloat(editingPartPriceValue);
     if (isNaN(newPrice) || newPrice < 0) { toast.error("Enter a valid price"); return; }
-    updatePartPriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity });
+    updatePartPriceMutation.mutate({ id: part.id, price: newPrice, quantity: part.quantity, charge_for_part: part.charge_for_part });
   };
 
   const updateJobOffline = useOfflineMutation({
     entity: 'Job',
     type: 'update',
     queryKeys: ['jobs'],
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      dismissSaveError(notesErrorLabel(variables?.data));
       queryClient.invalidateQueries({ queryKey: ["job", id] });
+    },
+    // Autosave failed: the text stays in the box; say so and offer Retry.
+    onError: (error, variables) => {
+      haptics.error();
+      showSaveError(notesErrorLabel(variables?.data), error, () => updateJobOffline.mutate(variables));
     },
   });
 
@@ -488,6 +401,41 @@ export default function JobDetail() {
     return `${m}:${String(sec).padStart(2,"0")}`;
   };
 
+  const statusGuard = useSaveGuard();
+  const collectGuard = useSaveGuard();
+  const scheduleNextGuard = useSaveGuard();
+  const scheduleNextId = useRef(newRequestId());
+  const collectInvoiceId = useRef(newRequestId());
+
+  // Items-tab remove: same inventory ledger as the Work tab (stock back +
+  // usage row removed), with Retry that resumes (H-4 / C-3).
+  const removePartGuard = useSaveGuard();
+  const pendingPartRemovals = useRef(new Map());
+  const removeJobPart = (part) => removePartGuard.run(async function attempt() {
+    const progress = pendingPartRemovals.current.get(part.id) || {};
+    pendingPartRemovals.current.set(part.id, progress);
+    try {
+      await removePartFromJob(part, progress);
+      pendingPartRemovals.current.delete(part.id);
+      dismissSaveError("", { id: `remove-part-${part.id}` });
+      toast.success(progress.stock ? `Part removed — ${part.quantity} put back in stock` : "Part removed");
+    } catch (e) {
+      haptics.error();
+      showSaveError(progress.deleted ? `"${part.name}" removed, but stock NOT put back yet` : `"${part.name}" NOT removed`, e,
+        () => removePartGuard.run(attempt), { id: `remove-part-${part.id}` });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["job-parts", id] });
+      queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    }
+  });
+
+  const laborAdd = useAddJobLabor(id);
+  const { data: laborRates = [], isSuccess: laborRatesLoaded } = useQuery({
+    queryKey: ["labor-rates"],
+    queryFn: () => db.LaborRate.list("name"),
+  });
+  const laborGroups = groupLaborRates(laborRates);
+
   const getJobTotals = () => {
     const f = computeJobFinancials(parts, labor);
     return { partsCost: f.partsCost, partsPrice: f.partsTotal, laborCost: f.laborCost, laborPrice: f.laborTotal };
@@ -502,12 +450,15 @@ export default function JobDetail() {
     setScheduleNextOpen(true);
   };
 
-  const handleStatusChange = async (newStatus, extraFields = {}) => {
-    if (isClosed) return;
+  // Returns true only once the server has saved the new status. On failure
+  // nothing else runs (no team email, no customer update, no navigation) and
+  // a persistent error with Retry is shown (F-04).
+  const handleStatusChange = async (newStatus, extraFields = {}, { retry } = {}) => {
+    if (isClosed) return false;
+    const label = newStatus.replace("_", " ");
     const { partsCost, partsPrice, laborCost, laborPrice } = getJobTotals();
-    updateJobOffline.mutate({
-      entityId: id,
-      data: {
+    try {
+      await withTimeout(db.Job.update(id, {
         status: newStatus,
         total_parts_cost: partsCost, total_parts_price: partsPrice,
         total_labor_cost: laborCost, total_labor_price: laborPrice,
@@ -515,8 +466,15 @@ export default function JobDetail() {
         profit: (partsPrice + laborPrice) - (partsCost + laborCost),
         ...(newStatus === "completed" ? { completed_date: new Date().toISOString() } : {}),
         ...extraFields,
-      },
-    });
+      }), 20000, "Saving the job");
+    } catch (e) {
+      haptics.error();
+      showSaveError(`Job NOT marked ${label}`, e, retry || (() => statusGuard.run(() => handleStatusChange(newStatus, extraFields))), { id: "job-status-error" });
+      return false;
+    }
+    dismissSaveError("", { id: "job-status-error" });
+    queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["job", id] });
     if (newStatus === "completed" && ["maintenance", "battery_replacement"].includes(job.job_type)) {
       const customerUpdate = { last_service_date: new Date().toISOString() };
 
@@ -534,7 +492,10 @@ export default function JobDetail() {
         }
       }
 
-      db.Customer.update(job.customer_id, customerUpdate);
+      db.Customer.update(job.customer_id, customerUpdate).catch(e => {
+        showSaveError("Customer's last service date NOT saved", e, () => db.Customer.update(job.customer_id, customerUpdate)
+          .then(() => dismissSaveError("Customer's last service date NOT saved")).catch(() => {}));
+      });
     }
     const triggeredBy = getUserDisplayName(user);
     if (newStatus === "dispatched") {
@@ -552,13 +513,55 @@ export default function JobDetail() {
       notifyTeam({ subject: `Job Canceled — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Job Canceled", "red")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Reason", cancelReason || "No reason given")])}`, triggeredBy });
     }
     haptics.medium();
-    toast.success(`Job marked as ${newStatus.replace("_", " ")}`);
+    toast.success(`Job marked as ${label}`);
+    return true;
   };
 
-  const handleCancel = () => {
-    setCancelOpen(false);
-    handleStatusChange("canceled", { cancel_reason: cancelReason });
+  // Decision 2: cancelling a job with parts asks which were used. Every part
+  // starts as "Return to stock". Order: cancel the job (nothing else happens
+  // if that fails), then put the returned parts back; each step resumes on
+  // Retry and the choices are kept until everything is saved.
+  const [partChoices, setPartChoices] = useState({}); // jobPart.id -> "return" | "used"
+  const cancelReturns = useRef(null); // { choices, progress: { [jobPartId]: {} }, ids: { [jobPartId]: returnId } }
+  const stockParts = parts.filter(p => p.part_id);
+  const choiceFor = (p) => partChoices[p.id] || "return";
+
+  const returnChosenParts = async (snapshot) => {
+    const toReturn = stockParts.filter(p => snapshot.choices[p.id] !== "used");
+    let returned = 0;
+    for (const p of toReturn) {
+      snapshot.progress[p.id] ||= {};
+      snapshot.ids[p.id] ||= newRequestId();
+      const pr = await returnPartToStock(p, { returnId: snapshot.ids[p.id] }, snapshot.progress[p.id]);
+      if (pr.qty > 0) returned += pr.qty;
+    }
+    return returned;
   };
+
+  const handleCancel = () => statusGuard.run(async function attempt() {
+    if (!cancelReturns.current) {
+      cancelReturns.current = { choices: Object.fromEntries(stockParts.map(p => [p.id, choiceFor(p)])), progress: {}, ids: {}, canceled: false };
+    }
+    const snap = cancelReturns.current;
+    if (!snap.canceled) {
+      // Until the cancel is saved the tech may still change the choices.
+      snap.choices = Object.fromEntries(stockParts.map(p => [p.id, choiceFor(p)]));
+      if (!(await handleStatusChange("canceled", { cancel_reason: cancelReason }, { retry: () => statusGuard.run(attempt) }))) return;
+      snap.canceled = true;
+      setCancelOpen(false);
+    }
+    try {
+      const n = await returnChosenParts(snap);
+      cancelReturns.current = null;
+      dismissSaveError("", { id: "cancel-returns-error" });
+      if (n > 0) toast.success(`${n} part${n === 1 ? "" : "s"} put back in stock`);
+    } catch (e) {
+      haptics.error();
+      showSaveError("Job canceled, but parts NOT put back in stock yet", e, () => statusGuard.run(attempt), { id: "cancel-returns-error" });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["parts-catalog"] });
+    }
+  });
 
   // Resend for a job whose confirmation email failed or was never sent —
   // the only other confirmation-send path is the "Create & Send
@@ -594,7 +597,7 @@ export default function JobDetail() {
   // Agreement added to this job but not yet signed on it — must be signed
   // BEFORE Complete Job so its PDF can ride on the single completion email.
   // An already-active member (agreement line = renewal/upgrade) isn't blocked.
-  const isActiveMember = !!(customer?.membership_signed && (!customer?.membership_expiry || new Date(customer.membership_expiry) > new Date()));
+  const isActiveMember = isActiveMemberNow(customer);
   const agreementLine = labor.find(l => l.requires_agreement);
   const agreementUnsigned = !!agreementLine && !jobAgreement && !isActiveMember;
   const goSignAgreement = () => {
@@ -624,6 +627,20 @@ export default function JobDetail() {
     setIncludeAgreementPdf(true);
     setCompleteJobOpen(true);
   };
+  // Back from "Collect now" (Complete dialog → invoice → payment recorded):
+  // reopen the Complete dialog once. Paid in full now → no collect prompt.
+  // Waits past the page transition: AnimatePresence briefly renders this
+  // route inside the EXITING page too, and that throwaway copy must not
+  // consume the state (its timer is cancelled when it unmounts).
+  useEffect(() => {
+    if (!location.state?.openComplete || !job) return;
+    const t = setTimeout(() => {
+      navigate(location.pathname, { replace: true, state: {} });
+      if (job.status === "on_site" || job.status === "in_progress") openCompleteJob();
+    }, 400);
+    return () => clearTimeout(t);
+  }, [location.state?.openComplete, job?.id]);
+
 
   const patchInvoiceCache = (updated) => {
     queryClient.setQueryData(["job-invoice", id], (old) =>
@@ -649,38 +666,67 @@ export default function JobDetail() {
     queryClient.invalidateQueries({ queryKey: ["job", id] });
   };
 
-  const doCompleteJob = async () => {
+  // The job is completed only once the server has saved it. Any failure
+  // (no signal, timeout, server error) keeps the dialog open with a
+  // persistent message and Retry; nothing is sent and nothing navigates
+  // (F-04, F-20, A-14). Every step is safe to repeat.
+  const doCompleteJob = () => statusGuard.run(async () => {
     setCompletingJob(true);
     try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("No connection");
+      }
       try {
-        await flushInvoiceNotes();
+        await withTimeout(flushInvoiceNotes(), 20000, "Saving the invoice summary");
       } catch (e) {
         haptics.error();
-        toast.error(`Couldn't save the invoice summary: ${e.message}`);
+        showSaveError("Job NOT completed — invoice summary not saved", e, doCompleteJob, { id: "job-complete-error" });
         return;
       }
-      const [freshParts, freshLabor] = await Promise.all([
+      const [freshParts, freshLabor] = await withTimeout(Promise.all([
         db.JobPart.filter({ job_id: id }),
         db.JobLabor.filter({ job_id: id }),
-      ]);
+      ]), 20000, "Loading the job");
       const fin = computeJobFinancials(freshParts, freshLabor);
       const zero = isZeroDollarJob(fin);
+      // Every completion email carries the invoice (PAID / UNPAID + amount
+      // due). Jobs created in the app always have one; a job that somehow has
+      // none (old data, other entry paths) gets it now — same fixed id as
+      // Collect Payment, so a Retry can't make a second one.
+      if (!existingInvoice) {
+        const data = buildInvoiceData(freshParts, freshLabor);
+        try {
+          const current = (await withTimeout(db.Invoice.filter({ job_id: id }), 20000, "Loading the invoice"))[0];
+          if (!current) {
+            patchInvoiceCache(await withTimeout(createOnce(db.Invoice, collectInvoiceId.current, {
+              ...data, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
+              invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`,
+              ...(zero ? { status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString(), surcharge_amount: 0 } : { status: "draft" }),
+            }), 20000, "Creating the invoice"));
+          }
+        } catch (e) {
+          haptics.error();
+          showSaveError("Job NOT completed — invoice not created", e, doCompleteJob, { id: "job-complete-error" });
+          return;
+        }
+      }
       if (existingInvoice && existingInvoice.status !== "paid") {
         const data = buildInvoiceData(freshParts, freshLabor);
         const patch = zero
-          ? { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString() }
-          : data;
+          ? { ...data, status: "paid", payment_method: "no_charge", payment_reference: null, paid_date: new Date().toISOString(), surcharge_amount: 0 }
+          : withResyncedSurcharge(data, existingInvoice, surchargeCfg);
         try {
-          patchInvoiceCache(await db.Invoice.update(existingInvoice.id, patch));
+          patchInvoiceCache(await withTimeout(db.Invoice.update(existingInvoice.id, patch), 20000, "Updating the invoice"));
         } catch (e) {
           haptics.error();
-          toast.error(`Couldn't update the invoice: ${e.message}`);
+          showSaveError("Job NOT completed — invoice not updated", e, doCompleteJob, { id: "job-complete-error" });
           return;
         }
       }
 
+      if (!(await handleStatusChange("completed", completionSnapshot || {}, { retry: doCompleteJob }))) return;
+      dismissSaveError("", { id: "job-complete-error" });
       setCompleteJobOpen(false);
-      await handleStatusChange("completed", completionSnapshot || {});
 
       if (customer?.email && emailOnComplete) {
         try {
@@ -693,7 +739,8 @@ export default function JobDetail() {
           else if (!r?.skipped) toast.success(`Summary sent to ${customer.email}`);
         } catch (e) {
           haptics.error();
-          toast.error(`Failed to send summary email: ${e.message}`);
+          // The job IS completed; the email can be re-sent from the job screen.
+          toast.error(`Job completed, but the summary email was NOT sent: ${e.message}. Use "Resend summary" on the job.`, { duration: Infinity, closeButton: true });
         }
         queryClient.invalidateQueries({ queryKey: ["job", id] });
       }
@@ -703,10 +750,13 @@ export default function JobDetail() {
       } else {
         navigate("/jobs");
       }
+    } catch (e) {
+      haptics.error();
+      showSaveError("Job NOT completed", e, doCompleteJob, { id: "job-complete-error" });
     } finally {
       setCompletingJob(false);
     }
-  };
+  });
 
   // Legacy stuck $0 jobs (completed before $0 invoices were auto-closed):
   // close the $0 invoice as paid / no_charge exactly like the completion path
@@ -794,22 +844,42 @@ export default function JobDetail() {
       JSON.stringify(existingInvoice.line_items || []) === JSON.stringify(fresh.line_items);
     if (totalsUnchanged && itemsUnchanged) return;
 
-    db.Invoice.update(existingInvoice.id, fresh).then(patchInvoiceCache);
+    db.Invoice.update(existingInvoice.id, withResyncedSurcharge(fresh, existingInvoice, surchargeCfg)).then(patchInvoiceCache);
   }, [parts, labor, existingInvoice?.id, existingInvoice?.status, partsLoaded, laborLoaded]);
 
-  const handleCollectPayment = async () => {
-    const invoiceData = buildInvoiceData();
-    if (existingInvoice) {
-      await db.Invoice.update(existingInvoice.id, invoiceData);
-      navigate(`/invoices/${existingInvoice.id}`, { state: { fromJobId: id } });
-    } else {
-      const inv = await db.Invoice.create({
-        ...invoiceData, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
-        invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft",
-      });
-      navigate(`/invoices/${inv.id}`, { state: { fromJobId: id } });
+  // One invoice per job: guarded against double taps, re-checks the database
+  // for an existing invoice before creating, and creates with a fixed id so a
+  // Retry after a lost response can't make a second one (F-05).
+  // Item 2: one save path for every Collect Signature button. Resolves only
+  // after the server saved it (JobSignatureButton shows "Signature saved").
+  const saveJobSignature = (sig) => new Promise((resolve, reject) => {
+    updateJob.mutate({ customer_signature: sig }, { onSuccess: resolve, onError: reject });
+  });
+
+  // completeAfter: opened from the Complete dialog's "Collect now" — after the
+  // payment is recorded the invoice screen brings the tech back here and the
+  // Complete dialog reopens (now paid → no prompt, one combined email).
+  const handleCollectPayment = ({ completeAfter = false } = {}) => collectGuard.run(async () => {
+    try {
+      const invoiceData = buildInvoiceData();
+      const current = existingInvoice || (await db.Invoice.filter({ job_id: id }))[0];
+      let inv;
+      if (current) {
+        inv = current.status === "paid" ? current : await db.Invoice.update(current.id, withResyncedSurcharge(invoiceData, current, surchargeCfg));
+      } else {
+        inv = await createOnce(db.Invoice, collectInvoiceId.current, {
+          ...invoiceData, job_id: id, customer_id: job.customer_id, customer_name: job.customer_name,
+          invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`, status: "draft",
+        });
+      }
+      dismissSaveError("", { id: "collect-payment-error" });
+      patchInvoiceCache(inv);
+      navigate(`/invoices/${inv.id}`, { state: { fromJobId: id, completeAfter } });
+    } catch (e) {
+      haptics.error();
+      showSaveError("Invoice NOT opened", e, () => handleCollectPayment({ completeAfter }), { id: "collect-payment-error" });
     }
-  };
+  });
   const addServiceAgreement = async (type) => {
     const FALLBACK = {
       annual_air_cooled: {
@@ -861,13 +931,24 @@ export default function JobDetail() {
   // Completed jobs are done: no editing the job itself or canceling it.
   // (Payment, resend summary, photos and notes stay available as before.)
   const canEditOrCancel = !isClosed && job.status !== "completed";
-  const isMember = !!(customer?.membership_plan && customer?.membership_signed);
-  const isSemiMember = !!(customer?.membership_plan === "semi_annual" && customer?.membership_signed);
-  const memberDiscountRate = isSemiMember ? 0.85 : isMember ? 0.90 : 1.0;
+  // Expired plans get no discount (D-01): one rule, src/lib/utils/membership.js.
+  const memberDiscountRate = memberDiscountRateFor(customer);
+  const isMember = memberDiscountRate < 1.0;
   const hasPendingAgreement = labor.some(l => l.requires_agreement);
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
   // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
   const isNoChargeJob = partsLoaded && laborLoaded && isZeroDollarJob(computeJobFinancials(parts, labor));
+  // Item 1: Collect Payment from On Site onward while the job is open, and
+  // after completion. Paid in full = nothing left to collect.
+  const jobIsOpenOnSite = job.status === "on_site" || job.status === "in_progress";
+  const invoicePaidInFull = existingInvoice?.status === "paid";
+  const invoicePartlyPaid = existingInvoice?.status === "partial";
+  const balanceDue = existingInvoice ? balanceCentsOf(existingInvoice) / 100 : computeJobFinancials(parts, labor).total;
+  // Item 2: the one signature control, placed above Collect Payment (or above
+  // Close / Complete on $0 jobs) and in the Notes tab.
+  const signatureButton = (
+    <JobSignatureButton signature={job.customer_signature} onSave={saveJobSignature} disabled={isClosed} />
+  );
   // Legacy stuck $0 job (completed, $0 invoice never closed) -> offer a
   // no-email close. Same strict $0.00-in-cents guard is re-run on click.
   const showCloseNoCharge = partsLoaded && laborLoaded &&
@@ -1129,11 +1210,10 @@ export default function JobDetail() {
               <LiveTotalBar
                 parts={parts}
                 labor={labor}
-                invoiceNotes={invoiceNotes}
-                onNotesChange={handleNotesChange}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
-                onCollectPayment={!isClosed && !isNoChargeJob && existingInvoice?.status !== "paid" ? handleCollectPayment : undefined}
+                onCollectPayment={jobIsOpenOnSite && !isNoChargeJob && !invoicePaidInFull ? () => handleCollectPayment() : undefined}
+                signatureSlot={jobIsOpenOnSite && !isNoChargeJob ? signatureButton : null}
                 isSaving={updateJob.isPending}
               />
 
@@ -1147,7 +1227,7 @@ export default function JobDetail() {
                     <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{jobAgreement.plan_name}</p>
                     <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed contract (PDF) is emailed with the job summary at completion</p>
                   </Card>
-                ) : customer?.membership_signed ? (
+                ) : isActiveMember ? (
                   <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
                     <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
                       ✅ SERVICE AGREEMENT ACTIVE
@@ -1196,9 +1276,9 @@ export default function JobDetail() {
               {!isClosed && (
                 <div className="space-y-2">
                   {job.status === "scheduled" && (
-                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-600 hover:bg-cyan-700"
-                      onClick={() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() })}>
-                      <Navigation className="w-4 h-4" /> Dispatch — Head Out
+                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-600 hover:bg-cyan-700" disabled={statusGuard.busy}
+                      onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
+                      {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />} Dispatch — Head Out
                     </Button>
                   )}
                   {job.status === "dispatched" && (
@@ -1207,17 +1287,19 @@ export default function JobDetail() {
                         <Navigation className="w-3.5 h-3.5 shrink-0" />
                         <span>En route — tap when you arrive to start the clock</span>
                       </div>
-                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-500 hover:bg-amber-600"
-                        onClick={() => {
+                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-500 hover:bg-amber-600" disabled={statusGuard.busy}
+                        onClick={() => statusGuard.run(async () => {
                           const now = new Date().toISOString();
                           setOptimisticOnSiteTime(now);
-                          handleStatusChange("on_site", { on_site_time: now });
-                        }}>
-                        <MapPin className="w-4 h-4" /> Arrived — Start Clock
+                          // Clock only keeps running if the arrival was saved.
+                          if (!(await handleStatusChange("on_site", { on_site_time: now }))) setOptimisticOnSiteTime(null);
+                        })}>
+                        {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />} Arrived — Start Clock
                       </Button>
                     </>
                   )}
-                  {(job.status === "on_site" || job.status === "in_progress") && (
+                  {jobIsOpenOnSite && isNoChargeJob && signatureButton}
+                  {jobIsOpenOnSite && (
                     <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
                       onClick={openCompleteJob}>
                       <CheckCircle2 className="w-4 h-4" /> Complete Job
@@ -1234,6 +1316,7 @@ export default function JobDetail() {
                           🛡️ Customer Sign Protection Agreement
                         </Button>
                       )}
+                      {!(isNoChargeJob && showCloseNoCharge) && signatureButton}
                       {existingInvoice?.status === "paid" && existingInvoice?.payment_method === "no_charge" ? (
                         <Card className="p-3 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
                           <p className="text-sm font-semibold text-green-800 dark:text-green-200 flex items-center gap-1.5">
@@ -1256,6 +1339,7 @@ export default function JobDetail() {
                               <p className="text-xs text-muted-foreground mt-0.5">Invoice is still open. Close it as no charge, or resend the summary email.</p>
                             )}
                           </Card>
+                          {showCloseNoCharge && signatureButton}
                           {showCloseNoCharge && (
                             <Button className="w-full rounded-xl gap-1.5 h-11" onClick={() => setCloseNoChargeOpen(true)}>
                               <CheckCircle2 className="w-4 h-4" /> Close as No Charge (no email)
@@ -1263,8 +1347,8 @@ export default function JobDetail() {
                           )}
                         </>
                       ) : (
-                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={handleCollectPayment}>
-                          <DollarSign className="w-4 h-4" /> Collect Payment Now
+                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={() => handleCollectPayment()} disabled={collectGuard.busy}>
+                          <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
                         </Button>
                       )}
                       {customer?.email && job.completion_send_failed && (
@@ -1292,7 +1376,30 @@ export default function JobDetail() {
                       <DialogContent className="max-w-sm">
                         <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
                         <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
-                        <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel}>Confirm Cancel</Button>
+                        {stockParts.length > 0 && (
+                          <div className="space-y-2" data-testid="cancel-parts">
+                            <p className="text-sm font-semibold">Were any of these used?</p>
+                            {stockParts.map(p => {
+                              const used = choiceFor(p) === "used";
+                              return (
+                                <div key={p.id} className="flex items-center justify-between gap-2 rounded-xl border border-border p-2">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium break-words">{p.name}</p>
+                                    <p className="text-xs text-muted-foreground">Qty {p.quantity}</p>
+                                  </div>
+                                  <div className="flex shrink-0 rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={`${p.name}: used or return`}>
+                                    {[["return", "Return to stock"], ["used", "Used"]].map(([v, label]) => (
+                                      <button key={v} type="button" role="radio" aria-checked={(v === "used") === used}
+                                        className={`min-h-[44px] px-2.5 rounded-md text-xs font-semibold ${(v === "used") === used ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+                                        onClick={() => setPartChoices(c => ({ ...c, [p.id]: v }))}>{label}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <Button variant="destructive" className="w-full rounded-xl" onClick={handleCancel} disabled={statusGuard.busy}>{statusGuard.busy ? "Canceling…" : "Confirm Cancel"}</Button>
                       </DialogContent>
                     </Dialog>
                   )}
@@ -1343,10 +1450,17 @@ export default function JobDetail() {
                       <p className="text-xs font-semibold">No charge — {formatCurrency(0)}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect. The invoice will be closed as no charge.</p>
                     </div>
-                  ) : existingInvoice && existingInvoice.status !== "paid" && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5">
-                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">⚠ Invoice is still unpaid</p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">You can complete the job and collect payment later.</p>
+                  ) : !invoicePaidInFull && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5" data-testid="complete-unpaid-box">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                        {invoicePartlyPaid ? `⚠ Partly paid — ${formatCurrency(balanceDue)} still due` : `⚠ Unpaid — ${formatCurrency(balanceDue)} due`}
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">Collect now, or complete it as unpaid and collect later.</p>
+                    </div>
+                  )}
+                  {invoicePaidInFull && !isNoChargeJob && (
+                    <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-green-800 dark:text-green-200">✓ Paid in full</p>
                     </div>
                   )}
 
@@ -1367,7 +1481,7 @@ export default function JobDetail() {
                       {emailOnComplete && (
                         <ul className="text-xs text-muted-foreground space-y-1 px-1">
                           {existingInvoice && (
-                            <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} (in the email)</li>
+                            <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} in the email — {isNoChargeJob ? "no charge" : invoicePaidInFull ? "PAID" : invoicePartlyPaid ? `${formatCurrency(balanceDue)} balance due` : `UNPAID, ${formatCurrency(balanceDue)} due`}</li>
                           )}
                           {completedDocuments.map(doc => (
                             <AttachmentToggle
@@ -1387,18 +1501,34 @@ export default function JobDetail() {
                     <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
                   )}
 
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
-                    <Button
-                      className="flex-1 rounded-xl gap-1.5 bg-green-600 hover:bg-green-700"
-                      disabled={completingJob}
-                      onClick={doCompleteJob}
-                    >
-                      {completingJob
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
-                        : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
-                    </Button>
-                  </div>
+                  {!isNoChargeJob && !invoicePaidInFull ? (
+                    // Unpaid / partly paid: collect now, or complete as unpaid.
+                    <div className="space-y-2 mt-2">
+                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" disabled={completingJob || collectGuard.busy}
+                        onClick={() => { setCompleteJobOpen(false); handleCollectPayment({ completeAfter: true }); }}>
+                        <DollarSign className="w-4 h-4" /> Collect now
+                      </Button>
+                      <Button variant="outline" className="w-full rounded-xl gap-1.5 h-11" disabled={completingJob} onClick={doCompleteJob}>
+                        {completingJob
+                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                          : <><CheckCircle2 className="w-4 h-4" /> Complete as unpaid</>}
+                      </Button>
+                      <Button variant="ghost" className="w-full rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+                      <Button
+                        className="flex-1 rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
+                        disabled={completingJob}
+                        onClick={doCompleteJob}
+                      >
+                        {completingJob
+                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                          : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
+                      </Button>
+                    </div>
+                  )}
                 </DialogContent>
               </Dialog>
 
@@ -1412,19 +1542,27 @@ export default function JobDetail() {
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); navigate("/jobs"); }}>Skip</Button>
-                    <Button className="flex-1 rounded-xl" onClick={async () => {
+                    <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
                       if (!nextDate) return;
-                      await db.Job.create({
-                        customer_id: job.customer_id, customer_name: job.customer_name,
-                        title: job.title, job_type: "maintenance", status: "scheduled",
-                        scheduled_date: new Date(nextDate).toISOString(),
-                        notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
-                      });
+                      try {
+                        // Fixed id: a double tap or a Retry can't create a second job (A-05).
+                        await createOnce(db.Job, scheduleNextId.current, {
+                          customer_id: job.customer_id, customer_name: job.customer_name,
+                          title: job.title, job_type: "maintenance", status: "scheduled",
+                          scheduled_date: new Date(nextDate).toISOString(),
+                          notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
+                        });
+                      } catch (e) {
+                        haptics.error();
+                        showSaveError("Next service NOT scheduled", e, () => scheduleNextGuard.run(scheduleIt), { id: "schedule-next-error" });
+                        return;
+                      }
+                      dismissSaveError("", { id: "schedule-next-error" });
                       setScheduleNextOpen(false);
                       toast.success("Next service scheduled");
                       queryClient.invalidateQueries({ queryKey: ["jobs"] });
                       navigate("/jobs");
-                    }}>Schedule It</Button>
+                    })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -1541,7 +1679,9 @@ export default function JobDetail() {
                                       <Pencil className="w-3 h-3" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7"
-                                      onClick={() => db.JobLabor.delete(item.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))}>
+                                      onClick={() => db.JobLabor.delete(item.id)
+                                        .then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }))
+                                        .catch(e => { haptics.error(); showSaveError(`"${item.description}" NOT removed`, e); })}>
                                       <Trash2 className="w-3 h-3 text-destructive" />
                                     </Button>
                                   </>
@@ -1554,98 +1694,40 @@ export default function JobDetail() {
                       </>
                     )}
 
-                    {/* Standard rates */}
+                    {/* Rate Catalog — straight from Catalog › Labor Rates (H-5).
+                        Adding stores the price at that moment; later catalog
+                        edits only change NEW lines. */}
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Rate Catalog</p>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Standard</p>
-                    {[
-                      { name: "First ½ Hour", sub: "Minimum charge", price: 125, type: "flat" },
-                      { name: "Standard Hourly", sub: "After first ½ hr · per hour", price: 115, type: "hourly" },
-                    ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-muted-foreground">{r.sub}{isMember ? ` · ${Math.round((1-memberDiscountRate)*100)}% off` : ""}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm font-bold">${isMember ? Math.round(r.price * memberDiscountRate) : r.price}{r.type === "hourly" ? "/hr" : ""}</p>
-                          <Button size="icon" className="h-7 w-7 rounded-lg" onClick={() => {
-                            const price = isMember ? Math.round(r.price * memberDiscountRate * 100) / 100 : r.price;
-                            db.JobLabor.create({
-                              job_id: id,
-                              description: r.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
-                              is_flat_rate: r.type === "flat",
-                              flat_rate_amount: r.type === "flat" ? price : 0,
-                              hours: r.type === "hourly" ? 1 : 0,
-                              rate: r.type === "hourly" ? price : 0,
-                              total_price: price,
-                              total_cost: 0,
-                              flat_rate_cost: 0,
-                            }).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
-                            toast.success(`${r.name} added`);
-                          }}>
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </Card>
+                    {laborGroups.map(group => (
+                      <div key={group.key} className="space-y-2">
+                        <p className={`text-[10px] font-bold uppercase tracking-wider mt-2 ${group.tone === "orange" ? "text-orange-400" : group.tone === "red" ? "text-red-400" : "text-muted-foreground/60"}`}>{group.label}</p>
+                        {group.rates.filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map(r => {
+                          const unit = memberPrice(ratePrice(r), memberDiscountRate);
+                          const perHour = r.type === "hourly" ? "/hr" : "";
+                          return (
+                            <Card key={r.id} data-testid="labor-rate" className={`p-3 flex items-center justify-between ${group.tone === "orange" ? "border-orange-200 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-900/20" : group.tone === "red" ? "border-red-200 bg-red-50/40 dark:border-red-700 dark:bg-red-900/20" : ""}`}>
+                              <div className="min-w-0 mr-2">
+                                <p className="text-sm font-medium">{r.name}</p>
+                                <p className="text-xs text-muted-foreground">{r.notes || "Per hour"}{isMember ? ` · ${Math.round((1 - memberDiscountRate) * 100)}% off` : ""}</p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right">
+                                  <p className="text-sm font-bold">{formatCurrency(unit)}{perHour}</p>
+                                  {isMember && <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(ratePrice(r))}</p>}
+                                </div>
+                                <Button size="icon" className="h-7 w-7 rounded-lg" aria-label={`Add ${r.name}`} disabled={laborAdd.busy}
+                                  onClick={() => laborAdd.add(buildLaborLine({ rate: r, jobId: id, memberDiscountRate }), r.name)}>
+                                  <Plus className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
                     ))}
-
-                    {/* After Hours */}
-                     <p className="text-[10px] font-bold uppercase tracking-wider text-orange-400 mt-2">After Hours & Weekend</p>
-                    {[
-                      { name: "Night / Sat until 3:30pm", sub: "After hours rate", price: 245 },
-                      { name: "Sat after 3:30pm / Sun", sub: "Weekend rate", price: 330 },
-                      { name: "Holiday Rate", sub: "Federal holidays", price: 330 },
-                    ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between border-orange-200 bg-orange-50/40 dark:border-orange-700 dark:bg-orange-900/20">
-                        <div>
-                          <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-orange-600 dark:text-orange-400">{r.sub}{isMember ? ` · ${Math.round((1-memberDiscountRate)*100)}% off` : ""}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm font-bold text-orange-700">${isMember ? Math.round(r.price * memberDiscountRate) : r.price}/hr</p>
-                          <Button size="icon" className="h-7 w-7 rounded-lg bg-orange-500 hover:bg-orange-600" onClick={() => {
-                            const price = isMember ? Math.round(r.price * memberDiscountRate * 100) / 100 : r.price;
-                            db.JobLabor.create({
-                              job_id: id, description: r.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
-                              is_flat_rate: false, hours: 1, rate: price, total_price: price, total_cost: 0,
-                            }).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
-                            toast.success(`${r.name} added`);
-                          }}>
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
-
-                    {/* Emergency */}
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-red-400 mt-2">Emergency</p>
-                    {[
-                      { name: "Emergency Dispatch Fee", sub: "Same-day emergency response", price: 75, type: "flat" },
-                      { name: "Emergency Hourly", sub: "Emergency rate · per hour", price: 245, type: "hourly" },
-                    ].filter(r => !workSearch || r.name.toLowerCase().includes(workSearch.toLowerCase())).map((r, i) => (
-                      <Card key={i} className="p-3 flex items-center justify-between border-red-200 bg-red-50/40 dark:border-red-700 dark:bg-red-900/20">
-                        <div>
-                          <p className="text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-red-500 dark:text-red-400">{r.sub}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm font-bold text-red-700">${r.price}{r.type === "hourly" ? "/hr" : ""}</p>
-                          <Button size="icon" className="h-7 w-7 rounded-lg bg-red-500 hover:bg-red-600" onClick={() => {
-                            db.JobLabor.create({
-                              job_id: id, description: r.name,
-                              is_flat_rate: r.type === "flat",
-                              flat_rate_amount: r.type === "flat" ? r.price : 0,
-                              hours: r.type === "hourly" ? 1 : 0,
-                              rate: r.type === "hourly" ? r.price : 0,
-                              total_price: r.price, total_cost: 0,
-                            }).then(() => queryClient.invalidateQueries({ queryKey: ["job-labor", id] }));
-                            toast.success(`${r.name} added`);
-                          }}>
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
+                    {laborRatesLoaded && laborGroups.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No labor rates in the catalog. Add them in Catalog › Labor Rates.</p>
+                    )}
                   </div>
                 )}
 
@@ -1852,33 +1934,16 @@ export default function JobDetail() {
                 </Card>
               )}
 
-              {/* Customer signature */}
-              {(job.status === "in_progress" || job.status === "completed" || job.status === "invoiced") && (
-                <Card className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="text-sm font-semibold">Customer Signature</p>
-                      <p className="text-xs text-muted-foreground">{job.customer_signature ? "Signature on file" : "Not yet collected"}</p>
-                    </div>
-                    {!isClosed && (
-                      <Dialog open={sigOpen} onOpenChange={setSigOpen}>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant={job.customer_signature ? "outline" : "default"} className="rounded-xl text-xs h-8 gap-1.5">
-                            <PenLine className="w-3 h-3" />
-                            {job.customer_signature ? "Re-sign" : "Collect Signature"}
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-sm">
-                          <DialogHeader><DialogTitle>Customer Signature</DialogTitle></DialogHeader>
-                          <p className="text-sm text-muted-foreground text-center italic">Please sign below to confirm work was completed satisfactorily</p>
-                          <SignatureCanvas onSave={sig => { haptics.success(); updateJob.mutate({ customer_signature: sig }); setSigOpen(false); toast.success("Signature saved"); }} />
-                        </DialogContent>
-                      </Dialog>
-                    )}
+              {/* Customer signature — same control as above Collect Payment (Item 2) */}
+              {["on_site", "in_progress", "completed", "invoiced"].includes(job.status) && (
+                <Card className="p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold">Customer Signature</p>
+                    <p className="text-xs text-muted-foreground">{job.customer_signature ? "Signature on file" : "Not yet collected"}</p>
                   </div>
-                  {job.customer_signature && (
+                  {isClosed ? (job.customer_signature && (
                     <img src={job.customer_signature} alt="Customer signature" className="w-full max-h-24 object-contain rounded-xl border border-border bg-muted/20" />
-                  )}
+                  )) : signatureButton}
                 </Card>
               )}
             </div>
@@ -1932,15 +1997,21 @@ export default function JobDetail() {
                                   </>
                                 ) : (
                                   <>
-                                    <p className="text-sm font-semibold">{formatCurrency(part.total_price)}</p>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                      onClick={() => startEditingPartPrice(part)}>
-                                      <Pencil className="w-3 h-3" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                    {part.charge_for_part === false ? (
+                                      <p className="text-xs font-semibold text-muted-foreground">No Charge</p>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm font-semibold">{formatCurrency(partChargeTotal(part))}</p>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                          onClick={() => startEditingPartPrice(part)}>
+                                          <Pencil className="w-3 h-3" />
+                                        </Button>
+                                      </>
+                                    )}
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" disabled={removePartGuard.busy} onClick={() => {
                                       if (!confirmDelete || window.confirm(`Remove "${part.name}" from this job?`)) {
                                         haptics.medium();
-                                        db.JobPart.delete(part.id).then(() => queryClient.invalidateQueries({ queryKey: ["job-parts", id] }));
+                                        removeJobPart(part);
                                       }
                                     }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                                   </>

@@ -10,6 +10,8 @@ import { formatCurrency } from "@/lib/utils/format";
 import { computeJobFinancials } from "@/lib/utils/jobFinancials";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
+import { useAddJobLabor } from "@/lib/useAddJobLabor";
+import { buildLaborLine, memberPrice, isAgreementRate, isPlaceholderRate, LABOR_TAB_FLAT_CATEGORIES } from "@/lib/utils/laborPricing";
 
 const ITEM_FOLDERS = [
   { key: "labor", label: "Labor Rates", icon: Clock, color: "bg-amber-100 text-amber-700", description: "Hourly billing rates" },
@@ -94,15 +96,11 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
     }
   };
 
-  const createMutation = useMutation({
-    mutationFn: (data) => db.JobLabor.create(data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["job-labor", jobId] });
-      toast.success("Added to job");
+  const { add: addLine, busy: adding } = useAddJobLabor(jobId, {
+    onAdded: (_, line) => {
       setSubFolder(null);
       setFolder(null);
-
-      if (variables.description?.split(" (Member")[0] === "Referral Discount" && customerId) {
+      if (line.description?.split(" (Member")[0] === "Referral Discount" && customerId) {
         triggerRewardApply(customerId);
       }
     },
@@ -145,47 +143,9 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
   };
 
   const addRate = (rate) => {
-    if (rate.type === "hourly") {
-      const discountedRate = Math.round(rate.rate * memberDiscountRate * 100) / 100;
-      createMutation.mutate({
-        job_id: jobId,
-        description: rate.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
-        hours: 1,
-        rate: discountedRate,
-        cost_rate: rate.cost_rate || 0,
-        is_flat_rate: false,
-        total_price: discountedRate,
-        total_cost: (rate.cost_rate || 0) * 1,
-      });
-    } else if (rate.category === "discounts") {
-      // Discount catalog items are stored at $0 — their notes carry the
-      // percentage ("adjust amount to X% of job total"). Compute the actual
-      // negative amount off the job's current subtotal at add-time instead of
-      // requiring a manual price entry before it shows up anywhere.
-      const pct = parseFloat((rate.notes || "").match(/(\d+(?:\.\d+)?)\s*%/)?.[1]) || 0;
-      const { subtotal } = computeJobFinancials(parts, labor);
-      const amount = pct > 0 ? -Math.round((subtotal * pct / 100) * 100) / 100 : 0;
-      createMutation.mutate({
-        job_id: jobId,
-        description: rate.name,
-        is_flat_rate: true,
-        flat_rate_amount: amount,
-        flat_rate_cost: 0,
-        total_price: amount,
-        total_cost: 0,
-      });
-    } else {
-      const discountedPrice = Math.round(rate.flat_price * memberDiscountRate * 100) / 100;
-      createMutation.mutate({
-        job_id: jobId,
-        description: rate.name + (isMember ? ` (Member ${Math.round((1-memberDiscountRate)*100)}% off)` : ""),
-        is_flat_rate: true,
-        flat_rate_amount: discountedPrice,
-        flat_rate_cost: rate.flat_cost || 0,
-        total_price: discountedPrice,
-        total_cost: rate.flat_cost || 0,
-      });
-    }
+    if (adding) return;
+    const { subtotal } = computeJobFinancials(parts, labor);
+    addLine(buildLaborLine({ rate, jobId, memberDiscountRate, subtotal }), rate.name);
   };
 
   const goBack = () => {
@@ -193,15 +153,20 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
     setFolder(null);
   };
 
-  const hourlyRates = rates.filter(r => r.type === "hourly");
-  const knownKeys = [...FLAT_RATE_FOLDERS.map(f => f.key).filter(k => k !== "other"), "maintenance"];
+  // Placeholder rows ("Do not add to jobs yet") are never offered. Service
+  // agreements are added only from their own cards (signature + fixed
+  // price), never from "Other" (B-02).
+  const offered = rates.filter(r => !isPlaceholderRate(r));
+  const hourlyRates = offered.filter(r => r.type === "hourly");
+  // "emergency" flat rows are offered on the Labor tab (LABOR_TAB_FLAT_CATEGORIES).
+  const knownKeys = [...FLAT_RATE_FOLDERS.map(f => f.key).filter(k => k !== "other"), "maintenance", "service_agreements", ...LABOR_TAB_FLAT_CATEGORIES];
 
   const getFlatRatesForFolder = (key) => {
-    if (key === "other") return rates.filter(r => r.type === "flat_rate" && !knownKeys.includes(r.category));
-    return rates.filter(r => r.type === "flat_rate" && r.category === key);
+    if (key === "other") return offered.filter(r => r.type === "flat_rate" && !knownKeys.includes(r.category));
+    return offered.filter(r => r.type === "flat_rate" && r.category === key);
   };
 
-  const maintenanceRates = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
+  const maintenanceRates = offered.filter(r => r.type === "flat_rate" && r.category === "maintenance");
   const totalCost = labor.reduce((s, l) => s + (l.total_cost || 0), 0);
   const totalPrice = labor.reduce((s, l) => s + (l.total_price || 0), 0);
 
@@ -282,7 +247,7 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
                   <div className="flex items-center gap-2">
                     {isMember ? (
                       <div className="text-right">
-                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(Math.round(r.rate * memberDiscountRate * 100) / 100)}/hr</span>
+                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(memberPrice(r.rate, memberDiscountRate))}/hr</span>
                         <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(r.rate)}</p>
                       </div>
                     ) : (
@@ -341,7 +306,7 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
                   <div className="flex items-center gap-2 shrink-0">
                     {isMember ? (
                       <div className="text-right">
-                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(Math.round(r.flat_price * memberDiscountRate * 100) / 100)}</span>
+                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(memberPrice(r.flat_price, isAgreementRate(r) || r.category === "discounts" ? 1.0 : memberDiscountRate))}</span>
                         <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(r.flat_price)}</p>
                       </div>
                     ) : (
@@ -375,7 +340,7 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
                   <div className="flex items-center gap-2 shrink-0">
                     {isMember ? (
                       <div className="text-right">
-                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(Math.round(r.flat_price * memberDiscountRate * 100) / 100)}</span>
+                        <span className="text-sm font-bold text-emerald-600">{formatCurrency(memberPrice(r.flat_price, isAgreementRate(r) || r.category === "discounts" ? 1.0 : memberDiscountRate))}</span>
                         <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(r.flat_price)}</p>
                       </div>
                     ) : (

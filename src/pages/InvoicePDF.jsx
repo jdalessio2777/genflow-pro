@@ -8,12 +8,15 @@ import { Loader2, FileText, CheckCircle2, Send, ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { formatCurrency } from "@/lib/utils/format";
 import { invoiceSummaryHTML, checklistSummaryHTML, combineEmailSections } from "@/lib/emailTemplates";
+import { useSettings } from "@/lib/useSettings";
+import { surchargeConfig } from "@/lib/utils/surcharge";
 import { toast } from "sonner";
 
 export default function InvoicePDF() {
   const { id } = useParams();
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const { settings } = useSettings();
   const [includeInvoice, setIncludeInvoice] = useState(true);
   const [includedDocs, setIncludedDocs] = useState({});
 
@@ -45,7 +48,7 @@ export default function InvoicePDF() {
     setSending(true);
     try {
       const bodyParts = [];
-      if (includeInvoice) bodyParts.push(invoiceSummaryHTML({ invoice, customer }));
+      if (includeInvoice) bodyParts.push(invoiceSummaryHTML({ invoice, customer, surchargeConfig: surchargeConfig(settings) }));
       completedDocs.forEach(doc => { if (includedDocs[doc.id]) bodyParts.push(checklistSummaryHTML(doc)); });
 
       const fullHTML = combineEmailSections(bodyParts);

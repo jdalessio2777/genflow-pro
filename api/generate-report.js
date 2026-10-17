@@ -111,7 +111,7 @@ async function fetchData(supabase, start, end) {
   const [r1, r2, r3, r4] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, customer_name, job_id, total, tax_amount, payment_method, paid_date, created_at, parts_total, labor_total')
+      .select('id, invoice_number, customer_name, job_id, total, tax_amount, surcharge_amount, payment_method, paid_date, created_at, parts_total, labor_total')
       .eq('status', 'paid')
       .gte('paid_date', startISO)
       .lte('paid_date', endISO)
@@ -174,6 +174,9 @@ function buildSummarySheet(wb, data, type, start, end) {
 
   const revenue = paidInvoices.reduce((s, i) => s + (i.total || 0), 0);
   const taxCollected = paidInvoices.reduce((s, i) => s + (i.tax_amount || 0), 0);
+  // Credit card surcharges are already inside revenue (invoice total); shown
+  // on their own line too.
+  const surchargesCollected = paidInvoices.reduce((s, i) => s + (Number(i.surcharge_amount) || 0), 0);
   const expTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const netProfit = revenue - expTotal;
   const margin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
@@ -218,6 +221,7 @@ function buildSummarySheet(wb, data, type, start, end) {
 
   addMoney('Total Revenue', revenue);
   addMoney('NJ Tax Collected', taxCollected);
+  addMoney('Card Surcharges Collected', surchargesCollected);
   addMoney('Total Expenses', expTotal);
   addMoney('Net Profit', netProfit);
   addKV('Profit Margin', `${margin.toFixed(1)}%`);

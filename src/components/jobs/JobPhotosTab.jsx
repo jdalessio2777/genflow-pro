@@ -3,11 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Camera, Trash2, ImagePlus } from "lucide-react";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
+import { integrationsCore } from "@/lib/coreIntegrations";
+import { showSaveError } from "@/lib/saveSafety";
 
 const PHOTO_TYPES = ["before", "after", "issue", "general"];
 
@@ -16,11 +17,19 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
   const [photoType, setPhotoType] = useState("before");
   const { confirmDelete } = usePreferences();
 
+  // Row first (what the app shows), then the stored file (KF-2).
   const deleteMutation = useMutation({
-    mutationFn: (id) => db.JobPhoto.delete(id),
+    mutationFn: async (photo) => {
+      await db.JobPhoto.delete(photo.id);
+      await integrationsCore.DeleteFile({ file_url: photo.url });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job-photos", jobId] });
       toast.success("Photo removed");
+    },
+    onError: (e, photo) => {
+      queryClient.invalidateQueries({ queryKey: ["job-photos", jobId] });
+      showSaveError("Photo NOT fully removed", e, () => deleteMutation.mutate(photo), { id: `photo-delete-${photo.id}` });
     },
   });
 
@@ -101,7 +110,7 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
                       {!isClosed && (
                         <button
                           onClick={() => {
-                            if (!confirmDelete || window.confirm("Remove this photo?")) deleteMutation.mutate(photo.id);
+                            if (!confirmDelete || window.confirm("Remove this photo?")) deleteMutation.mutate(photo);
                           }}
                           className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 rounded-lg flex items-center justify-center active:bg-black/80 transition-colors"
                         >

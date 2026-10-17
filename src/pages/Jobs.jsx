@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { deleteJobCascade } from "@/lib/deleteRecords";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
@@ -16,10 +17,10 @@ import EmptyState from "@/components/ui/EmptyState";
 import AnimatedListItem from "@/components/ui/AnimatedListItem";
 import RewardBadge from "@/components/ui/RewardBadge";
 import SwipeableListItem from "@/components/ui/SwipeableListItem";
-import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils/format";
-import { formatTime } from "@/lib/formatTime";
+import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
+import { sortJobs, isJobOverdue } from "@/lib/utils/jobSort";
 
 function formatJobDate(dateStr, use24h = false) {
   if (!dateStr) return null;
@@ -33,7 +34,8 @@ function formatJobDate(dateStr, use24h = false) {
   if (d.toDateString() === tomorrow.toDateString()) {
     return "Tomorrow, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
   }
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) +
+    ", " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
 }
 
 const TECH_COLORS = {
@@ -64,28 +66,12 @@ export default function Jobs() {
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
 
   const deleteMutation = useMutation({
-    mutationFn: async (jobId) => {
-      const [parts, labor, docs, photos, invoices] = await Promise.all([
-        db.JobPart.filter({ job_id: jobId }),
-        db.JobLabor.filter({ job_id: jobId }),
-        db.JobDocument.filter({ job_id: jobId }),
-        db.JobPhoto.filter({ job_id: jobId }),
-        db.Invoice.filter({ job_id: jobId }),
-      ]);
-      await Promise.all([
-        ...parts.map(r => db.JobPart.delete(r.id)),
-        ...labor.map(r => db.JobLabor.delete(r.id)),
-        ...docs.map(r => db.JobDocument.delete(r.id)),
-        ...photos.map(r => db.JobPhoto.delete(r.id)),
-        ...invoices.map(r => db.Invoice.delete(r.id)),
-      ]);
-      return db.Job.delete(jobId);
-    },
+    mutationFn: (jobId) => deleteJobCascade(jobId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       toast.success("Job deleted");
     },
-    onError: (e) => toast.error("Failed to delete: " + e.message),
+    onError: (e) => toast.error("Failed to delete: " + e.message, { duration: Infinity, closeButton: true }),
   });
 
   const filtered = jobs.filter(j => {
@@ -104,9 +90,7 @@ export default function Jobs() {
     return true;
   });
 
-  const sortedFiltered = filter === "completed"
-    ? [...filtered].sort((a, b) => new Date(b.completed_date || b.created_date) - new Date(a.completed_date || a.created_date))
-    : filtered;
+  const sortedFiltered = sortJobs(filtered);
 
   const techFiltered = techFilter === "mine"
     ? sortedFiltered.filter(j => !j.assigned_to_name || j.assigned_to_name === getUserDisplayName(user)?.split(" ")[0])
@@ -312,8 +296,13 @@ export default function Jobs() {
                             <p className="text-xs text-muted-foreground">{job.customer_name}</p>
                             <RewardBadge show={customerMap[job.customer_id]?.pending_reward} />
                           </div>
-                          {job.scheduled_date && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{formatJobDate(job.scheduled_date, use24h)}</p>
+                          {job.scheduled_date ? (
+                            <p className={`text-xs mt-0.5 flex items-center gap-1.5 ${isJobOverdue(job) ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                              {isJobOverdue(job) && <StatusBadge status="overdue" />}
+                              {formatJobDate(job.scheduled_date, use24h)}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mt-0.5 italic">No date set</p>
                           )}
                           {customerMap[job.customer_id]?.property_notes && (
                             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-center gap-1">

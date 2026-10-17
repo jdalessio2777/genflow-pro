@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, CalendarCheck } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
-import EmptyState from "@/components/ui/EmptyState";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { getRecentCalendarChanges } from "@/lib/googleCalendar";
 import { formatTime } from "@/lib/formatTime";
+import { sortJobs, etDateKey, localDateKey } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 
 const STATUS_COLORS = {
@@ -165,8 +165,8 @@ export default function Schedule() {
   };
 
   const getJobsForDate = (date) => {
-    const dateStr = date.toDateString();
-    return scheduledJobs.filter(j => new Date(j.scheduled_date).toDateString() === dateStr);
+    const dayKey = localDateKey(date);
+    return sortJobs(scheduledJobs.filter(j => etDateKey(j.scheduled_date) === dayKey));
   };
 
   const isToday = (date) => date.toDateString() === new Date().toDateString();
@@ -308,7 +308,7 @@ export default function Schedule() {
               </Card>
             ) : (
               <div className="space-y-2">
-                {selectedJobs.sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date)).map(job => (
+                {selectedJobs.map(job => (
                   <Link key={job.id} to={`/jobs/${job.id}`}>
                     <Card className="p-3 hover:border-primary/20 transition-all">
                       <div className="flex items-center justify-between">
