@@ -213,6 +213,17 @@ export default function DocumentFill() {
     });
   };
 
+  // "Check all" / "Uncheck all" (Annual Maintenance, while filling it out):
+  // one tap sets every checkbox item, saved like any other change.
+  const setAllChecks = (fieldIds, checked) => {
+    setValues(prev => {
+      const next = { ...prev };
+      for (const fid of fieldIds) next[fid] = checked;
+      debouncedSave(next);
+      return next;
+    });
+  };
+
   // Reverse sync: write generator fields back to the customer record if currently empty
   const syncToCustomer = (savedValues) => {
     if (!customer) return;
@@ -500,6 +511,11 @@ export default function DocumentFill() {
   const checkboxFields = fields.filter(f => f.type === "checkbox");
   const checkedCount = checkboxFields.filter(f => values[f.id]).length;
   const pct = checkboxFields.length > 0 ? (checkedCount / checkboxFields.length) * 100 : 0;
+  const allChecked = checkboxFields.length > 0 && checkedCount === checkboxFields.length;
+  // Only on the Annual Maintenance checklist, and only while it is being
+  // filled out (never on the completed copy, its print, PDF or email).
+  const showCheckAll = doc.status !== "completed" && checkboxFields.length > 0
+    && /annual maintenance/i.test(doc.template_name || "");
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -550,7 +566,16 @@ export default function DocumentFill() {
         <div className="px-4 pt-3 pb-1 no-print">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground">Progress</span>
-            <span className="text-xs font-semibold text-primary">{checkedCount}/{checkboxFields.length}</span>
+            <span className="flex items-center gap-3">
+              {showCheckAll && (
+                <button type="button" data-testid="check-all"
+                  className="text-xs font-semibold text-primary min-h-[44px] px-2 -my-3 active:opacity-60"
+                  onClick={() => setAllChecks(checkboxFields.map(f => f.id), !allChecked)}>
+                  {allChecked ? "Uncheck all" : "Check all"}
+                </button>
+              )}
+              <span className="text-xs font-semibold text-primary">{checkedCount}/{checkboxFields.length}</span>
+            </span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />

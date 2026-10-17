@@ -137,7 +137,7 @@ function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, is
 
 // Which autosaved notes box failed (for the persistent error message).
 const notesErrorLabel = (data) =>
-  data && "generator_notes" in data ? "Generator notes NOT saved" : "Invoice summary NOT saved";
+  data && "generator_notes" in data ? "Generator notes NOT saved" : "Service Summary NOT saved";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -656,7 +656,7 @@ export default function JobDetail() {
   // job completed, then send the ONE completion email (server-built: invoice
   // inline + checklist/agreement PDFs). No other customer email is sent here.
   // The server builds the summary email from jobs.invoice_notes, but the
-  // Invoice Summary textarea autosaves with a 1.2s debounce. Write any
+  // Service Summary textarea autosaves with a 1.2s debounce. Write any
   // pending text synchronously before an email is requested so the last
   // keystrokes are never missing.
   const flushInvoiceNotes = async () => {
@@ -677,10 +677,10 @@ export default function JobDetail() {
         throw new Error("No connection");
       }
       try {
-        await withTimeout(flushInvoiceNotes(), 20000, "Saving the invoice summary");
+        await withTimeout(flushInvoiceNotes(), 20000, "Saving the Service Summary");
       } catch (e) {
         haptics.error();
-        showSaveError("Job NOT completed — invoice summary not saved", e, doCompleteJob, { id: "job-complete-error" });
+        showSaveError("Job NOT completed — Service Summary not saved", e, doCompleteJob, { id: "job-complete-error" });
         return;
       }
       const [freshParts, freshLabor] = await withTimeout(Promise.all([
@@ -1194,15 +1194,15 @@ export default function JobDetail() {
                 </Card>
               )}
 
-              {/* ── Invoice Summary ── */}
+              {/* ── Service Summary (customer-facing; jobs.invoice_notes) ── */}
               <Card className="px-4 pt-3.5 pb-3.5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Invoice Summary</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
                 <Textarea
                   value={invoiceNotes}
                   onChange={e => handleNotesChange(e.target.value)}
                   className="text-sm rounded-xl resize-none border-border bg-muted/20 min-h-[64px]"
                   rows={3}
-                  placeholder="Describe work performed for customer invoice..."
+                  placeholder="Work performed — shown to the customer on the invoice..."
                 />
               </Card>
 

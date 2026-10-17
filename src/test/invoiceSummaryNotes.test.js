@@ -22,36 +22,46 @@ describe('serviceNotesHTML', () => {
   })
   it('escapes and keeps line breaks', () => {
     const h = serviceNotesHTML('Replaced <b>starter</b> & "battery"\nLoad test OK')
-    expect(h).toContain('SERVICE NOTES')
+    expect(h).toContain('SERVICE SUMMARY')
     expect(h).toContain('Replaced &lt;b&gt;starter&lt;/b&gt; &amp; &quot;battery&quot;<br>Load test OK')
     expect(h).not.toContain('<b>')
   })
   it('>$0 invoice renders escaped notes; whitespace-only notes render nothing', () => {
     expect(invoiceSummaryHTML({ invoice: { ...invUnpaid, notes: '<script>x</script>' }, customer })).toContain('&lt;script&gt;x&lt;/script&gt;')
-    expect(invoiceSummaryHTML({ invoice: { ...invUnpaid, notes: '  ' }, customer })).not.toContain('SERVICE NOTES')
+    expect(invoiceSummaryHTML({ invoice: { ...invUnpaid, notes: '  ' }, customer })).not.toContain('SERVICE SUMMARY')
   })
 })
 
-describe('job summary email carries the customer-facing Invoice Summary (jobs.invoice_notes)', () => {
+describe('job summary email carries the customer-facing Service Summary (jobs.invoice_notes)', () => {
   const cases = {
     'completion, $0': { kind: 'completion', invoice: invZero, labor: zeroLabor },
     'completion, >$0 unpaid': { kind: 'completion', invoice: invUnpaid, labor },
     'completion, >$0 paid': { kind: 'completion', invoice: invPaid, labor },
   }
   // Item 1d: the pay-later receipt is the short "Payment received" email —
-  // no line items or service notes (they went out in the completion email).
-  it('receipt: short, never carries service or internal notes', async () => {
+  // no line items, but it carries the Service Summary (never internal notes).
+  it('receipt: short, carries the job Service Summary, never internal notes', async () => {
     const job = { ...baseJob, invoice_notes: 'Replaced starter & battery' }
     const { html } = await buildJobSummaryEmail({ kind: 'receipt', job, customer, invoice: { ...invPaid, notes: 'x' }, labor })
     expect(html).toContain('Payment received')
-    expect(html).not.toContain('SERVICE NOTES')
+    expect(html).toContain('SERVICE SUMMARY')
+    expect(html).toContain('>Replaced starter &amp; battery</p>')
+    expect(html).not.toContain('Repair labor')
     for (const m of INTERNAL) expect(html).not.toContain(m)
+  })
+  it('receipt: no Service Summary section when the job summary is empty', async () => {
+    for (const v of [null, '', '  \n ']) {
+      const { html } = await buildJobSummaryEmail({ kind: 'receipt', job: { ...baseJob, invoice_notes: v }, customer, invoice: { ...invPaid, notes: 'old text' }, labor })
+      expect(html).not.toContain('SERVICE SUMMARY')
+      expect(html).not.toContain('old text')
+      for (const m of INTERNAL) expect(html).not.toContain(m)
+    }
   })
   for (const [name, c] of Object.entries(cases)) {
     it(`${name}: present from the job even when the invoice snapshot is empty`, async () => {
       const job = { ...baseJob, invoice_notes: 'Replaced starter & battery\nAll tests passed' }
       const { html } = await buildJobSummaryEmail({ kind: c.kind, job, customer, invoice: { ...c.invoice, notes: '' }, labor: c.labor })
-      expect(html).toContain('SERVICE NOTES')
+      expect(html).toContain('SERVICE SUMMARY')
       expect(html).toContain('Replaced starter &amp; battery<br>All tests passed')
       for (const m of INTERNAL) expect(html).not.toContain(m)
     })
@@ -65,7 +75,7 @@ describe('job summary email carries the customer-facing Invoice Summary (jobs.in
       for (const v of [null, '', '  \n ']) {
         const job = { ...baseJob, invoice_notes: v }
         const { html } = await buildJobSummaryEmail({ kind: c.kind, job, customer, invoice: { ...c.invoice, notes: 'old text' }, labor: c.labor })
-        expect(html).not.toContain('SERVICE NOTES')
+        expect(html).not.toContain('SERVICE SUMMARY')
         expect(html).not.toContain('old text')
         for (const m of INTERNAL) expect(html).not.toContain(m)
       }

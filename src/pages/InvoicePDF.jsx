@@ -10,6 +10,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { invoiceSummaryHTML, checklistSummaryHTML, combineEmailSections } from "@/lib/emailTemplates";
 import { useSettings } from "@/lib/useSettings";
 import { surchargeConfig } from "@/lib/utils/surcharge";
+import { customerFacingInvoice } from "@/lib/invoicePrint";
 import { toast } from "sonner";
 
 export default function InvoicePDF() {
@@ -37,6 +38,14 @@ export default function InvoicePDF() {
     enabled: !!invoice?.job_id,
   });
 
+  // A job invoice carries the job's live Service Summary, as in every other
+  // customer email (api/_lib/jobSummary.js).
+  const { data: invoiceJob } = useQuery({
+    queryKey: ["invoice-job", invoice?.job_id],
+    queryFn: async () => { const r = await db.Job.filter({ id: invoice.job_id }); return r[0] || null; },
+    enabled: !!invoice?.job_id,
+  });
+
   const completedDocs = jobDocs.filter(d => d.status === "completed");
 
   const handleSend = async () => {
@@ -48,7 +57,7 @@ export default function InvoicePDF() {
     setSending(true);
     try {
       const bodyParts = [];
-      if (includeInvoice) bodyParts.push(invoiceSummaryHTML({ invoice, customer, surchargeConfig: surchargeConfig(settings) }));
+      if (includeInvoice) bodyParts.push(invoiceSummaryHTML({ invoice: customerFacingInvoice({ invoice, job: invoiceJob }), customer, surchargeConfig: surchargeConfig(settings) }));
       completedDocs.forEach(doc => { if (includedDocs[doc.id]) bodyParts.push(checklistSummaryHTML(doc)); });
 
       const fullHTML = combineEmailSections(bodyParts);

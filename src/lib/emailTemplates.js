@@ -476,14 +476,14 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
 // Shared by InvoicePDF.jsx's "send invoice / checklists" screen and JobDetail.jsx's
 // job-completion screen — one implementation for the same email-body building blocks
 // so the two entry points can never drift out of sync.
-// Customer-facing invoice summary ("Invoice Summary" textarea on the job ->
+// Customer-facing "Service Summary" (the textarea on the job ->
 // jobs.invoice_notes, snapshotted to invoices.notes) rendered as the
-// SERVICE NOTES block. Escaped, newlines kept; omitted entirely when empty or
-// whitespace-only. Same wrapper markup as before, so an invoice without notes
-// renders byte-identically.
+// SERVICE SUMMARY block in every customer invoice/receipt email. Escaped,
+// newlines kept; omitted entirely when empty or whitespace-only, so an
+// invoice without a summary renders byte-identically.
 export function serviceNotesHTML(notes) {
   if (!String(notes ?? '').trim()) return ""
-  return `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE NOTES</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(notes)}</p></div>`
+  return `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE SUMMARY</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(notes)}</p></div>`
 }
 
 export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHARGE_DEFAULTS }) {
@@ -778,8 +778,9 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
 
 // Item 1d: the short "Payment received" receipt for a payment recorded after
 // the job's completion email went out. No line items (the customer already
-// has the invoice): amount, method, what's still due, and the signature if one
-// was collected (incl. one collected after completion).
+// has the invoice): amount, method, what's still due, the Service Summary
+// (if one was typed) and the signature if one was collected (incl. one
+// collected after completion).
 export function paymentReceiptHTML({ invoice, customer }) {
   const first = String(customer?.name || "").trim().split(/\s+/)[0] || "there"
   const totalCents = invoiceTotalCents(invoice)
@@ -812,6 +813,7 @@ export function paymentReceiptHTML({ invoice, customer }) {
       ${row(paidInFull ? "Paid" : "Paid so far", fmt(paid), true)}
       ${paidInFull ? row("Balance", "Paid in full ✓", true) : row("Balance due", fmt(balance), true)}
     </table>
+    ${serviceNotesHTML(invoice.notes)}
     ${signatureHTML}
   </div>`
 }

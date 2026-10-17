@@ -4,7 +4,7 @@ import { formatDate } from './utils/format.js'
 // Customer-facing "Notes" cell for the printable Service History
 // (CustomerDetail.jsx). Only customer-facing job text may appear here:
 //   invoice_notes        — "Describe work performed for customer invoice"
-//                          (also printed as SERVICE NOTES on the invoice)
+//                          (the "Service Summary" on invoices and emails)
 //   customer_description — "Job Description (customer-facing)"
 // Never jobs.notes / generator_notes / quote_notes — those are internal.
 export function serviceHistoryNotesHtml(job) {
@@ -111,7 +111,7 @@ export function serviceHistoryDocumentHtml({ customer, completedJobs }) {
     <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;width:120px;">Date</th>
     <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;">Service</th>
     <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;width:100px;">Status</th>
-    <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;">Notes</th>
+    <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;">Service Summary</th>
   </tr>
     </thead>
     <tbody>${jobRows}</tbody>

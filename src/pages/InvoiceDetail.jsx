@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock, Smartphone, X, Plus } from "lucide-react";
+import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock, Smartphone, X, Plus, Printer } from "lucide-react";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -25,6 +25,7 @@ import { showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety"
 import { useSettings } from "@/lib/useSettings";
 import { surchargeConfig, surchargeFor, surchargeLabel, balanceCentsOf, owedCentsOf, amountPaidCentsOf, supportsPartialPayments } from "@/lib/utils/surcharge";
 import { Switch } from "@/components/ui/switch";
+import { customerFacingInvoice, invoicePrintDocumentHtml } from "@/lib/invoicePrint";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -348,6 +349,20 @@ export default function InvoiceDetail() {
   const paidSoFar = amountPaidCentsOf(invoice) / 100;
   // Signature: the job's (collected any time) — the invoice copy may predate it.
   const signature = invoiceJob?.customer_signature || invoice.customer_signature;
+  // What the customer sees (emails, print): the job's live Service Summary.
+  const customerInvoice = customerFacingInvoice({ invoice, job: invoiceJob });
+  const serviceSummary = String(customerInvoice.notes ?? "").trim() ? customerInvoice.notes : "";
+
+  // Printable invoice / Save as PDF (iOS: Print > share > Save to Files).
+  const printInvoice = () => {
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Couldn't open the print view"); return; }
+    win.document.write(invoicePrintDocumentHtml({ invoice: customerInvoice, customer: invoiceCustomer, surchargeConfig: surchargeCfg }));
+    win.document.close();
+    // The page itself runs no script (CSP); wire Close from here.
+    win.document.getElementById("close-invoice")?.addEventListener("click", () => win.close());
+    setTimeout(() => win.print(), 500);
+  };
 
   return (
     <div>
@@ -492,6 +507,9 @@ export default function InvoiceDetail() {
             <Send className="w-4 h-4" /> Send to Customer
           </Button>
         )}
+        <Button variant="outline" className="w-full rounded-xl gap-2 h-11" onClick={printInvoice} data-testid="print-invoice">
+          <Printer className="w-4 h-4" /> Print / Save PDF
+        </Button>
 
         {isNoCharge && invoice.status !== "paid" && (
           <Card className="p-4 bg-muted/40">
@@ -634,6 +652,13 @@ export default function InvoiceDetail() {
                 </Button>
               ))}
             </div>
+          </Card>
+        )}
+
+        {serviceSummary && (
+          <Card className="p-4" data-testid="invoice-service-summary">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
+            <p className="text-sm whitespace-pre-wrap break-words">{serviceSummary}</p>
           </Card>
         )}
 

@@ -46,7 +46,7 @@ export function invoiceForEmail({ invoice, parts = [], labor = [], notes, surcha
   if (isZeroDollarInvoice(inv)) {
     inv = { ...inv, line_items: buildInvoiceLineItems(parts, labor, { includeNoChargeParts: true }) };
   }
-  // Customer-facing summary: the job's live "Invoice Summary" text
+  // Customer-facing summary: the job's live "Service Summary" text
   // (jobs.invoice_notes) is the source of truth. invoices.notes is only a
   // snapshot taken when JobDetail last wrote the invoice (Collect Payment,
   // Complete Job on an unpaid invoice, or a totals change) — so it is empty
