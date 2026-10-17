@@ -924,6 +924,19 @@ export default function JobDetail() {
     toast.success("Service Agreement added to job · Customer signs at completion");
   };
 
+  // Tint the status-bar band (AppLayout) to the colored job header.
+  const statusBarColor = !job ? null
+    : job.status === "on_site" ? "#b45309"
+    : job.status === "dispatched" ? "#0e7490"
+    : ["invoiced", "canceled"].includes(job.status) ? "#4b5563"
+    : "hsl(var(--primary))";
+  useEffect(() => {
+    if (!statusBarColor) return undefined;
+    const root = document.documentElement;
+    root.style.setProperty("--status-bar-bg", statusBarColor);
+    return () => root.style.removeProperty("--status-bar-bg");
+  }, [statusBarColor]);
+
   if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
@@ -954,12 +967,15 @@ export default function JobDetail() {
   const showCloseNoCharge = partsLoaded && laborLoaded &&
     canCloseAsNoCharge({ jobStatus: job.status, invoice: existingInvoice, financials: computeJobFinancials(parts, labor) });
   const isActive = ["dispatched", "on_site"].includes(job.status);
-  const headerBg = job.status === "on_site" ? "bg-amber-500" : job.status === "dispatched" ? "bg-cyan-600" : isClosed ? "bg-gray-600" : "bg-primary";
-  const headerDot = job.status === "on_site" ? "bg-amber-300" : "bg-cyan-300";
-  const tabActiveColor = job.status === "on_site" ? "#d97706" : job.status === "dispatched" ? "#0891b2" : "hsl(var(--primary))";
+  // Header colors readable in sunlight (F-17): white text on amber-700 /
+  // cyan-700 is ≥ 4.5:1 (amber-500 was 2.15:1). The status bar band above
+  // the header takes the same color (statusBarColor).
+  const headerBg = job.status === "on_site" ? "bg-amber-700" : job.status === "dispatched" ? "bg-cyan-700" : isClosed ? "bg-gray-600" : "bg-primary";
+  const headerDot = job.status === "on_site" ? "bg-amber-200" : "bg-cyan-200";
+  const tabActiveColor = job.status === "on_site" ? "#b45309" : job.status === "dispatched" ? "#0e7490" : "hsl(var(--primary))";
 
   return (
-    <div className="flex flex-col h-screen bg-muted/30">
+    <div className="flex flex-col bg-muted/30" style={{ height: "calc(100vh - var(--sat))" }}>
 
       {/* ── COLORED ACTIVE JOB HEADER ── */}
       <div className={`${headerBg} px-4 pt-3 pb-3 shrink-0`}>
@@ -974,7 +990,7 @@ export default function JobDetail() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 {isActive && <div className={`w-1.5 h-1.5 rounded-full ${headerDot} animate-pulse shrink-0`} />}
-                <span className="text-white/80 text-xs font-bold uppercase tracking-wider">
+                <span className="text-white text-xs font-bold uppercase tracking-wider">
                   {job.status === "on_site" ? "On Site" :
                    job.status === "dispatched" ? "Dispatched" :
                    job.status === "completed" ? "Completed" :
@@ -994,7 +1010,7 @@ export default function JobDetail() {
                 {job.title}
               </p>
               <div className="flex items-center gap-1.5 min-w-0">
-                <p className="text-white/75 text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+                <p className="text-white/90 text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
                 <RewardBadge show={customer?.pending_reward} />
               </div>
             </div>
@@ -1003,7 +1019,7 @@ export default function JobDetail() {
             {job.status === "on_site" && (
               <div className="text-right">
                 <p className="font-mono text-white text-lg font-bold tracking-wider">{formatElapsed(elapsedSeconds)}</p>
-                <p className="text-white/70 text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
+                <p className="text-white/90 text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
               </div>
             )}
             {canEditOrCancel && (
@@ -1035,7 +1051,7 @@ export default function JobDetail() {
               className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0"
               style={{
                 borderBottomColor: activeJobTab === tab.key ? tabActiveColor : "transparent",
-                color: activeJobTab === tab.key ? tabActiveColor : "#9ca3af",
+                color: activeJobTab === tab.key ? tabActiveColor : "#6b7280",
               }}
             >
               <span>{tab.icon}</span>

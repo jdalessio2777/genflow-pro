@@ -89,19 +89,19 @@ export function OfflineProvider({ children }) {
   return (
     <OfflineContext.Provider value={{ isOnline, pendingCount, syncing, syncPendingOperations, updatePendingCount }}>
       {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2">
+        <div style={{ top: "var(--sat)" }} className="fixed left-0 right-0 z-[100] bg-amber-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2">
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
           Offline — changes saved locally and will sync when you reconnect
         </div>
       )}
       {isOnline && syncing && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-blue-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2">
+        <div style={{ top: "var(--sat)" }} className="fixed left-0 right-0 z-[100] bg-blue-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2">
           <span className="w-2 h-2 rounded-full bg-white animate-ping" />
           Syncing offline changes...
         </div>
       )}
       {isOnline && !syncing && pendingCount > 0 && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-orange-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2">
+        <div style={{ top: "var(--sat)" }} className="fixed left-0 right-0 z-[100] bg-orange-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2">
           {pendingCount} change{pendingCount !== 1 ? 's' : ''} pending sync
           <button onClick={syncPendingOperations} className="underline ml-1">Sync now</button>
         </div>

@@ -87,12 +87,22 @@
   }
 }
 
+/* Safe areas (F-12). The installed app uses viewport-fit=cover with the
+   black-translucent status bar, so the page runs under the clock / Dynamic
+   Island and the home indicator. Every top/bottom offset goes through these
+   two variables (tests can override them to simulate a notched iPhone). */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --status-bar-bg: #0D1014;
+}
+
 @layer utilities {
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
   .safe-bottom {
-    padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+    padding-bottom: max(var(--sab), 0.75rem);
   }
   .card-lift {
     transition: box-shadow 0.15s ease, transform 0.15s ease;

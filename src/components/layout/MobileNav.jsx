@@ -35,7 +35,7 @@ export default function MobileNav() {
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-50 flex justify-center"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)", paddingLeft: 16, paddingRight: 16 }}
+      style={{ paddingBottom: "max(var(--sab), 12px)", paddingLeft: 16, paddingRight: 16 }}
     >
       <nav className="w-full max-w-lg bg-card/98 backdrop-blur-xl border border-border/80 rounded-2xl shadow-xl shadow-black/10 px-1 py-1.5">
         <div className="flex items-center justify-around">

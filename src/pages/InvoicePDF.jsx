@@ -90,7 +90,7 @@ export default function InvoicePDF() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 p-4 border-b sticky top-0 bg-background/90 backdrop-blur-xl z-40">
+      <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
         <Link to={`/invoices/${id}`}>
           <Button variant="ghost" size="icon" className="rounded-xl h-9 w-9"><ArrowLeft className="w-4 h-4" /></Button>
         </Link>

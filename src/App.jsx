@@ -1,4 +1,3 @@
-import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -109,8 +108,10 @@ function App() {
             </Routes>
           </OfflineProvider>
         </Router>
-        <Toaster />
-        <SonnerToaster richColors position="top-right" />
+        {/* sonner is the only toaster. (The old shadcn <Toaster /> rendered two
+            empty full-width fixed divs over the top 32 px of every screen and
+            swallowed taps on back/edit/New buttons — F-03.) */}
+        <SonnerToaster richColors position="top-right" offset={{ top: "calc(var(--sat) + 12px)" }} mobileOffset={{ top: "calc(var(--sat) + 8px)" }} />
       </QueryClientProvider>
     </AuthProvider>
   )
