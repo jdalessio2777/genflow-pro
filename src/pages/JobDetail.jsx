@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
@@ -173,6 +174,10 @@ export default function JobDetail() {
   const [customerExpanded, setCustomerExpanded] = useState(false);
   const [titleExpanded, setTitleExpanded] = useState(false);
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
+  // Completing with an empty Service Summary: ask once (Add / Skip); never blocks.
+  const [summaryAskOpen, setSummaryAskOpen] = useState(false);
+  const summarySkipped = useRef(false);
+  const serviceSummaryRef = useRef(null);
   const [completionSnapshot, setCompletionSnapshot] = useState(null);
   const [emailOnComplete, setEmailOnComplete] = useState(true);
   // Per-attachment toggles in the Complete Job dialog (all ON by default).
@@ -628,6 +633,23 @@ export default function JobDetail() {
     setExcludedDocIds([]);
     setIncludeAgreementPdf(true);
     setCompleteJobOpen(true);
+  };
+  const requestCompleteJob = () => {
+    if (!invoiceNotes.trim() && !summarySkipped.current) { setSummaryAskOpen(true); return; }
+    openCompleteJob();
+  };
+  const addServiceSummaryFirst = () => {
+    setSummaryAskOpen(false);
+    setActiveJobTab("overview");
+    setTimeout(() => {
+      serviceSummaryRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      serviceSummaryRef.current?.focus();
+    }, 350);
+  };
+  const skipServiceSummary = () => {
+    summarySkipped.current = true;
+    setSummaryAskOpen(false);
+    openCompleteJob();
   };
   // Back from "Collect now" (Complete dialog → invoice → payment recorded):
   // reopen the Complete dialog once. Paid in full now → no collect prompt.
@@ -1100,7 +1122,7 @@ export default function JobDetail() {
                 )}
                 {(job.quote_notes || job.notes) && (
                   <div className="mx-3.5 mb-3.5 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5 dark:bg-sky-900/20 dark:border-sky-700">
-                    <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider mb-1">Summary</p>
+                    <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider mb-1">Internal Notes</p>
                     <p className="text-xs text-sky-800 dark:text-sky-200 leading-relaxed">
                       {job.quote_notes || job.notes}
                     </p>
@@ -1224,6 +1246,7 @@ export default function JobDetail() {
               <Card className="px-4 pt-3.5 pb-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
                 <Textarea
+                  ref={serviceSummaryRef}
                   value={invoiceNotes}
                   onChange={e => handleNotesChange(e.target.value)}
                   className="text-sm rounded-xl resize-none border-border bg-muted/20 min-h-[64px]"
@@ -1327,10 +1350,22 @@ export default function JobDetail() {
                   {jobIsOpenOnSite && isNoChargeJob && signatureButton}
                   {jobIsOpenOnSite && (
                     <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
-                      onClick={openCompleteJob}>
+                      onClick={requestCompleteJob}>
                       <CheckCircle2 className="w-4 h-4" /> Complete Job
                     </Button>
                   )}
+                  <AlertDialog open={summaryAskOpen} onOpenChange={setSummaryAskOpen}>
+                    <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="summary-ask">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Add a Service Summary?</AlertDialogTitle>
+                        <AlertDialogDescription>It appears on the customer's email.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="h-11 rounded-xl" onClick={skipServiceSummary}>Skip</AlertDialogCancel>
+                        <AlertDialogAction className="h-11 rounded-xl" onClick={addServiceSummaryFirst}>Add</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                   {job.status === "completed" && (
                     <div className="space-y-2">
                       {/* Legacy: agreement left unsigned on an already-completed job.
@@ -1953,7 +1988,7 @@ export default function JobDetail() {
               {/* Job notes */}
               {(job.notes || job.quote_notes) && (
                 <Card className="p-3.5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Job Notes</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Internal Notes</p>
                   {job.quote_notes && <p className="text-xs font-semibold text-muted-foreground mb-1">Quote Scope</p>}
                   {job.quote_notes && <p className="text-sm leading-relaxed mb-2">{job.quote_notes}</p>}
                   {job.notes && <p className="text-sm text-muted-foreground leading-relaxed">{job.notes}</p>}
