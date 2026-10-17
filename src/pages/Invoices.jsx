@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { Link } from "react-router-dom";
+import { useUrlState } from "@/hooks/useUrlState";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, DollarSign, Send, X } from "lucide-react";
 import { haptics } from "@/lib/haptics";
@@ -15,7 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Invoices() {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useUrlState("filter", "all");
   const [payingInvoice, setPayingInvoice] = useState(null);
   const [showCheckNumberDialog, setShowCheckNumberDialog] = useState(false);
   const queryClient = useQueryClient();
@@ -58,7 +59,7 @@ export default function Invoices() {
 
   return (
     <div>
-      <PageHeader title="Invoices" subtitle={totalUnpaid > 0 ? `${formatCurrency(totalUnpaid)} outstanding` : `${invoices.length} total`} />
+      <PageHeader back title="Invoices" subtitle={totalUnpaid > 0 ? `${formatCurrency(totalUnpaid)} outstanding` : `${invoices.length} total`} />
 
       <div className="px-4 pt-3 pb-4 space-y-3 max-w-lg mx-auto">
         <Tabs value={filter} onValueChange={setFilter}>

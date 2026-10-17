@@ -962,7 +962,7 @@ export default function Finance() {
 
   return (
     <div>
-      <PageHeader title="Finance" subtitle="Revenue, expenses & tax summary" back="/" />
+      <PageHeader title="Finance" subtitle="Revenue, expenses & tax summary" back />
       <div className="px-4 pt-3 pb-4 max-w-lg mx-auto">
         <Tabs defaultValue="overview">
           <div className="overflow-x-auto mb-4 -mx-1 px-1">

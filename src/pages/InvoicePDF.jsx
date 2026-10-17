@@ -1,4 +1,5 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useBack } from "@/hooks/useBack";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 export default function InvoicePDF() {
   const { id } = useParams();
   const [sending, setSending] = useState(false);
+  const goBack = useBack();
   const [sent, setSent] = useState(false);
   const { settings } = useSettings();
   const [includeInvoice, setIncludeInvoice] = useState(true);
@@ -91,9 +93,7 @@ export default function InvoicePDF() {
   return (
     <div>
       <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
-        <Link to={`/invoices/${id}`}>
-          <Button variant="ghost" size="icon" className="rounded-xl h-9 w-9"><ArrowLeft className="w-4 h-4" /></Button>
-        </Link>
+        <Button variant="ghost" size="icon" className="rounded-xl h-11 w-11" aria-label="Back" data-testid="back-button" onClick={goBack}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold">{invoice.invoice_number}</p>
           <p className="text-xs text-muted-foreground">{invoice.customer_name}</p>

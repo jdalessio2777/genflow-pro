@@ -26,6 +26,8 @@ import { useSettings } from "@/lib/useSettings";
 import { surchargeConfig, surchargeFor, surchargeLabel, balanceCentsOf, owedCentsOf, amountPaidCentsOf, supportsPartialPayments } from "@/lib/utils/surcharge";
 import { Switch } from "@/components/ui/switch";
 import { customerFacingInvoice, invoicePrintDocumentHtml } from "@/lib/invoicePrint";
+import { goBack } from "@/hooks/useBack";
+import { getAppRouter, previousEntry } from "@/lib/navigation";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -111,7 +113,8 @@ export default function InvoiceDetail() {
     mutationFn: () => db.Invoice.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      navigate("/invoices", { replace: true });
+      // Back to wherever the invoice was opened (its job, the list…).
+      goBack(navigate, location, "/invoices");
     },
     onError: (e) => { haptics.error(); toast.error("Failed to delete: " + e.message); },
   });
@@ -163,7 +166,15 @@ export default function InvoiceDetail() {
     dismissSaveError("", { id: "record-payment-error" });
     onSuccess?.();
     if (completeAfter && invoice?.job_id && patch.status === "paid") {
-      navigate(`/jobs/${invoice.job_id}`, { replace: true, state: { openComplete: true } });
+      // Pop back to the job (no second copy of it in history) and reopen
+      // Complete there; replace only if the job isn't the previous screen.
+      const prev = previousEntry(getAppRouter()?.state.location ?? location);
+      if (prev?.entry && prev.entry.path.split("?")[0] === `/jobs/${invoice.job_id}`) {
+        try { sessionStorage.setItem("gf-open-complete", invoice.job_id); } catch { /* ignore */ }
+        navigate(-prev.steps);
+      } else {
+        navigate(`/jobs/${invoice.job_id}`, { replace: true, state: { openComplete: true } });
+      }
     }
     return true;
   });
@@ -374,7 +385,7 @@ export default function InvoiceDetail() {
             <RewardBadge show={invoiceCustomer?.pending_reward} compact />
           </span>
         }
-        back={fromJobId ? `/jobs/${fromJobId}` : "/invoices"}
+        back={invoice.job_id ? `/jobs/${invoice.job_id}` : "/invoices"}
         backLabel={fromJobId ? "Back to Job" : undefined}
         actions={
           <AlertDialog>

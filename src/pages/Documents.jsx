@@ -38,6 +38,7 @@ export default function Documents() {
   return (
     <div>
       <PageHeader
+        back
         title="Documents"
         subtitle={`${templates.length} templates`}
         actions={

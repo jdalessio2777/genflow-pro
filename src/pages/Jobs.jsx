@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { deleteJobCascade } from "@/lib/deleteRecords";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
+import { useUrlState } from "@/hooks/useUrlState";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,9 +46,10 @@ const TECH_COLORS = {
 };
 
 export default function Jobs() {
-  const [filter, setFilter] = useState("active");
-  const [search, setSearch] = useState("");
-  const [techFilter, setTechFilter] = useState("all");
+  // List state lives in the URL so back / the tab bar return to it (F-08).
+  const [filter, setFilter] = useUrlState("tab", "active");
+  const [search, setSearch] = useUrlState("q", "");
+  const [techFilter, setTechFilter] = useUrlState("tech", "all");
   const { user } = useAuth();
   const { use24h } = usePreferences();
 

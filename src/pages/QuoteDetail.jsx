@@ -134,7 +134,7 @@ export default function QuoteDetail() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success("Quote approved — job created");
-      navigate(`/jobs/${job.id}`);
+      navigate(`/jobs/${job.id}`, { replace: true });
     },
     onError: (e) => toast.error(`Failed to approve quote: ${e.message}`),
   });
@@ -146,7 +146,7 @@ export default function QuoteDetail() {
 
   return (
     <div>
-      <PageHeader title="Quote" subtitle={name} back="/inbox" />
+      <PageHeader title="Quote" subtitle={name} back />
 
       <div className="p-4 space-y-3 max-w-lg mx-auto pb-8">
         <Card className="p-4">

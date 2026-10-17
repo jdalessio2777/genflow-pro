@@ -1,10 +1,10 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { AnimatePresence } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { Moon } from 'lucide-react';
 import MobileNav from "./MobileNav";
 import PageTransition from "./PageTransition";
 import { usePreferences } from "../../hooks/usePreferences";
+import { UnsavedChangesProvider } from "../../hooks/useUnsavedChangesGuard";
 
 // Pages with their own fixed bottom action bar — MobileNav (also fixed-bottom,
 // same z-index) would otherwise render on top of it and cover the buttons
@@ -97,11 +97,13 @@ export default function AppLayout() {
         </div>
       )}
       <main className="max-w-lg mx-auto" style={{ paddingTop: 'var(--sat)', paddingBottom: 'calc(6rem + var(--sab))' }}>
-        <AnimatePresence mode="wait" initial={false}>
+        {/* Fade-in only, no exit wait: the next screen mounts at once, so
+            scroll restoration and the first touch see the real page. */}
+        <UnsavedChangesProvider>
           <PageTransition key={location.pathname}>
             <Outlet />
           </PageTransition>
-        </AnimatePresence>
+        </UnsavedChangesProvider>
       </main>
       {!hideNav && <MobileNav />}
     </div>

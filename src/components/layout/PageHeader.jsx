@@ -1,9 +1,14 @@
 import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useBack } from "@/hooks/useBack";
 
+// `back`:
+//   true      → the shared back (pop; or the route's logical parent when
+//               there is nothing to pop) — same as the iOS edge swipe
+//   "/path"   → same, with this path as the parent for a direct open
+//   function  → custom in-screen step back (e.g. a wizard step)
 export default function PageHeader({ title, subtitle, back, backLabel, actions, className }) {
-  const navigate = useNavigate();
+  const goBack = useBack(typeof back === "string" ? back : undefined);
 
   return (
     <header className={cn(
@@ -14,11 +19,10 @@ export default function PageHeader({ title, subtitle, back, backLabel, actions, 
         <div className="flex items-center gap-2.5 min-w-0">
           {back && (
             <button
-              onClick={() => {
-              if (typeof back === "function") back();
-              else if (typeof back === "string") navigate(back);
-              else navigate(-1);
-            }}
+              type="button"
+              aria-label={backLabel || "Back"}
+              data-testid="back-button"
+              onClick={() => (typeof back === "function" ? back() : goBack())}
               className={cn(
                 "touch-target flex items-center justify-center rounded-xl hover:bg-muted active:bg-muted/80 transition-colors shrink-0",
                 backLabel ? "h-9 pl-1.5 pr-3 -ml-1 gap-1" : "w-9 h-9 -ml-1"

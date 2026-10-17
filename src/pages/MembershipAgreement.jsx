@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
@@ -19,11 +20,12 @@ import SignaturePad from "@/components/signature/SignaturePad";
 
 export default function MembershipAgreement() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const urlParams = new URLSearchParams(window.location.search);
   const fromJobId = urlParams.get("from_job");
+  // Back from a job-linked signing returns to that job when opened directly.
+  const goBack = useBack(fromJobId ? `/jobs/${fromJobId}` : undefined);
   const planParam = urlParams.get("plan");
   const [selectedPlan, setSelectedPlan] = useState(PLANS[planParam] ? planParam : "annual");
   // Signed from inside a job: the contract is linked to that job
@@ -189,7 +191,7 @@ export default function MembershipAgreement() {
     return (
       <div>
         <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
-          <button onClick={() => navigate(-1)} className="touch-target flex items-center justify-center w-9 h-9 rounded-xl hover:bg-muted">
+          <button onClick={() => goBack()} aria-label="Back" data-testid="back-button" className="touch-target flex items-center justify-center w-9 h-9 rounded-xl hover:bg-muted">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
@@ -225,7 +227,8 @@ export default function MembershipAgreement() {
     <div>
       <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
         <button
-          onClick={() => { if (step === "terms") setStep("plan"); else if (step === "sign") setStep("terms"); else if (renewing && !fromJobId) setRenewing(false); else navigate(-1); }}
+          onClick={() => { if (step === "terms") setStep("plan"); else if (step === "sign") setStep("terms"); else if (renewing && !fromJobId) setRenewing(false); else goBack(); }}
+          aria-label="Back" data-testid="back-button"
           className="touch-target flex items-center justify-center w-9 h-9 rounded-xl hover:bg-muted"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -404,7 +407,7 @@ export default function MembershipAgreement() {
                   : `A confirmation email has been sent to ${customer.email}`}
               </p>
             )}
-            <Button className="w-full rounded-xl h-12" onClick={() => fromJobId ? navigate(`/jobs/${fromJobId}`) : navigate(`/customers/${id}`)}>
+            <Button className="w-full rounded-xl h-12" onClick={() => goBack()}>
               {fromJobId ? "Back to Job" : "Back to Customer"}
             </Button>
           </div>

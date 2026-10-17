@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, markServiceRequestContacted } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useUrlState } from "@/hooks/useUrlState";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, CheckCircle2, ChevronDown, ChevronUp, UserPlus, PhoneCall, X, FileText } from "lucide-react";
@@ -34,7 +35,8 @@ const SOURCE_COLORS = {
 };
 
 export default function Inbox() {
-  const [activeTab, setActiveTab] = useState("service_due");
+  const [activeTab, setActiveTab] = useUrlState("tab", "service_due");
+  const location = useLocation();
   const [expandedLeads, setExpandedLeads] = useState(new Set());
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -311,7 +313,7 @@ export default function Inbox() {
           : activeTab === "quotes"
           ? `${quotes.length} quote${quotes.length !== 1 ? "s" : ""}`
           : `${leads.length} lead${leads.length !== 1 ? "s" : ""}`}
-        back="/"
+        back={location.pathname === "/call-list" ? true : undefined}
       />
 
       <div className="px-4 pt-3">

@@ -37,7 +37,8 @@ import { useAddJobLabor } from "@/lib/useAddJobLabor";
 import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
 import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
-import { useSwipeBack } from "@/hooks/useSwipeBack";
+import { useBack, goBack } from "@/hooks/useBack";
+import { useUrlState } from "@/hooks/useUrlState";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
@@ -160,7 +161,7 @@ export default function JobDetail() {
   const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
   const [nextDate, setNextDate] = useState("");
   const notesInitialized = useRef(false);
-  const [activeJobTab, setActiveJobTab] = useState("overview");
+  const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
   const [workSubTab, setWorkSubTab] = useState("parts");
   const [flatFolder, setFlatFolder] = useState(null);
   const [workSearch, setWorkSearch] = useState("");
@@ -182,7 +183,8 @@ export default function JobDetail() {
   const [resendingSummary, setResendingSummary] = useState(false);
   const [closeNoChargeOpen, setCloseNoChargeOpen] = useState(false);
   const [closingNoCharge, setClosingNoCharge] = useState(false);
-  useSwipeBack("/jobs");
+  // Back = pop to wherever this job was opened (or Jobs when opened directly).
+  const back = useBack();
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
   const { data: job, isLoading } = useQuery({
@@ -632,14 +634,19 @@ export default function JobDetail() {
   // Waits past the page transition: AnimatePresence briefly renders this
   // route inside the EXITING page too, and that throwaway copy must not
   // consume the state (its timer is cancelled when it unmounts).
+  // The invoice screen pops back here with a session flag (no second copy
+  // of the job in history), or replaces with state.openComplete.
   useEffect(() => {
-    if (!location.state?.openComplete || !job) return;
+    let flagged = false;
+    try { flagged = sessionStorage.getItem("gf-open-complete") === id; } catch { /* ignore */ }
+    if ((!location.state?.openComplete && !flagged) || !job) return;
     const t = setTimeout(() => {
-      navigate(location.pathname, { replace: true, state: {} });
+      try { sessionStorage.removeItem("gf-open-complete"); } catch { /* ignore */ }
+      if (location.state?.openComplete) navigate(location.pathname + location.search, { replace: true, state: {} });
       if (job.status === "on_site" || job.status === "in_progress") openCompleteJob();
     }, 400);
     return () => clearTimeout(t);
-  }, [location.state?.openComplete, job?.id]);
+  }, [location.state?.openComplete, location.key, job?.id]);
 
 
   const patchInvoiceCache = (updated) => {
@@ -748,7 +755,8 @@ export default function JobDetail() {
       if (["maintenance", "battery_replacement"].includes(job.job_type)) {
         maybeOpenScheduleNext();
       } else {
-        navigate("/jobs");
+        // Pop to wherever the job was opened (Dashboard, Schedule, customer…).
+        goBack(navigate, location, "/jobs");
       }
     } catch (e) {
       haptics.error();
@@ -982,7 +990,9 @@ export default function JobDetail() {
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto min-w-0">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
-              onClick={() => navigate("/jobs")}
+              onClick={back}
+              aria-label="Back"
+              data-testid="back-button"
               className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-white" />
@@ -1557,7 +1567,7 @@ export default function JobDetail() {
                     <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); navigate("/jobs"); }}>Skip</Button>
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); goBack(navigate, location, "/jobs"); }}>Skip</Button>
                     <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
                       if (!nextDate) return;
                       try {
@@ -1577,7 +1587,7 @@ export default function JobDetail() {
                       setScheduleNextOpen(false);
                       toast.success("Next service scheduled");
                       queryClient.invalidateQueries({ queryKey: ["jobs"] });
-                      navigate("/jobs");
+                      goBack(navigate, location, "/jobs");
                     })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
                   </div>
                 </DialogContent>
