@@ -598,7 +598,7 @@ export default function DocumentFill() {
       </div>
 
       {/* Sticky footer */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border safe-bottom z-50 no-print">
+      <div data-fixed-bottom="" className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border safe-bottom z-50 no-print">
         {doc.status !== "completed" ? (
           <div className="flex gap-2 max-w-lg mx-auto">
             <Button type="button" variant="ghost" className="flex-1 rounded-xl h-12"

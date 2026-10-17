@@ -5,6 +5,7 @@ import MobileNav from "./MobileNav";
 import PageTransition from "./PageTransition";
 import { usePreferences } from "../../hooks/usePreferences";
 import { UnsavedChangesProvider } from "../../hooks/useUnsavedChangesGuard";
+import { useKeyboardAware } from "../../hooks/useKeyboardAware";
 
 // Pages with their own fixed bottom action bar — MobileNav (also fixed-bottom,
 // same z-index) would otherwise render on top of it and cover the buttons
@@ -17,6 +18,7 @@ export default function AppLayout() {
   const { keepAwake } = usePreferences();
   const wakeLockRef = useRef(null);
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  useKeyboardAware();
 
   // Acquire / release screen wake lock based on preference
   useEffect(() => {
@@ -96,7 +98,10 @@ export default function AppLayout() {
           <Moon size={14} color="#fff" />
         </div>
       )}
-      <main className="max-w-lg mx-auto" style={{ paddingTop: 'var(--sat)', paddingBottom: 'calc(6rem + var(--sab))' }}>
+      {/* Bottom padding = the measured tab bar (incl. home-indicator inset)
+          + the screen's action bar, if any + a little air: nothing hides
+          under them and the page doesn't scroll past its end. */}
+      <main className="max-w-lg mx-auto" style={{ paddingTop: 'var(--sat)', paddingBottom: hideNav ? 'calc(6rem + var(--sab) + var(--kb-h, 0px))' : 'calc(var(--nav-h) + var(--action-h) + 16px + var(--kb-h, 0px))' }}>
         {/* Fade-in only, no exit wait: the next screen mounts at once, so
             scroll restoration and the first touch see the real page. */}
         <UnsavedChangesProvider>

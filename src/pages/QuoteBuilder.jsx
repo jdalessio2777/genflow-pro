@@ -407,7 +407,7 @@ export default function QuoteBuilder() {
       </div>
 
       {/* Sticky send bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl border-t border-border p-4">
+      <div data-fixed-bottom="" className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl border-t border-border p-4">
         <div className="max-w-lg mx-auto">
           {!hasRecipient && recipientName && (
             <p className="text-xs text-destructive mb-2 text-center">No email on file for {recipientName} — add one to send</p>

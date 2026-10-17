@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { motion } from 'framer-motion';
 import { LayoutDashboard, Users, Wrench, CalendarDays, BookOpen, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,18 @@ export default function MobileNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const activeTab = currentEntry()?.tab ?? defaultTabFor(location.pathname);
+  // Publish the bar's real height (incl. the home-indicator inset) as --nav-h
+  // for the page padding and the action bar above it. 0 when hidden.
+  const barRef = useRef(null);
+  useEffect(() => {
+    const el = barRef.current;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty("--nav-h", `${el?.offsetHeight || 0}px`);
+    set();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.setProperty("--nav-h", "0px"); };
+  }, []);
 
   const { data: newLeadsCount = 0 } = useQuery({
     queryKey: ["service-requests-count"],
@@ -73,6 +86,8 @@ export default function MobileNav() {
 
   return (
     <div
+      ref={barRef}
+      data-fixed-bottom=""
       className="fixed bottom-0 left-0 right-0 z-50 flex justify-center"
       style={{ paddingBottom: "max(var(--sab), 12px)", paddingLeft: 16, paddingRight: 16 }}
     >

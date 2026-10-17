@@ -95,6 +95,15 @@
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --status-bar-bg: #0D1014;
+  /* Measured by MobileNav / BottomActionBar (fallbacks until measured). */
+  --nav-h: calc(66px + max(var(--sab), 12px));
+  --action-h: 0px;
+}
+
+/* On-screen keyboard open (useKeyboardAware): the fixed bottom bars would
+   float over the field being typed in, so they step aside. */
+html[data-kb-open] [data-fixed-bottom] {
+  display: none !important;
 }
 
 @layer utilities {

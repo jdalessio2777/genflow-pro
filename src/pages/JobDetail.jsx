@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import BottomActionBar from "@/components/layout/BottomActionBar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -954,6 +955,20 @@ export default function JobDetail() {
     toast.success("Service Agreement added to job · Customer signs at completion");
   };
 
+  // Height of the pinned job header + tab strip, for things pinned below it.
+  const jobHeaderRef = useRef(null);
+  const hasJob = !!job;
+  useEffect(() => {
+    const el = jobHeaderRef.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty("--job-header-h", `${el.offsetHeight}px`);
+    set();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty("--job-header-h"); };
+  }, [hasJob]);
+
   // Tint the status-bar band (AppLayout) to the colored job header.
   const statusBarColor = !job ? null
     : job.status === "on_site" ? "#b45309"
@@ -984,6 +999,8 @@ export default function JobDetail() {
   // Item 1: Collect Payment from On Site onward while the job is open, and
   // after completion. Paid in full = nothing left to collect.
   const jobIsOpenOnSite = job.status === "on_site" || job.status === "in_progress";
+  // Completed job with money still owed: Collect Payment Now is its main action.
+  const showCollectNow = job.status === "completed" && !isNoChargeJob && existingInvoice?.status !== "paid";
   const invoicePaidInFull = existingInvoice?.status === "paid";
   const invoicePartlyPaid = existingInvoice?.status === "partial";
   const balanceDue = existingInvoice ? balanceCentsOf(existingInvoice) / 100 : computeJobFinancials(parts, labor).total;
@@ -1005,8 +1022,11 @@ export default function JobDetail() {
   const tabActiveColor = job.status === "on_site" ? "#b45309" : job.status === "dispatched" ? "#0e7490" : "hsl(var(--primary))";
 
   return (
-    <div className="flex flex-col bg-muted/30" style={{ height: "calc(100vh - var(--sat))" }}>
+    <div className="bg-muted/30">
 
+      {/* Colored header + tab strip stay pinned under the status bar while the
+          page (the document — the only scroller) moves beneath them. */}
+      <div ref={jobHeaderRef} data-sticky-header="" className="sticky top-[var(--sat)] z-30">
       {/* ── COLORED ACTIVE JOB HEADER ── */}
       <div className={`${headerBg} px-4 pt-3 pb-3 shrink-0`}>
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto min-w-0">
@@ -1079,7 +1099,7 @@ export default function JobDetail() {
       ].map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveJobTab(tab.key)}
+              onClick={() => { setActiveJobTab(tab.key); if (window.scrollY > 0) window.scrollTo(0, 0); }}
               className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0"
               style={{
                 borderBottomColor: activeJobTab === tab.key ? tabActiveColor : "transparent",
@@ -1093,8 +1113,10 @@ export default function JobDetail() {
         </div>
       </div>
 
+      </div>
+
       {/* ── TAB CONTENT ── */}
-      <div className="flex-1 overflow-y-auto" style={{ touchAction: "pan-y" }}>
+      <div>
         <div className="max-w-lg mx-auto">
 
           {/* ════ OVERVIEW TAB ════ */}
@@ -1324,36 +1346,15 @@ export default function JobDetail() {
               {/* Status action buttons */}
               {!isClosed && (
                 <div className="space-y-2">
-                  {job.status === "scheduled" && (
-                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-600 hover:bg-cyan-700" disabled={statusGuard.busy}
-                      onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
-                      {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />} Dispatch — Head Out
-                    </Button>
-                  )}
                   {job.status === "dispatched" && (
                     <>
                       <div className="flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-xl px-3 py-2.5">
                         <Navigation className="w-3.5 h-3.5 shrink-0" />
                         <span>En route — tap when you arrive to start the clock</span>
                       </div>
-                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-500 hover:bg-amber-600" disabled={statusGuard.busy}
-                        onClick={() => statusGuard.run(async () => {
-                          const now = new Date().toISOString();
-                          setOptimisticOnSiteTime(now);
-                          // Clock only keeps running if the arrival was saved.
-                          if (!(await handleStatusChange("on_site", { on_site_time: now }))) setOptimisticOnSiteTime(null);
-                        })}>
-                        {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />} Arrived — Start Clock
-                      </Button>
                     </>
                   )}
                   {jobIsOpenOnSite && isNoChargeJob && signatureButton}
-                  {jobIsOpenOnSite && (
-                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
-                      onClick={requestCompleteJob}>
-                      <CheckCircle2 className="w-4 h-4" /> Complete Job
-                    </Button>
-                  )}
                   <AlertDialog open={summaryAskOpen} onOpenChange={setSummaryAskOpen}>
                     <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="summary-ask">
                       <AlertDialogHeader>
@@ -1407,11 +1408,7 @@ export default function JobDetail() {
                             </Button>
                           )}
                         </>
-                      ) : (
-                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={() => handleCollectPayment()} disabled={collectGuard.busy}>
-                          <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
-                        </Button>
-                      )}
+                      ) : null}
                       {customer?.email && job.completion_send_failed && (
                         <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
                           <div className="flex items-center gap-2">
@@ -1656,7 +1653,7 @@ export default function JobDetail() {
               {/* Work search */}
               {/* Parts: filters this job's parts AND searches the whole catalog
                   (name or part #) — JobPartsTab renders tap-to-add matches. */}
-              <div className="sticky top-0 z-10 bg-background px-4 pt-2 pb-1">
+              <div className="sticky z-10 bg-background px-4 pt-2 pb-1" style={{ top: "calc(var(--sat) + var(--job-header-h, 0px))" }}>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <Input
@@ -2193,6 +2190,37 @@ export default function JobDetail() {
         </div>
       </div>
 
+      {/* The job's main action, just above the tab bar on every job tab. */}
+      <BottomActionBar>
+        {!isClosed && job.status === "scheduled" && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-700 hover:bg-cyan-800" disabled={statusGuard.busy}
+            onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
+            {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />} Dispatch — Head Out
+          </Button>
+        )}
+        {!isClosed && job.status === "dispatched" && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-700 hover:bg-amber-800" disabled={statusGuard.busy}
+            onClick={() => statusGuard.run(async () => {
+              const now = new Date().toISOString();
+              setOptimisticOnSiteTime(now);
+              // Clock only keeps running if the arrival was saved.
+              if (!(await handleStatusChange("on_site", { on_site_time: now }))) setOptimisticOnSiteTime(null);
+            })}>
+            {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />} Arrived — Start Clock
+          </Button>
+        )}
+        {!isClosed && jobIsOpenOnSite && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
+            onClick={requestCompleteJob}>
+            <CheckCircle2 className="w-4 h-4" /> Complete Job
+          </Button>
+        )}
+        {showCollectNow && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={() => handleCollectPayment()} disabled={collectGuard.busy}>
+            <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
+          </Button>
+        )}
+      </BottomActionBar>
     </div>
   );
 }
