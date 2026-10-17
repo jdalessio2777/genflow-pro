@@ -173,7 +173,7 @@ export default function QuoteBuilder() {
     },
     onSuccess: (quote) => {
       toast.success(`Quote sent to ${recipientName}`);
-      navigate(`/quotes/${quote.id}`);
+      navigate(`/quotes/${quote.id}`, { replace: true });
     },
     onError: (e) => {
       toast.error(`Failed to send quote: ${e.message}`);
@@ -192,7 +192,7 @@ export default function QuoteBuilder() {
 
   return (
     <div className="pb-28">
-      <PageHeader title="New Quote" subtitle="Build a quote for an existing customer or a new prospect" back="/" />
+      <PageHeader title="New Quote" subtitle="Build a quote for an existing customer or a new prospect" back />
 
       <div className="p-4 space-y-4 max-w-lg mx-auto">
 

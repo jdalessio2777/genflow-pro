@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock, Smartphone, X, Plus } from "lucide-react";
+import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock, Smartphone, X, Plus, Printer } from "lucide-react";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -25,6 +25,9 @@ import { showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety"
 import { useSettings } from "@/lib/useSettings";
 import { surchargeConfig, surchargeFor, surchargeLabel, balanceCentsOf, owedCentsOf, amountPaidCentsOf, supportsPartialPayments } from "@/lib/utils/surcharge";
 import { Switch } from "@/components/ui/switch";
+import { customerFacingInvoice, invoicePrintDocumentHtml } from "@/lib/invoicePrint";
+import { goBack } from "@/hooks/useBack";
+import { getAppRouter, previousEntry } from "@/lib/navigation";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -110,7 +113,8 @@ export default function InvoiceDetail() {
     mutationFn: () => db.Invoice.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      navigate("/invoices", { replace: true });
+      // Back to wherever the invoice was opened (its job, the list…).
+      goBack(navigate, location, "/invoices");
     },
     onError: (e) => { haptics.error(); toast.error("Failed to delete: " + e.message); },
   });
@@ -162,7 +166,15 @@ export default function InvoiceDetail() {
     dismissSaveError("", { id: "record-payment-error" });
     onSuccess?.();
     if (completeAfter && invoice?.job_id && patch.status === "paid") {
-      navigate(`/jobs/${invoice.job_id}`, { replace: true, state: { openComplete: true } });
+      // Pop back to the job (no second copy of it in history) and reopen
+      // Complete there; replace only if the job isn't the previous screen.
+      const prev = previousEntry(getAppRouter()?.state.location ?? location);
+      if (prev?.entry && prev.entry.path.split("?")[0] === `/jobs/${invoice.job_id}`) {
+        try { sessionStorage.setItem("gf-open-complete", invoice.job_id); } catch { /* ignore */ }
+        navigate(-prev.steps);
+      } else {
+        navigate(`/jobs/${invoice.job_id}`, { replace: true, state: { openComplete: true } });
+      }
     }
     return true;
   });
@@ -348,6 +360,20 @@ export default function InvoiceDetail() {
   const paidSoFar = amountPaidCentsOf(invoice) / 100;
   // Signature: the job's (collected any time) — the invoice copy may predate it.
   const signature = invoiceJob?.customer_signature || invoice.customer_signature;
+  // What the customer sees (emails, print): the job's live Service Summary.
+  const customerInvoice = customerFacingInvoice({ invoice, job: invoiceJob });
+  const serviceSummary = String(customerInvoice.notes ?? "").trim() ? customerInvoice.notes : "";
+
+  // Printable invoice / Save as PDF (iOS: Print > share > Save to Files).
+  const printInvoice = () => {
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Couldn't open the print view"); return; }
+    win.document.write(invoicePrintDocumentHtml({ invoice: customerInvoice, customer: invoiceCustomer, surchargeConfig: surchargeCfg }));
+    win.document.close();
+    // The page itself runs no script (CSP); wire Close from here.
+    win.document.getElementById("close-invoice")?.addEventListener("click", () => win.close());
+    setTimeout(() => win.print(), 500);
+  };
 
   return (
     <div>
@@ -359,7 +385,7 @@ export default function InvoiceDetail() {
             <RewardBadge show={invoiceCustomer?.pending_reward} compact />
           </span>
         }
-        back={fromJobId ? `/jobs/${fromJobId}` : "/invoices"}
+        back={invoice.job_id ? `/jobs/${invoice.job_id}` : "/invoices"}
         backLabel={fromJobId ? "Back to Job" : undefined}
         actions={
           <AlertDialog>
@@ -492,6 +518,9 @@ export default function InvoiceDetail() {
             <Send className="w-4 h-4" /> Send to Customer
           </Button>
         )}
+        <Button variant="outline" className="w-full rounded-xl gap-2 h-11" onClick={printInvoice} data-testid="print-invoice">
+          <Printer className="w-4 h-4" /> Print / Save PDF
+        </Button>
 
         {isNoCharge && invoice.status !== "paid" && (
           <Card className="p-4 bg-muted/40">
@@ -634,6 +663,13 @@ export default function InvoiceDetail() {
                 </Button>
               ))}
             </div>
+          </Card>
+        )}
+
+        {serviceSummary && (
+          <Card className="p-4" data-testid="invoice-service-summary">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
+            <p className="text-sm whitespace-pre-wrap break-words">{serviceSummary}</p>
           </Card>
         )}
 

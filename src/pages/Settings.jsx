@@ -558,7 +558,7 @@ export default function Settings() {
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Business configuration" back="/" />
+      <PageHeader title="Settings" subtitle="Business configuration" back />
       <div className="px-4 pt-3 pb-4 max-w-lg mx-auto">
         <Tabs defaultValue="business">
           <TabsList className="w-full grid grid-cols-5 bg-muted/60 rounded-xl p-0.5 mb-4">

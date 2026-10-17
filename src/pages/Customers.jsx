@@ -1,9 +1,9 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { deleteCustomerCascade } from "@/lib/deleteRecords";
 import { isActiveMember } from "@/lib/utils/membership";
 import { Link } from "react-router-dom";
+import { useUrlState } from "@/hooks/useUrlState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -195,7 +195,9 @@ function CallListCard({ customer, category }) {
 }
 
 export default function Customers() {
-  const [search, setSearch] = useState("");
+  // List state lives in the URL so back / the tab bar return to it (F-08).
+  const [search, setSearch] = useUrlState("q", "");
+  const [listTab, setListTab] = useUrlState("tab", "all");
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ["customers"],
@@ -237,7 +239,7 @@ export default function Customers() {
       />
 
       <div className="px-4 pt-3 pb-4 max-w-lg mx-auto">
-        <Tabs defaultValue="all">
+        <Tabs value={listTab} onValueChange={setListTab}>
           <TabsList className="w-full mb-3">
             <TabsTrigger value="all" className="flex-1">All Customers</TabsTrigger>
             <TabsTrigger value="calllist" className="flex-1 relative">

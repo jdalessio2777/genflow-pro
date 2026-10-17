@@ -1,5 +1,4 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { deleteCustomerCascade } from "@/lib/deleteRecords";
@@ -20,7 +19,6 @@ import { toast } from "sonner";
 export default function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  useSwipeBack("/customers");
   const [generatingHistory, setGeneratingHistory] = useState(false);
   const queryClient = useQueryClient();
 
@@ -87,7 +85,7 @@ export default function CustomerDetail() {
           </span>
         }
         subtitle={customer.generator_model || "No generator info"}
-        back="/customers"
+        back
         actions={
           <div className="flex items-center gap-1.5">
             <Button

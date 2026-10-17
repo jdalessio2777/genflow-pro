@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { initSignatureCanvas } from "@/lib/signatureCanvas";
 import SignatureGuideOverlay from "@/components/ui/SignatureGuideOverlay";
+import { useSheetHistory } from "@/lib/sheetHistory";
 
 // The ONE signature pad (full-screen canvas): used by the job's
 // Collect Signature button (JobSignatureButton) and the membership agreement.
@@ -13,6 +14,9 @@ export default function SignaturePad({ onSave, onCancel }) {
   const [dismissed, setDismissed] = useState(false);
   const [slideClass, setSlideClass] = useState("translate-y-full");
   const isPortrait = typeof window !== "undefined" && window.innerWidth < window.innerHeight;
+  // Full-screen pad = a sheet: a back swipe cancels it instead of leaving
+  // the job (F-10). Only when it can be cancelled.
+  useSheetHistory(!!onCancel, () => onCancel?.());
 
   // Slide-up animation on mount
   useEffect(() => {

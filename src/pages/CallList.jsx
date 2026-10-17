@@ -99,7 +99,7 @@ export default function CallList() {
       <PageHeader
         title="Call List"
         subtitle={`${callList.length} customer${callList.length !== 1 ? "s" : ""} to reach out to`}
-        back="/"
+        back
       />
       <div className="px-4 pt-3 pb-4 space-y-5 max-w-lg mx-auto">
         {callList.length === 0 ? (

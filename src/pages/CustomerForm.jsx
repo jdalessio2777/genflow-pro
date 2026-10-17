@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { goBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, markServiceRequestContacted } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
@@ -18,6 +19,7 @@ import { toast } from "sonner";
 export default function CustomerForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const isEdit = !!id;
@@ -114,9 +116,10 @@ export default function CustomerForm() {
             .then(() => queryClient.invalidateQueries({ queryKey: ["service-requests-inbox"] }))
             .catch((err) => console.warn("Failed to mark lead as contacted:", err));
         }
-        navigate(`/customers/${result.id}`);
+        // Replace: the finished form never reappears on back (F-06).
+        navigate(`/customers/${result.id}`, { replace: true });
       } else {
-        navigate(`/customers/${id}`);
+        goBack(navigate, location, `/customers/${id}`);
       }
     },
   });
@@ -134,7 +137,7 @@ export default function CustomerForm() {
 
   return (
     <div>
-      <PageHeader title={isEdit ? "Edit Customer" : "New Customer"} back="/customers" />
+      <PageHeader title={isEdit ? "Edit Customer" : "New Customer"} back />
 
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
         <Card className="p-4 space-y-4">

@@ -114,7 +114,7 @@ function useDirtyKeys() {
 
 function UnsavedChangesDialog({ guard, count }) {
   return (
-    <AlertDialog open={guard.blocked} onOpenChange={(o) => { if (!o) guard.stay(); }}>
+    <AlertDialog history={false} open={guard.blocked} onOpenChange={(o) => { if (!o) guard.stay(); }}>
       <AlertDialogContent className="max-w-sm rounded-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>You have unsaved changes</AlertDialogTitle>
@@ -691,7 +691,7 @@ export default function Catalog() {
       <PageHeader
         title={getTitle()}
         subtitle={getSubtitle()}
-        back={section ? () => navigate(-1) : undefined}
+        back={section ? true : undefined}
       />
       <div className="px-4 pt-3 pb-24 space-y-3 max-w-lg mx-auto">
 

@@ -1,10 +1,10 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { AnimatePresence } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { Moon } from 'lucide-react';
 import MobileNav from "./MobileNav";
 import PageTransition from "./PageTransition";
 import { usePreferences } from "../../hooks/usePreferences";
+import { UnsavedChangesProvider } from "../../hooks/useUnsavedChangesGuard";
 
 // Pages with their own fixed bottom action bar — MobileNav (also fixed-bottom,
 // same z-index) would otherwise render on top of it and cover the buttons
@@ -67,11 +67,19 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen" style={{ background: "hsl(var(--background))" }}>
+      {/* Opaque band behind the status bar: nothing scrolls under the clock.
+          Dark so the (white) black-translucent status bar text stays readable;
+          JobDetail tints it to match its colored header. */}
+      <div
+        aria-hidden="true"
+        data-testid="status-bar-scrim"
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 'var(--sat)', background: 'var(--status-bar-bg)', zIndex: 45, pointerEvents: 'none' }}
+      />
       {wakeLockActive && (
         <div
           style={{
             position: 'fixed',
-            top: 8,
+            top: 'calc(var(--sat) + 8px)',
             right: 8,
             zIndex: 60,
             background: 'rgba(0,0,0,0.45)',
@@ -88,12 +96,14 @@ export default function AppLayout() {
           <Moon size={14} color="#fff" />
         </div>
       )}
-      <main className="pb-28 max-w-lg mx-auto">
-        <AnimatePresence mode="wait" initial={false}>
+      <main className="max-w-lg mx-auto" style={{ paddingTop: 'var(--sat)', paddingBottom: 'calc(6rem + var(--sab))' }}>
+        {/* Fade-in only, no exit wait: the next screen mounts at once, so
+            scroll restoration and the first touch see the real page. */}
+        <UnsavedChangesProvider>
           <PageTransition key={location.pathname}>
             <Outlet />
           </PageTransition>
-        </AnimatePresence>
+        </UnsavedChangesProvider>
       </main>
       {!hideNav && <MobileNav />}
     </div>

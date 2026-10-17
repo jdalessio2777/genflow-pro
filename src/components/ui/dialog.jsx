@@ -5,8 +5,25 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useSheetHistory } from "@/lib/sheetHistory"
 
-const Dialog = DialogPrimitive.Root
+// Root with a history entry while open (src/lib/sheetHistory.js): a back
+// swipe closes the dialog instead of leaving the screen (F-10).
+// history={false} opts out (e.g. the unsaved-changes prompt, which is
+// itself shown for a held navigation).
+function Dialog({ open: openProp, defaultOpen, onOpenChange, history = true, ...props }) {
+  const [innerOpen, setInnerOpen] = React.useState(defaultOpen ?? false)
+  const controlled = openProp !== undefined
+  const isOpen = controlled ? !!openProp : innerOpen
+  const onChangeRef = React.useRef(onOpenChange)
+  onChangeRef.current = onOpenChange
+  const handleOpenChange = React.useCallback((next) => {
+    if (!controlled) setInnerOpen(next)
+    onChangeRef.current?.(next)
+  }, [controlled])
+  useSheetHistory(isOpen, () => handleOpenChange(false), history)
+  return <DialogPrimitive.Root open={isOpen} onOpenChange={handleOpenChange} {...props} />
+}
 
 const DialogTrigger = DialogPrimitive.Trigger
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
@@ -74,7 +75,6 @@ const getUnit = (fieldId) => {
 
 export default function DocumentFill() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -84,6 +84,10 @@ export default function DocumentFill() {
     queryKey: ["job-doc", id],
     queryFn: async () => { const r = await db.JobDocument.filter({ id }); return r[0]; },
   });
+
+  // Save / Complete / Back pop to the screen the checklist was opened from
+  // (its job), or replace with the job when opened directly.
+  const goBack = useBack(doc?.job_id ? `/jobs/${doc.job_id}` : undefined);
 
   const { data: job } = useQuery({
     queryKey: ["doc-job", doc?.job_id],
@@ -213,6 +217,17 @@ export default function DocumentFill() {
     });
   };
 
+  // "Check all" / "Uncheck all" (Annual Maintenance, while filling it out):
+  // one tap sets every checkbox item, saved like any other change.
+  const setAllChecks = (fieldIds, checked) => {
+    setValues(prev => {
+      const next = { ...prev };
+      for (const fid of fieldIds) next[fid] = checked;
+      debouncedSave(next);
+      return next;
+    });
+  };
+
   // Reverse sync: write generator fields back to the customer record if currently empty
   const syncToCustomer = (savedValues) => {
     if (!customer) return;
@@ -243,8 +258,7 @@ export default function DocumentFill() {
     saveMutation.mutate({ field_values: values });
     syncToCustomer(values);
     toast.success("Checklist saved");
-    if (doc?.job_id) navigate(`/jobs/${doc.job_id}`);
-    else navigate(-1);
+    goBack();
   };
 
   const handleComplete = () => {
@@ -258,8 +272,7 @@ export default function DocumentFill() {
     saveMutation.mutate({ field_values: values, status: "completed", completed_date: new Date().toISOString() });
     syncToCustomer(values);
     toast.success("Document completed");
-    if (doc?.job_id) navigate(`/jobs/${doc.job_id}`);
-    else navigate(-1);
+    goBack();
   };
 
   // ── Early returns ──────────────────────────────────────────────────────────
@@ -500,6 +513,11 @@ export default function DocumentFill() {
   const checkboxFields = fields.filter(f => f.type === "checkbox");
   const checkedCount = checkboxFields.filter(f => values[f.id]).length;
   const pct = checkboxFields.length > 0 ? (checkedCount / checkboxFields.length) * 100 : 0;
+  const allChecked = checkboxFields.length > 0 && checkedCount === checkboxFields.length;
+  // Only on the Annual Maintenance checklist, and only while it is being
+  // filled out (never on the completed copy, its print, PDF or email).
+  const showCheckAll = doc.status !== "completed" && checkboxFields.length > 0
+    && /annual maintenance/i.test(doc.template_name || "");
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -516,7 +534,7 @@ export default function DocumentFill() {
       <div className="no-print">
         <PageHeader
           title={doc.template_name}
-          back={doc.job_id ? `/jobs/${doc.job_id}` : -1}
+          back={doc.job_id ? `/jobs/${doc.job_id}` : true}
           actions={<StatusBadge status={doc.status} />}
         />
       </div>
@@ -550,7 +568,16 @@ export default function DocumentFill() {
         <div className="px-4 pt-3 pb-1 no-print">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground">Progress</span>
-            <span className="text-xs font-semibold text-primary">{checkedCount}/{checkboxFields.length}</span>
+            <span className="flex items-center gap-3">
+              {showCheckAll && (
+                <button type="button" data-testid="check-all"
+                  className="text-xs font-semibold text-primary min-h-[44px] px-2 -my-3 active:opacity-60"
+                  onClick={() => setAllChecks(checkboxFields.map(f => f.id), !allChecked)}>
+                  {allChecked ? "Uncheck all" : "Check all"}
+                </button>
+              )}
+              <span className="text-xs font-semibold text-primary">{checkedCount}/{checkboxFields.length}</span>
+            </span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
@@ -586,7 +613,7 @@ export default function DocumentFill() {
         ) : (
           <div className="flex gap-2 max-w-lg mx-auto">
             <Button type="button" variant="outline" className="flex-1 rounded-xl h-12"
-              onClick={() => doc.job_id ? navigate(`/jobs/${doc.job_id}`) : navigate(-1)}>
+              onClick={goBack}>
               Back to Job
             </Button>
             <Button type="button" variant="outline" className="rounded-xl h-12 px-4"

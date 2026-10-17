@@ -37,7 +37,8 @@ import { useAddJobLabor } from "@/lib/useAddJobLabor";
 import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
 import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
-import { useSwipeBack } from "@/hooks/useSwipeBack";
+import { useBack, goBack } from "@/hooks/useBack";
+import { useUrlState } from "@/hooks/useUrlState";
 import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
@@ -137,7 +138,7 @@ function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, is
 
 // Which autosaved notes box failed (for the persistent error message).
 const notesErrorLabel = (data) =>
-  data && "generator_notes" in data ? "Generator notes NOT saved" : "Invoice summary NOT saved";
+  data && "generator_notes" in data ? "Generator notes NOT saved" : "Service Summary NOT saved";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -160,7 +161,7 @@ export default function JobDetail() {
   const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
   const [nextDate, setNextDate] = useState("");
   const notesInitialized = useRef(false);
-  const [activeJobTab, setActiveJobTab] = useState("overview");
+  const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
   const [workSubTab, setWorkSubTab] = useState("parts");
   const [flatFolder, setFlatFolder] = useState(null);
   const [workSearch, setWorkSearch] = useState("");
@@ -182,7 +183,8 @@ export default function JobDetail() {
   const [resendingSummary, setResendingSummary] = useState(false);
   const [closeNoChargeOpen, setCloseNoChargeOpen] = useState(false);
   const [closingNoCharge, setClosingNoCharge] = useState(false);
-  useSwipeBack("/jobs");
+  // Back = pop to wherever this job was opened (or Jobs when opened directly).
+  const back = useBack();
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
   const { data: job, isLoading } = useQuery({
@@ -632,14 +634,19 @@ export default function JobDetail() {
   // Waits past the page transition: AnimatePresence briefly renders this
   // route inside the EXITING page too, and that throwaway copy must not
   // consume the state (its timer is cancelled when it unmounts).
+  // The invoice screen pops back here with a session flag (no second copy
+  // of the job in history), or replaces with state.openComplete.
   useEffect(() => {
-    if (!location.state?.openComplete || !job) return;
+    let flagged = false;
+    try { flagged = sessionStorage.getItem("gf-open-complete") === id; } catch { /* ignore */ }
+    if ((!location.state?.openComplete && !flagged) || !job) return;
     const t = setTimeout(() => {
-      navigate(location.pathname, { replace: true, state: {} });
+      try { sessionStorage.removeItem("gf-open-complete"); } catch { /* ignore */ }
+      if (location.state?.openComplete) navigate(location.pathname + location.search, { replace: true, state: {} });
       if (job.status === "on_site" || job.status === "in_progress") openCompleteJob();
     }, 400);
     return () => clearTimeout(t);
-  }, [location.state?.openComplete, job?.id]);
+  }, [location.state?.openComplete, location.key, job?.id]);
 
 
   const patchInvoiceCache = (updated) => {
@@ -656,7 +663,7 @@ export default function JobDetail() {
   // job completed, then send the ONE completion email (server-built: invoice
   // inline + checklist/agreement PDFs). No other customer email is sent here.
   // The server builds the summary email from jobs.invoice_notes, but the
-  // Invoice Summary textarea autosaves with a 1.2s debounce. Write any
+  // Service Summary textarea autosaves with a 1.2s debounce. Write any
   // pending text synchronously before an email is requested so the last
   // keystrokes are never missing.
   const flushInvoiceNotes = async () => {
@@ -677,10 +684,10 @@ export default function JobDetail() {
         throw new Error("No connection");
       }
       try {
-        await withTimeout(flushInvoiceNotes(), 20000, "Saving the invoice summary");
+        await withTimeout(flushInvoiceNotes(), 20000, "Saving the Service Summary");
       } catch (e) {
         haptics.error();
-        showSaveError("Job NOT completed — invoice summary not saved", e, doCompleteJob, { id: "job-complete-error" });
+        showSaveError("Job NOT completed — Service Summary not saved", e, doCompleteJob, { id: "job-complete-error" });
         return;
       }
       const [freshParts, freshLabor] = await withTimeout(Promise.all([
@@ -748,7 +755,8 @@ export default function JobDetail() {
       if (["maintenance", "battery_replacement"].includes(job.job_type)) {
         maybeOpenScheduleNext();
       } else {
-        navigate("/jobs");
+        // Pop to wherever the job was opened (Dashboard, Schedule, customer…).
+        goBack(navigate, location, "/jobs");
       }
     } catch (e) {
       haptics.error();
@@ -924,6 +932,19 @@ export default function JobDetail() {
     toast.success("Service Agreement added to job · Customer signs at completion");
   };
 
+  // Tint the status-bar band (AppLayout) to the colored job header.
+  const statusBarColor = !job ? null
+    : job.status === "on_site" ? "#b45309"
+    : job.status === "dispatched" ? "#0e7490"
+    : ["invoiced", "canceled"].includes(job.status) ? "#4b5563"
+    : "hsl(var(--primary))";
+  useEffect(() => {
+    if (!statusBarColor) return undefined;
+    const root = document.documentElement;
+    root.style.setProperty("--status-bar-bg", statusBarColor);
+    return () => root.style.removeProperty("--status-bar-bg");
+  }, [statusBarColor]);
+
   if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
@@ -954,19 +975,24 @@ export default function JobDetail() {
   const showCloseNoCharge = partsLoaded && laborLoaded &&
     canCloseAsNoCharge({ jobStatus: job.status, invoice: existingInvoice, financials: computeJobFinancials(parts, labor) });
   const isActive = ["dispatched", "on_site"].includes(job.status);
-  const headerBg = job.status === "on_site" ? "bg-amber-500" : job.status === "dispatched" ? "bg-cyan-600" : isClosed ? "bg-gray-600" : "bg-primary";
-  const headerDot = job.status === "on_site" ? "bg-amber-300" : "bg-cyan-300";
-  const tabActiveColor = job.status === "on_site" ? "#d97706" : job.status === "dispatched" ? "#0891b2" : "hsl(var(--primary))";
+  // Header colors readable in sunlight (F-17): white text on amber-700 /
+  // cyan-700 is ≥ 4.5:1 (amber-500 was 2.15:1). The status bar band above
+  // the header takes the same color (statusBarColor).
+  const headerBg = job.status === "on_site" ? "bg-amber-700" : job.status === "dispatched" ? "bg-cyan-700" : isClosed ? "bg-gray-600" : "bg-primary";
+  const headerDot = job.status === "on_site" ? "bg-amber-200" : "bg-cyan-200";
+  const tabActiveColor = job.status === "on_site" ? "#b45309" : job.status === "dispatched" ? "#0e7490" : "hsl(var(--primary))";
 
   return (
-    <div className="flex flex-col h-screen bg-muted/30">
+    <div className="flex flex-col bg-muted/30" style={{ height: "calc(100vh - var(--sat))" }}>
 
       {/* ── COLORED ACTIVE JOB HEADER ── */}
       <div className={`${headerBg} px-4 pt-3 pb-3 shrink-0`}>
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto min-w-0">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
-              onClick={() => navigate("/jobs")}
+              onClick={back}
+              aria-label="Back"
+              data-testid="back-button"
               className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-white" />
@@ -974,7 +1000,7 @@ export default function JobDetail() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 {isActive && <div className={`w-1.5 h-1.5 rounded-full ${headerDot} animate-pulse shrink-0`} />}
-                <span className="text-white/80 text-xs font-bold uppercase tracking-wider">
+                <span className="text-white text-xs font-bold uppercase tracking-wider">
                   {job.status === "on_site" ? "On Site" :
                    job.status === "dispatched" ? "Dispatched" :
                    job.status === "completed" ? "Completed" :
@@ -994,7 +1020,7 @@ export default function JobDetail() {
                 {job.title}
               </p>
               <div className="flex items-center gap-1.5 min-w-0">
-                <p className="text-white/75 text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+                <p className="text-white text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
                 <RewardBadge show={customer?.pending_reward} />
               </div>
             </div>
@@ -1003,7 +1029,7 @@ export default function JobDetail() {
             {job.status === "on_site" && (
               <div className="text-right">
                 <p className="font-mono text-white text-lg font-bold tracking-wider">{formatElapsed(elapsedSeconds)}</p>
-                <p className="text-white/70 text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
+                <p className="text-white text-[10px]">{(elapsedSeconds / 3600).toFixed(2)}h on site</p>
               </div>
             )}
             {canEditOrCancel && (
@@ -1035,7 +1061,7 @@ export default function JobDetail() {
               className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0"
               style={{
                 borderBottomColor: activeJobTab === tab.key ? tabActiveColor : "transparent",
-                color: activeJobTab === tab.key ? tabActiveColor : "#9ca3af",
+                color: activeJobTab === tab.key ? tabActiveColor : "#6b7280",
               }}
             >
               <span>{tab.icon}</span>
@@ -1194,15 +1220,15 @@ export default function JobDetail() {
                 </Card>
               )}
 
-              {/* ── Invoice Summary ── */}
+              {/* ── Service Summary (customer-facing; jobs.invoice_notes) ── */}
               <Card className="px-4 pt-3.5 pb-3.5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Invoice Summary</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
                 <Textarea
                   value={invoiceNotes}
                   onChange={e => handleNotesChange(e.target.value)}
                   className="text-sm rounded-xl resize-none border-border bg-muted/20 min-h-[64px]"
                   rows={3}
-                  placeholder="Describe work performed for customer invoice..."
+                  placeholder="Work performed — shown to the customer on the invoice..."
                 />
               </Card>
 
@@ -1541,7 +1567,7 @@ export default function JobDetail() {
                     <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); navigate("/jobs"); }}>Skip</Button>
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); goBack(navigate, location, "/jobs"); }}>Skip</Button>
                     <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
                       if (!nextDate) return;
                       try {
@@ -1561,7 +1587,7 @@ export default function JobDetail() {
                       setScheduleNextOpen(false);
                       toast.success("Next service scheduled");
                       queryClient.invalidateQueries({ queryKey: ["jobs"] });
-                      navigate("/jobs");
+                      goBack(navigate, location, "/jobs");
                     })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
                   </div>
                 </DialogContent>

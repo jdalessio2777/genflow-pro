@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { goBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ const CATEGORIES = ["maintenance", "installation", "diagnostic", "inspection", "
 export default function DocumentTemplateForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const isEdit = !!id;
 
@@ -62,7 +64,7 @@ export default function DocumentTemplateForm() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success(isEdit ? "Template updated" : "Template created");
-      navigate("/catalog");
+      goBack(navigate, location);
     },
     onError: (err) => toast.error("Failed to save template: " + err.message),
   });
@@ -101,7 +103,7 @@ export default function DocumentTemplateForm() {
 
   return (
     <div>
-      <PageHeader title={isEdit ? "Edit Template" : "New Template"} back="/documents" />
+      <PageHeader title={isEdit ? "Edit Template" : "New Template"} back />
 
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
         <Card className="p-4 space-y-3">

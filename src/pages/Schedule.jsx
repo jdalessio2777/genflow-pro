@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useUrlState } from "@/hooks/useUrlState";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useAuth } from "@/lib/AuthContext";
@@ -27,11 +28,23 @@ const STATUS_COLORS = {
   invoiced: "bg-emerald-500",
 };
 
+const toYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const parseYmd = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+
 export default function Schedule() {
-  const [view, setView] = useState("month");
-  const [current, setCurrent] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [techFilter, setTechFilter] = useState("all");
+  // Calendar state lives in the URL so back / the tab bar return to the same
+  // view, week/month and selected day (F-08).
+  const [view, setView] = useUrlState("view", "month");
+  const [dateParam, setDateParam] = useUrlState("date", "");
+  const [dayParam, setDayParam] = useUrlState("day", "");
+  const [techFilter, setTechFilter] = useUrlState("tech", "all");
+  const current = useMemo(() => parseYmd(dateParam) ?? new Date(), [dateParam]);
+  const setCurrent = (d) => setDateParam(toYmd(d));
+  const selectedDate = useMemo(() => parseYmd(dayParam), [dayParam]);
+  const setSelectedDate = (d) => setDayParam(d ? toYmd(d) : "");
   const [pendingConflicts, setPendingConflicts] = useState([]);
   const { user, googleToken } = useAuth();
   const queryClient = useQueryClient();

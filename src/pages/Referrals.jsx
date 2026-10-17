@@ -379,6 +379,7 @@ export default function Referrals() {
   return (
     <div>
       <PageHeader
+        back
         title="Referrals"
         subtitle={`${stats.total} total`}
         actions={

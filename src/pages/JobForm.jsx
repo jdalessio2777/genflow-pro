@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { goBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { integrationsCore } from "@/lib/coreIntegrations";
@@ -36,6 +37,7 @@ const JOB_TYPES = [
 export default function JobForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const isEdit = !!id;
   const urlParams = new URLSearchParams(window.location.search);
@@ -219,7 +221,10 @@ export default function JobForm() {
       queryClient.invalidateQueries({ queryKey: ["job", savedJob.id] });
       if (!isEdit) haptics.light();
       toast.success(isEdit ? "Job updated" : "Job created");
-      navigate(isEdit ? `/jobs/${id}` : `/jobs/${savedJob.id}`);
+      // Create: replace the form with the new job; edit: pop back to the job.
+      // The finished form never reappears on back (F-06).
+      if (isEdit) goBack(navigate, location, `/jobs/${id}`);
+      else navigate(`/jobs/${savedJob.id}`, { replace: true });
     },
     onError: (error, variables) => {
       haptics.error();
@@ -267,7 +272,7 @@ export default function JobForm() {
 
   return (
     <div>
-      <PageHeader title={isEdit ? "Edit Job" : "New Job"} back={isEdit ? `/jobs/${id}` : "/jobs"} />
+      <PageHeader title={isEdit ? "Edit Job" : "New Job"} back />
 
       <form onSubmit={isEdit ? handleSave : (e) => e.preventDefault()} className="p-4 space-y-4">
         <Card className="p-4 space-y-4">

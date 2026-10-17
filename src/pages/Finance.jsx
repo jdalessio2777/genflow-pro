@@ -502,7 +502,8 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
     ...(customers || [])
       .filter(c => c.address)
       .map(c => ({ label: `📍 ${c.name}`, value: c.address, customerName: c.name })),
-  ];
+  // An empty value (no home address set) crashes the Select (Radix forbids "").
+  ].filter(o => o.value);
 
   const getAddressShortName = (address) => {
     if (address === effectiveHomeAddress) return "Home";
@@ -962,7 +963,7 @@ export default function Finance() {
 
   return (
     <div>
-      <PageHeader title="Finance" subtitle="Revenue, expenses & tax summary" back="/" />
+      <PageHeader title="Finance" subtitle="Revenue, expenses & tax summary" back />
       <div className="px-4 pt-3 pb-4 max-w-lg mx-auto">
         <Tabs defaultValue="overview">
           <div className="overflow-x-auto mb-4 -mx-1 px-1">

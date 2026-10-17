@@ -2,9 +2,26 @@ import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { cn } from "@/lib/utils"
+import { useSheetHistory } from "@/lib/sheetHistory"
 import { buttonVariants } from "@/components/ui/button"
 
-const AlertDialog = AlertDialogPrimitive.Root
+// Root with a history entry while open (src/lib/sheetHistory.js): a back
+// swipe closes the alert instead of leaving the screen (F-10).
+// history={false} opts out (e.g. the unsaved-changes prompt, which is
+// itself shown for a held navigation).
+function AlertDialog({ open: openProp, defaultOpen, onOpenChange, history = true, ...props }) {
+  const [innerOpen, setInnerOpen] = React.useState(defaultOpen ?? false)
+  const controlled = openProp !== undefined
+  const isOpen = controlled ? !!openProp : innerOpen
+  const onChangeRef = React.useRef(onOpenChange)
+  onChangeRef.current = onOpenChange
+  const handleOpenChange = React.useCallback((next) => {
+    if (!controlled) setInnerOpen(next)
+    onChangeRef.current?.(next)
+  }, [controlled])
+  useSheetHistory(isOpen, () => handleOpenChange(false), history)
+  return <AlertDialogPrimitive.Root open={isOpen} onOpenChange={handleOpenChange} {...props} />
+}
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger
 
