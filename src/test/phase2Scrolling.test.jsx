@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
-import { render, fireEvent } from '@testing-library/react'
+import { render, fireEvent, screen } from '@testing-library/react'
 import { Textarea } from '@/components/ui/textarea'
 import { keepFieldVisible, isTextField } from '@/hooks/useKeyboardAware'
+import BottomActionBar from '@/components/layout/BottomActionBar'
 
 const rect = (top, height) => ({ top, bottom: top + height, height, left: 0, right: 100, width: 100, x: 0, y: top })
 
@@ -46,3 +47,15 @@ describe('keepFieldVisible (keyboard never covers the field)', () => {
     expect(keepFieldVisible(cb, { vv, topReserve: 0 })).toBe(0)
   })
 })
+
+describe('BottomActionBar', () => {
+  it('renders nothing and reserves no space when no action applies', () => {
+    const { container } = render(<BottomActionBar>{false}{null}</BottomActionBar>);
+    expect(container.firstChild).toBeNull();
+    expect(document.documentElement.style.getPropertyValue('--action-h')).toBe('');
+  });
+  it('renders the bar when an action applies', () => {
+    render(<BottomActionBar>{false}<button>Dispatch</button></BottomActionBar>);
+    expect(screen.getByTestId('bottom-action-bar')).toBeTruthy();
+  });
+});

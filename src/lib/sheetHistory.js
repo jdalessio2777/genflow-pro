@@ -96,6 +96,23 @@ export function useSheetHistory(isOpen, close, enabled = true) {
   }, [isOpen, enabled]);
 }
 
+/**
+ * afterSheetsClose(fn): runs fn once every sheet is closed and its history
+ * entry is gone. URL state changed before that (e.g. switching the job tab
+ * from a dialog button) would be written onto the sheet's entry and then
+ * popped away with it.
+ */
+export function afterSheetsClose(fn, timeoutMs = 1500) {
+  const until = Date.now() + timeoutMs;
+  const tick = () => {
+    const router = getAppRouter();
+    const busy = open.size > 0 || isNavigating() || (router && currentToken(router));
+    if (busy && Date.now() < until) setTimeout(tick, 50);
+    else fn();
+  };
+  setTimeout(tick, 0);
+}
+
 // For tests only.
 export function __sheetDebug() {
   return { open: [...open.entries()].map(([t, e]) => ({ t, pushed: e.pushed })) };

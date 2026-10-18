@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import BottomActionBar from "@/components/layout/BottomActionBar";
+import { afterSheetsClose } from "@/lib/sheetHistory";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -641,11 +642,15 @@ export default function JobDetail() {
   };
   const addServiceSummaryFirst = () => {
     setSummaryAskOpen(false);
-    setActiveJobTab("overview");
-    setTimeout(() => {
-      serviceSummaryRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-      serviceSummaryRef.current?.focus();
-    }, 350);
+    // Switch tabs only after the prompt's history entry is popped, or the
+    // pop would undo the switch (Complete Job is reachable from every tab).
+    afterSheetsClose(() => {
+      setActiveJobTab("overview");
+      setTimeout(() => {
+        serviceSummaryRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+        serviceSummaryRef.current?.focus();
+      }, 350);
+    });
   };
   const skipServiceSummary = () => {
     summarySkipped.current = true;
@@ -1355,18 +1360,6 @@ export default function JobDetail() {
                     </>
                   )}
                   {jobIsOpenOnSite && isNoChargeJob && signatureButton}
-                  <AlertDialog open={summaryAskOpen} onOpenChange={setSummaryAskOpen}>
-                    <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="summary-ask">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Add a Service Summary?</AlertDialogTitle>
-                        <AlertDialogDescription>It appears on the customer's email.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="h-11 rounded-xl" onClick={skipServiceSummary}>Skip</AlertDialogCancel>
-                        <AlertDialogAction className="h-11 rounded-xl" onClick={addServiceSummaryFirst}>Add</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
                   {job.status === "completed" && (
                     <div className="space-y-2">
                       {/* Legacy: agreement left unsigned on an already-completed job.
@@ -1498,132 +1491,7 @@ export default function JobDetail() {
                 </DialogContent>
               </Dialog>
 
-              {/* Complete Job modal */}
-              <Dialog open={completeJobOpen} onOpenChange={setCompleteJobOpen}>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader><DialogTitle>Complete Job</DialogTitle></DialogHeader>
 
-                  {isNoChargeJob ? (
-                    <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
-                      <p className="text-xs font-semibold">No charge — {formatCurrency(0)}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect. The invoice will be closed as no charge.</p>
-                    </div>
-                  ) : !invoicePaidInFull && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5" data-testid="complete-unpaid-box">
-                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-                        {invoicePartlyPaid ? `⚠ Partly paid — ${formatCurrency(balanceDue)} still due` : `⚠ Unpaid — ${formatCurrency(balanceDue)} due`}
-                      </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">Collect now, or complete it as unpaid and collect later.</p>
-                    </div>
-                  )}
-                  {invoicePaidInFull && !isNoChargeJob && (
-                    <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20 px-3 py-2.5">
-                      <p className="text-xs font-semibold text-green-800 dark:text-green-200">✓ Paid in full</p>
-                    </div>
-                  )}
-
-                  {customer?.email ? (
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => setEmailOnComplete(v => !v)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${emailOnComplete ? "border-primary bg-primary/5" : "border-border bg-card"}`}
-                      >
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${emailOnComplete ? "border-primary bg-primary" : "border-muted-foreground"}`}>
-                          {emailOnComplete && <CheckCircle2 className="w-3 h-3 text-white" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold">Email job summary</p>
-                          <p className="text-xs text-muted-foreground truncate">{customer.email}</p>
-                        </div>
-                      </button>
-                      {emailOnComplete && (
-                        <ul className="text-xs text-muted-foreground space-y-1 px-1">
-                          {existingInvoice && (
-                            <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} in the email — {isNoChargeJob ? "no charge" : invoicePaidInFull ? "PAID" : invoicePartlyPaid ? `${formatCurrency(balanceDue)} balance due` : `UNPAID, ${formatCurrency(balanceDue)} due`}</li>
-                          )}
-                          {completedDocuments.map(doc => (
-                            <AttachmentToggle
-                              key={doc.id}
-                              label={doc.template_name || "Service checklist"}
-                              on={!excludedDocIds.includes(doc.id)}
-                              onToggle={() => setExcludedDocIds(ids => ids.includes(doc.id) ? ids.filter(x => x !== doc.id) : [...ids, doc.id])}
-                            />
-                          ))}
-                          {jobAgreement && (
-                            <AttachmentToggle label="Signed Maintenance Agreement" on={includeAgreementPdf} onToggle={() => setIncludeAgreementPdf(v => !v)} />
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
-                  )}
-
-                  {!isNoChargeJob && !invoicePaidInFull ? (
-                    // Unpaid / partly paid: collect now, or complete as unpaid.
-                    <div className="space-y-2 mt-2">
-                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" disabled={completingJob || collectGuard.busy}
-                        onClick={() => { setCompleteJobOpen(false); handleCollectPayment({ completeAfter: true }); }}>
-                        <DollarSign className="w-4 h-4" /> Collect now
-                      </Button>
-                      <Button variant="outline" className="w-full rounded-xl gap-1.5 h-11" disabled={completingJob} onClick={doCompleteJob}>
-                        {completingJob
-                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
-                          : <><CheckCircle2 className="w-4 h-4" /> Complete as unpaid</>}
-                      </Button>
-                      <Button variant="ghost" className="w-full rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2 mt-2">
-                      <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
-                      <Button
-                        className="flex-1 rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
-                        disabled={completingJob}
-                        onClick={doCompleteJob}
-                      >
-                        {completingJob
-                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
-                          : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
-                      </Button>
-                    </div>
-                  )}
-                </DialogContent>
-              </Dialog>
-
-              <Dialog open={scheduleNextOpen} onOpenChange={setScheduleNextOpen}>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader><DialogTitle>Schedule Next Service?</DialogTitle></DialogHeader>
-                  <p className="text-sm text-muted-foreground">Would you like to pre-schedule {job.customer_name}'s next maintenance visit?</p>
-                  <div>
-                    <Label className="text-xs">Next Service Date</Label>
-                    <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); goBack(navigate, location, "/jobs"); }}>Skip</Button>
-                    <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
-                      if (!nextDate) return;
-                      try {
-                        // Fixed id: a double tap or a Retry can't create a second job (A-05).
-                        await createOnce(db.Job, scheduleNextId.current, {
-                          customer_id: job.customer_id, customer_name: job.customer_name,
-                          title: job.title, job_type: "maintenance", status: "scheduled",
-                          scheduled_date: new Date(nextDate).toISOString(),
-                          notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
-                        });
-                      } catch (e) {
-                        haptics.error();
-                        showSaveError("Next service NOT scheduled", e, () => scheduleNextGuard.run(scheduleIt), { id: "schedule-next-error" });
-                        return;
-                      }
-                      dismissSaveError("", { id: "schedule-next-error" });
-                      setScheduleNextOpen(false);
-                      toast.success("Next service scheduled");
-                      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-                      goBack(navigate, location, "/jobs");
-                    })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
 
             </div>
           )}
@@ -2189,6 +2057,149 @@ export default function JobDetail() {
 
         </div>
       </div>
+
+      {/* Complete Job is in the bottom bar on every tab, so its prompts live
+          outside the Overview tab too (as does Schedule Next, which follows). */}
+      <AlertDialog open={summaryAskOpen} onOpenChange={setSummaryAskOpen}>
+        <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="summary-ask">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add a Service Summary?</AlertDialogTitle>
+            <AlertDialogDescription>It appears on the customer's email.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-11 rounded-xl" onClick={skipServiceSummary}>Skip</AlertDialogCancel>
+            <AlertDialogAction className="h-11 rounded-xl" onClick={addServiceSummaryFirst}>Add</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Complete Job modal */}
+      <Dialog open={completeJobOpen} onOpenChange={setCompleteJobOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Complete Job</DialogTitle></DialogHeader>
+
+          {isNoChargeJob ? (
+            <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
+              <p className="text-xs font-semibold">No charge — {formatCurrency(0)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect. The invoice will be closed as no charge.</p>
+            </div>
+          ) : !invoicePaidInFull && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5" data-testid="complete-unpaid-box">
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                {invoicePartlyPaid ? `⚠ Partly paid — ${formatCurrency(balanceDue)} still due` : `⚠ Unpaid — ${formatCurrency(balanceDue)} due`}
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">Collect now, or complete it as unpaid and collect later.</p>
+            </div>
+          )}
+          {invoicePaidInFull && !isNoChargeJob && (
+            <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20 px-3 py-2.5">
+              <p className="text-xs font-semibold text-green-800 dark:text-green-200">✓ Paid in full</p>
+            </div>
+          )}
+
+          {customer?.email ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => setEmailOnComplete(v => !v)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${emailOnComplete ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+              >
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${emailOnComplete ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                  {emailOnComplete && <CheckCircle2 className="w-3 h-3 text-white" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Email job summary</p>
+                  <p className="text-xs text-muted-foreground truncate">{customer.email}</p>
+                </div>
+              </button>
+              {emailOnComplete && (
+                <ul className="text-xs text-muted-foreground space-y-1 px-1">
+                  {existingInvoice && (
+                    <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} in the email — {isNoChargeJob ? "no charge" : invoicePaidInFull ? "PAID" : invoicePartlyPaid ? `${formatCurrency(balanceDue)} balance due` : `UNPAID, ${formatCurrency(balanceDue)} due`}</li>
+                  )}
+                  {completedDocuments.map(doc => (
+                    <AttachmentToggle
+                      key={doc.id}
+                      label={doc.template_name || "Service checklist"}
+                      on={!excludedDocIds.includes(doc.id)}
+                      onToggle={() => setExcludedDocIds(ids => ids.includes(doc.id) ? ids.filter(x => x !== doc.id) : [...ids, doc.id])}
+                    />
+                  ))}
+                  {jobAgreement && (
+                    <AttachmentToggle label="Signed Maintenance Agreement" on={includeAgreementPdf} onToggle={() => setIncludeAgreementPdf(v => !v)} />
+                  )}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
+          )}
+
+          {!isNoChargeJob && !invoicePaidInFull ? (
+            // Unpaid / partly paid: collect now, or complete as unpaid.
+            <div className="space-y-2 mt-2">
+              <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" disabled={completingJob || collectGuard.busy}
+                onClick={() => { setCompleteJobOpen(false); handleCollectPayment({ completeAfter: true }); }}>
+                <DollarSign className="w-4 h-4" /> Collect now
+              </Button>
+              <Button variant="outline" className="w-full rounded-xl gap-1.5 h-11" disabled={completingJob} onClick={doCompleteJob}>
+                {completingJob
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                  : <><CheckCircle2 className="w-4 h-4" /> Complete as unpaid</>}
+              </Button>
+              <Button variant="ghost" className="w-full rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <div className="flex gap-2 mt-2">
+              <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+              <Button
+                className="flex-1 rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
+                disabled={completingJob}
+                onClick={doCompleteJob}
+              >
+                {completingJob
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                  : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Opens after Complete Job, from any tab. */}
+      <Dialog open={scheduleNextOpen} onOpenChange={setScheduleNextOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Schedule Next Service?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Would you like to pre-schedule {job.customer_name}'s next maintenance visit?</p>
+          <div>
+            <Label className="text-xs">Next Service Date</Label>
+            <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); goBack(navigate, location, "/jobs"); }}>Skip</Button>
+            <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
+              if (!nextDate) return;
+              try {
+                // Fixed id: a double tap or a Retry can't create a second job (A-05).
+                await createOnce(db.Job, scheduleNextId.current, {
+                  customer_id: job.customer_id, customer_name: job.customer_name,
+                  title: job.title, job_type: "maintenance", status: "scheduled",
+                  scheduled_date: new Date(nextDate).toISOString(),
+                  notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
+                });
+              } catch (e) {
+                haptics.error();
+                showSaveError("Next service NOT scheduled", e, () => scheduleNextGuard.run(scheduleIt), { id: "schedule-next-error" });
+                return;
+              }
+              dismissSaveError("", { id: "schedule-next-error" });
+              setScheduleNextOpen(false);
+              toast.success("Next service scheduled");
+              queryClient.invalidateQueries({ queryKey: ["jobs"] });
+              goBack(navigate, location, "/jobs");
+            })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* The job's main action, just above the tab bar on every job tab. */}
       <BottomActionBar>
