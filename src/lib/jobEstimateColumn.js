@@ -12,6 +12,10 @@ export function hasEstimateColumn() {
   columnProbe = (async () => {
     try {
       const { supabase } = await import("@/lib/supabaseClient");
+      // One whole row tells us without an error: asking for a missing column
+      // by name is a 400 that shows as a console error on every app load.
+      const row = await supabase.from("jobs").select("*").limit(1);
+      if (!row.error && row.data?.length) return "estimated_minutes" in row.data[0];
       const { error } = await supabase.from("jobs").select("estimated_minutes").limit(0);
       if (!error) return true;
       const missing = error.code === "42703" || /estimated_minutes/.test(error.message || "");

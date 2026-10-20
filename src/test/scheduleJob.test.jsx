@@ -34,7 +34,10 @@ vi.mock("@/lib/coreIntegrations", () => ({ integrationsCore: { SendEmailWithRetr
 vi.mock("@/lib/notifyTeam", () => ({ notifyTeam: vi.fn(), buildTable: vi.fn(() => ""), buildRow: vi.fn(() => ""), buildEventBadge: vi.fn(() => "") }));
 vi.mock("@/lib/calendarSync", () => ({ syncJobToCalendar: (...a) => sync(...a), removeJobFromCalendar: vi.fn() }));
 vi.mock("@/lib/AuthContext", () => ({ useAuth: () => ({ user: { email: "qa@example.com", full_name: "Jeremy D" } }) }));
-vi.mock("@/lib/supabaseClient", () => ({ supabase: { from: () => ({ select: () => ({ limit: async () => ({ error: { code: "42703", message: "column jobs.estimated_minutes does not exist" } }) }) }) } }));
+const probeRows = { value: [] }; // rows the whole-row probe sees ([] = falls through to the named-column probe)
+vi.mock("@/lib/supabaseClient", () => ({ supabase: { from: () => ({ select: (cols) => ({ limit: async () => (cols === "*"
+  ? { data: probeRows.value, error: null }
+  : { error: { code: "42703", message: "column jobs.estimated_minutes does not exist" } }) }) }) } }));
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
 const { formatEstimate, minutesFromHoursInput, estimateLabel, jobWithEstimate, estimateMinutes } = await import("../lib/jobDuration.js");
@@ -93,6 +96,16 @@ describe("B2 estimate helpers", () => {
 
   it("probe: a missing column (42703) reads as false", async () => {
     expect(await hasEstimateColumn()).toBe(false);
+  });
+
+  it("probe: reads the column from a whole row (no 400 in the console)", async () => {
+    probeRows.value = [{ id: "j", estimated_minutes: null }];
+    __setEstimateColumnForTests(null);
+    expect(await hasEstimateColumn()).toBe(true);
+    probeRows.value = [{ id: "j" }];
+    __setEstimateColumnForTests(null);
+    expect(await hasEstimateColumn()).toBe(false);
+    probeRows.value = [];
   });
 
   it("confirmation email says the estimated time on site", () => {
