@@ -138,6 +138,12 @@ Other test-data rules:
   may exist after 12:45 UTC. Whatever isn't finished by 12:15 UTC 
   gets logged as unfinished; then clean up, verify the baseline, 
   and write the summary.
+- Cleanup must never wait on an agent finishing (Run 6: a suspended 
+  agent's data stayed in the DB until 17:17 UTC). Before launching 
+  agents, check `date -u`; each agent deletes its own data within 
+  60 min of creating it, and the main session cleans up every 
+  QA-AUDIT row by the cutoff itself, whatever agents are still 
+  running.
 - START CHECK (read-only): staff = 5; counts match 
   baseline-counts.json (real rows added since: confirm they're not 
   QA-AUDIT, then update the baseline).
