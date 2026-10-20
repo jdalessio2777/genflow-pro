@@ -1309,12 +1309,26 @@ export default function JobDetail() {
                     <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed contract (PDF) is emailed with the job summary at completion</p>
                   </Card>
                 ) : isActiveMember ? (
+                  // B5a: an active member renewing (agreement line on this job)
+                  // can sign the renewal here. Same customer row, no 2nd membership.
                   <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
-                    <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
-                      ✅ SERVICE AGREEMENT ACTIVE
-                    </p>
-                    <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{pendingAgreementLine?.description}</p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed · Discounts applied automatically</p>
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
+                          ✅ SERVICE AGREEMENT ACTIVE
+                        </p>
+                        <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{pendingAgreementLine?.description}</p>
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                          Current plan{customer?.membership_expiry ? ` expires ${new Date(customer.membership_expiry).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""} · Renewal signature not collected yet
+                        </p>
+                      </div>
+                      {!isClosed && (
+                        <Button size="sm" data-testid="sign-renewal" className="rounded-xl h-8 text-xs bg-green-700 hover:bg-green-800 shrink-0 ml-2"
+                          onClick={goSignAgreement}>
+                          Sign renewal
+                        </Button>
+                      )}
+                    </div>
                   </Card>
                 ) : (
                   <Card className="p-3.5 border-indigo-200 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20">
