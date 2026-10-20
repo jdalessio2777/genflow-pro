@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback, use
 import { supabase } from '@/lib/supabaseClient';
 import { checkIsStaff, getConfirmedStaffId, rememberConfirmedStaff, forgetConfirmedStaff } from '@/lib/staffCheck';
 import { captureGoogleTokens, clearGoogleTokens, onGoogleTokenChange } from '@/lib/googleTokenStore';
+import { clearDeviceData } from '@/lib/signOutDevice';
 
 // B3: only what the app uses — events on the Jobs calendar + reading the
 // calendar list for Settings → "Jobs calendar". (gmail.send and full
@@ -39,6 +40,7 @@ export const AuthProvider = ({ children }) => {
   const [googleToken, setGoogleToken] = useState(null);
   const [googleTokenExpiry, setGoogleTokenExpiry] = useState(null);
   const deniedRef = useRef(false); // B6: signed out because the staff check said no
+  const signedOutRef = useRef(false); // this page ran Sign out
 
   const applySession = useCallback((sess) => {
     const nextUser = mapSupabaseUser(sess?.user ?? null);
@@ -164,22 +166,45 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Settings → Sign out (and the staff-check screen). This device only
+  // (scope 'local': the tech's other devices stay signed in). Clears the
+  // device's Google tokens, calendar choice and cached data
+  // (signOutDevice.js), then loads /login as a NEW page that REPLACES the
+  // current history entry. Back / swipe can't return: every earlier entry is
+  // a staff-only screen, which now redirects to /login (navigateToLogin), and
+  // a page restored from the back-forward cache is sent to /login too.
   const signOut = async (shouldRedirect = true) => {
+    signedOutRef.current = true;
     forgetConfirmedStaff();
-    await supabase.auth.signOut();
-    clearGoogleTokens();
+    // Clear first: Supabase's SIGNED_OUT event can already send AuthGate to
+    // /login while signOut() is still running.
+    clearDeviceData({ keepSession: true });
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) { console.warn('[Auth] sign-out failed:', e.message); }
+    clearDeviceData();
     setUser(null);
     setSession(null);
     setIsAuthenticated(false);
     setGoogleToken(null);
     if (shouldRedirect && typeof window !== 'undefined') {
-      window.location.assign('/login');
+      // Blank the old page first, so a back-forward cache snapshot shows nothing.
+      document.body.style.visibility = 'hidden';
+      window.location.replace('/login');
     }
   };
 
+  useEffect(() => {
+    const onPageShow = (e) => {
+      if (e.persisted && signedOutRef.current) window.location.replace('/login');
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
+  // replace, not assign: a back press from the sign-in screen lands on the
+  // previous entry, which redirects here again instead of piling up entries.
   const navigateToLogin = () => {
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-      window.location.assign('/login');
+      window.location.replace('/login');
     }
   };
 
