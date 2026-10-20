@@ -74,12 +74,26 @@ export async function stripeModeOf(page) {
   const origin = new URL(page.url()).origin;
   if (stripeCache.has(origin)) return stripeCache.get(origin);
   const mode = await page.evaluate(async () => {
-    const srcs = [...document.querySelectorAll('script[src]')].map(s => s.src).filter(s => s.startsWith(location.origin));
-    let test = false, live = false;
-    for (const s of srcs) { const t = await (await fetch(s)).text(); if (t.includes('pk_test_')) test = true; if (t.includes('pk_live_')) live = true; }
+    // Every same-origin JS file the app uses: entry scripts, modulepreloads,
+    // chunks already loaded, and every assets/*.js the entry references
+    // (route code-splitting puts the Stripe key in a lazily loaded chunk).
+    const same = (u) => { try { const x = new URL(u, location.href); return x.origin === location.origin && /\.js(\?|$)/.test(x.pathname) ? x.href : null; } catch { return null; } };
+    const queue = [
+      ...[...document.querySelectorAll('script[src]')].map(s => s.src),
+      ...[...document.querySelectorAll('link[rel="modulepreload"]')].map(l => l.href),
+      ...performance.getEntriesByType('resource').map(r => r.name),
+    ].map(same).filter(Boolean);
+    const seen = new Set(); let test = false, live = false;
+    while (queue.length && seen.size < 200) {
+      const s = queue.shift(); if (seen.has(s)) continue; seen.add(s);
+      let t = ''; try { t = await (await fetch(s)).text(); } catch { continue; }
+      if (t.includes('pk_test_')) test = true;
+      if (t.includes('pk_live_')) live = true;
+      for (const m of t.matchAll(/assets\/[\w.-]+\.js/g)) { const u = same('/' + m[0]); if (u && !seen.has(u)) queue.push(u); }
+    }
     return live ? 'live' : test ? 'test' : 'unknown';
   });
-  stripeCache.set(origin, mode);
+  if (mode !== 'unknown') stripeCache.set(origin, mode);
   return mode;
 }
 
