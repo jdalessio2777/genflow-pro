@@ -54,11 +54,10 @@ export function preloadPage(path) {
 }
 
 // Most likely next screens. The tab screens are small and are warmed as soon
-// as the first screen is idle. The detail screens come later (DETAIL_DELAY_MS):
-// the job and invoice screens carry the Stripe payment code, whose script
-// download + start-up is the biggest single piece of work in the app — warmed
-// right away it lands on top of the tech's first taps (measured: Jobs tab
-// 363-872 ms at 4x CPU, vs ~340 when it isn't running). A press on a job row
+// as the first screen is idle. The detail screens come later (DETAIL_DELAY_MS)
+// so their downloads don't land on top of the tech's first taps. (Stripe.js is
+// no longer started by preloading the invoice screen: it loads only when the
+// card sheet opens — src/lib/stripeLoader.js, F4.) A press on a job row
 // still warms the job screen at once (usePressPrefetch).
 const TABS = ["/jobs", "/customers", "/schedule", "/inbox", "/catalog", "/"];
 const DETAILS = ["/jobs/:id", "/customers/:id", "/jobs/new", "/invoices/:id", "/invoices", "/finance"];

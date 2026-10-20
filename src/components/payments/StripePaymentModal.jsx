@@ -1,6 +1,5 @@
 // Stripe payment modal - rebuilt with env key
-import { useState, useCallback, useEffect } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { usePreferences } from '@/hooks/usePreferences';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,9 +11,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import { useSettings } from '@/lib/useSettings';
 import { surchargeConfig, surchargeCents, surchargeLabel, balanceCentsOf } from '@/lib/utils/surcharge';
+import { STRIPE_KEY, getStripe } from '@/lib/stripeLoader';
 
-const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
 // The payment routes are staff-only: send the signed-in user's access token.
 async function authHeaders() {
@@ -309,6 +307,10 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
   const [paymentIntentId, setPaymentIntentId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [initError, setInitError] = useState(null);
+  // Stripe.js starts loading when the sheet opens (in parallel with the
+  // payment intent), never before; getStripe() memoises it app-wide, and
+  // useMemo keeps one promise per opening (Elements' stripe prop can't change).
+  const stripePromise = useMemo(() => (open ? getStripe() : null), [open]);
 
   useEffect(() => {
     if (!open || clientSecret) return;
