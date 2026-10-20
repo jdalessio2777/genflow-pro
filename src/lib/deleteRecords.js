@@ -1,3 +1,4 @@
+import { removeJobFromCalendar } from "@/lib/calendarSync";
 import { db } from "@/lib/db";
 import { removePartFromJob } from "@/lib/inventory";
 
@@ -55,6 +56,7 @@ export async function deleteJobCascade(jobId) {
   if (blockers.length) throw new Error(`Not deleted — ${blockers.join("; ")}. Nothing was removed.`);
   const job = (await db.Job.filter({ id: jobId }))[0];
   await deleteJobRows(jobId, job?.status);
+  await removeJobFromCalendar({ job }); // never throws
 }
 
 export async function deleteCustomerCascade(customerId) {

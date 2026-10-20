@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { ALLOWED_EMAILS } from '@/lib/allowedUsers';
+import { setCalendarAccessToken } from '@/lib/calendarSync';
 
 const AuthContext = createContext();
 
@@ -33,6 +34,7 @@ export const AuthProvider = ({ children }) => {
     setUser(nextUser);
     setIsAuthenticated(!!sess);
     setGoogleToken(sess?.provider_token ?? null);
+    setCalendarAccessToken(sess?.provider_token ?? null);
     if (sess) {
       setAuthError(null);
     } else {
@@ -134,6 +136,7 @@ export const AuthProvider = ({ children }) => {
         const { access_token, expires_in } = await res.json();
         if (access_token) {
           setGoogleToken(access_token);
+          setCalendarAccessToken(access_token);
           setGoogleTokenExpiry(Date.now() + expires_in * 1000);
         }
       } catch (e) {

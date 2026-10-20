@@ -21,7 +21,7 @@ import { Save, Loader2, Send, BellOff } from "lucide-react";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
-import { createCalendarEvent, updateCalendarEvent } from "@/lib/googleCalendar";
+import { syncJobToCalendar } from "@/lib/calendarSync";
 import { newRequestId, createOnce, showSaveError, dismissSaveError } from "@/lib/saveSafety";
 
 const JOB_TYPES = [
@@ -192,30 +192,8 @@ export default function JobForm() {
         }
       }
 
-      // Calendar sync — non-fatal, runs after job is saved
-      if (savedJob.scheduled_date && googleToken) {
-        const customer = jobCustomer;
-        try {
-          const calendarPromise = savedJob.calendar_event_id
-            ? updateCalendarEvent(savedJob.calendar_event_id, savedJob, customer, googleToken)
-            : createCalendarEvent(savedJob, customer, googleToken);
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Calendar sync timed out')), 5000)
-          );
-          const eventId = await Promise.race([calendarPromise, timeoutPromise]);
-          await db.Job.update(savedJob.id, {
-            calendar_event_id: eventId,
-            last_synced_at: new Date().toISOString(),
-          });
-          toast.success("Synced to Google Calendar", { duration: 2000 });
-        } catch (e) {
-          if (e?.message?.startsWith('401')) {
-            toast.warning("Please sign out and sign back in to refresh your Google connection");
-          } else {
-            toast.warning("Job saved — Google Calendar sync failed");
-          }
-        }
-      }
+      // Calendar sync — never blocks the save (calendarSync never throws).
+      await syncJobToCalendar({ job: savedJob, customer: jobCustomer });
 
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["job", savedJob.id] });

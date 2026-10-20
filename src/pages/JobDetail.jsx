@@ -36,6 +36,7 @@ import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
 import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
+import { syncJobToCalendar, removeJobFromCalendar } from "@/lib/calendarSync";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
 import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
@@ -558,6 +559,7 @@ export default function JobDetail() {
       if (!(await handleStatusChange("canceled", { cancel_reason: cancelReason }, { retry: () => statusGuard.run(attempt) }))) return;
       snap.canceled = true;
       setCancelOpen(false);
+      removeJobFromCalendar({ job }); // never throws or blocks
     }
     try {
       const n = await returnChosenParts(snap);
@@ -2180,7 +2182,7 @@ export default function JobDetail() {
               if (!nextDate) return;
               try {
                 // Fixed id: a double tap or a Retry can't create a second job (A-05).
-                await createOnce(db.Job, scheduleNextId.current, {
+                const nextJob = await createOnce(db.Job, scheduleNextId.current, {
                   customer_id: job.customer_id, customer_name: job.customer_name,
                   title: job.title, job_type: "maintenance", status: "scheduled",
                   scheduled_date: new Date(nextDate).toISOString(),
@@ -2192,6 +2194,7 @@ export default function JobDetail() {
                 return;
               }
               dismissSaveError("", { id: "schedule-next-error" });
+              syncJobToCalendar({ job: nextJob, customer }); // never throws or blocks
               setScheduleNextOpen(false);
               toast.success("Next service scheduled");
               queryClient.invalidateQueries({ queryKey: ["jobs"] });
