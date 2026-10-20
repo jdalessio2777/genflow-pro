@@ -99,11 +99,11 @@ export default function Jobs() {
         title="Jobs"
         subtitle={`${jobs.length} total`}
         actions={
-          <Link to="/jobs/new">
-            <Button size="sm" className="rounded-xl gap-1.5">
+          <Button asChild size="sm" className="rounded-xl gap-1.5">
+            <Link to="/jobs/new">
               <Plus className="w-4 h-4" /> New
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         }
       />
 

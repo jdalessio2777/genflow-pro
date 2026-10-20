@@ -134,9 +134,9 @@ export default function RouteMap() {
                     </div>
                   </div>
                   <div className="flex gap-2 mt-2.5 ml-10">
-                    <Link to={`/jobs/${job.id}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full rounded-xl h-8 text-xs">Open Job</Button>
-                    </Link>
+                    <Button asChild variant="outline" size="sm" className="flex-1 rounded-xl h-9 text-xs">
+                      <Link to={`/jobs/${job.id}`}>Open Job</Link>
+                    </Button>
                     <CallButtons phone={cust?.phone} />
                   </div>
                 </Card>

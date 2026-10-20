@@ -254,8 +254,10 @@ export default function Schedule() {
           </div>
         </div>
 
-        {/* Day headers */}
-        <div className="grid grid-cols-7 gap-px">
+        {/* Day headers. On a narrow phone (SE, 320 pt) the month grid runs
+            edge to edge so each day is >= 44 pt wide (7 across 288 pt would
+            be 40); the headers follow so the columns stay lined up. */}
+        <div className="grid grid-cols-7 gap-px max-[359px]:-mx-4">
           {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
             <div key={d} className="text-center text-[11px] font-semibold text-muted-foreground py-1">{d}</div>
           ))}
@@ -263,7 +265,7 @@ export default function Schedule() {
 
         {/* Month view */}
         {view === "month" && (
-          <div className="grid grid-cols-7 gap-px bg-border rounded-2xl overflow-hidden border border-border">
+          <div className="grid grid-cols-7 gap-px bg-border rounded-2xl overflow-hidden border border-border max-[359px]:-mx-4 max-[359px]:rounded-none max-[359px]:border-x-0">
             {getMonthDays().map(({ date, inMonth }, i) => {
               const dayJobs = getJobsForDate(date);
               const isSelected = selectedDate?.toDateString() === date.toDateString();

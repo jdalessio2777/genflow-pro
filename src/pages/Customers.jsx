@@ -227,11 +227,11 @@ export default function Customers() {
         title="Customers"
         subtitle={`${customers.length} total`}
         actions={
-          <Link to="/customers/new">
-            <Button size="sm" className="rounded-xl gap-1.5">
+          <Button asChild size="sm" className="rounded-xl gap-1.5">
+            <Link to="/customers/new">
               <Plus className="w-4 h-4" /> Add
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         }
       />
 

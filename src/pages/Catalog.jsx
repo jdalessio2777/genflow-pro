@@ -143,7 +143,7 @@ function PartsCategoryList({ parts, loading, onSelectCategory }) {
           </p>
           <div className="space-y-2">
             {reorderParts.map(part => (
-              <div key={part.id} className="flex items-center justify-between gap-2">
+              <div key={part.id} className="flex items-center justify-between gap-2 min-h-[44px]">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{part.name}</p>
                   {part.part_number && <p className="text-xs text-muted-foreground">#{part.part_number}</p>}
