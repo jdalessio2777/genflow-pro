@@ -38,7 +38,7 @@ import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId,
 import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
 import { syncJobToCalendar, removeJobFromCalendar } from "@/lib/calendarSync";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
-import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
+import { buildLaborLine, groupLaborRates, memberPrice, ratePrice, descriptionAfterPriceEdit } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
 import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
 import { useBack, goBack } from "@/hooks/useBack";
@@ -327,10 +327,13 @@ export default function JobDetail() {
     const newPrice = parseFloat(editingLaborPriceValue);
     // Flat-rate items (e.g. discounts) may be negative to reduce the invoice; hourly rates may not.
     if (isNaN(newPrice) || (newPrice < 0 && !item.is_flat_rate)) { toast.error("Enter a valid price"); return; }
+    // B5b: keep the "(Member N% off)" label in step with the edited price.
+    const description = descriptionAfterPriceEdit({ line: item, newPrice, rates: laborRates, memberDiscountRate: memberDiscountRateFor(customer) });
+    const label = description !== item.description ? { description } : {};
     if (item.is_flat_rate) {
-      updateLaborPriceMutation.mutate({ id: item.id, data: { flat_rate_amount: newPrice, total_price: newPrice } });
+      updateLaborPriceMutation.mutate({ id: item.id, data: { flat_rate_amount: newPrice, total_price: newPrice, ...label } });
     } else {
-      updateLaborPriceMutation.mutate({ id: item.id, data: { rate: newPrice, total_price: newPrice * (item.hours || 0) } });
+      updateLaborPriceMutation.mutate({ id: item.id, data: { rate: newPrice, total_price: newPrice * (item.hours || 0), ...label } });
     }
   };
 

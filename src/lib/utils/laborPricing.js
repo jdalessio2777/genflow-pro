@@ -17,6 +17,31 @@ export function memberLabel(memberDiscountRate) {
   return `Member ${Math.round((1 - memberDiscountRate) * 100)}% off`;
 }
 
+// " (Member 10% off)" suffix that buildLaborLine puts on a discounted line.
+const MEMBER_LABEL_RE = /\s*\(Member \d+% off\)\s*$/;
+export const stripMemberLabel = (description) => String(description ?? "").replace(MEMBER_LABEL_RE, "");
+
+// B5b: the description a labor line should carry after its price is edited
+// by hand, so the "(Member N% off)" label always matches the price actually
+// charged. Labels only — the price itself is whatever the tech typed.
+//  - Price not changed: description untouched.
+//  - Line is a catalog rate (matched by name): labelled only when the new
+//    price IS the member price of that rate for this customer right now.
+//  - Not a catalog rate: a changed price can't be verified as a member
+//    price, so the label is dropped.
+export function descriptionAfterPriceEdit({ line, newPrice, rates = [], memberDiscountRate = 1.0 }) {
+  const description = String(line?.description ?? "");
+  const oldUnit = line?.is_flat_rate ? line?.flat_rate_amount : line?.rate;
+  if (round2(newPrice) === round2(oldUnit)) return description;
+  const base = stripMemberLabel(description);
+  const rate = (rates || []).find(r => r?.name === base &&
+    (line?.is_flat_rate ? r.type !== "hourly" : r.type === "hourly"));
+  if (!rate || memberDiscountRate >= 1.0 || isAgreementRate(rate) || rate.category === "discounts") return base;
+  const list = round2(ratePrice(rate));
+  const member = memberPrice(list, memberDiscountRate);
+  return member !== list && round2(newPrice) === member ? `${base} (${memberLabel(memberDiscountRate)})` : base;
+}
+
 // Groups for the job screen's Labor list, in display order. Hourly catalog
 // rows land in their category's group; unknown categories go to "Other".
 export const LABOR_GROUPS = [
