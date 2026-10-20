@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { CalendarX2, RefreshCw, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { getCalendarStatus, onCalendarStatus, pendingCalendarOps, retryPendingCalendarSync } from "@/lib/calendarSync";
 
 // B3: non-blocking notice when a job's Google Calendar event couldn't be
-// written. Sits above the tab bar; never covers the screen. "Reconnect Google"
+// written. Sits above the tab bar and publishes its height as --banner-h, so
+// the page leaves room for it and it never covers a button. "Reconnect Google"
 // re-runs Google sign-in and comes back to this screen; the queued jobs are
 // then synced automatically.
 export default function CalendarSyncBanner() {
@@ -18,7 +19,19 @@ export default function CalendarSyncBanner() {
   // Anything left from before (e.g. after coming back from reconnecting): retry once.
   useEffect(() => { if (pendingCalendarOps().length) retryPendingCalendarSync(); }, []);
 
-  if (status.state === "ok" || (status.at && status.at <= dismissedAt)) return null;
+  const visible = !(status.state === "ok" || (status.at && status.at <= dismissedAt));
+  const boxRef = useRef(null);
+  useEffect(() => {
+    const root = document.documentElement; const el = boxRef.current;
+    if (!visible || !el) { root.style.removeProperty("--banner-h"); return undefined; }
+    const set = () => root.style.setProperty("--banner-h", `${el.offsetHeight + 8}px`);
+    set();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty("--banner-h"); };
+  }, [visible]);
+
+  if (!visible) return null;
   const n = pendingCalendarOps().length;
   const reconnect = status.state === "reconnect";
 
@@ -29,7 +42,7 @@ export default function CalendarSyncBanner() {
       className="fixed left-0 right-0 z-40 flex justify-center px-3 pointer-events-none"
       style={{ bottom: "calc(var(--nav-h) + var(--action-h) + 8px + var(--kb-h, 0px))" }}
     >
-      <div className="pointer-events-auto max-w-lg w-full rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700 shadow-lg p-3 flex items-start gap-2">
+      <div ref={boxRef} className="pointer-events-auto max-w-lg w-full rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700 shadow-lg p-3 flex items-start gap-2">
         <CalendarX2 className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">{status.message}</p>

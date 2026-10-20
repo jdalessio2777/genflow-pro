@@ -109,7 +109,7 @@ export default function AppLayout() {
       {/* Bottom padding = the measured tab bar (incl. home-indicator inset)
           + the screen's action bar, if any + a little air: nothing hides
           under them and the page doesn't scroll past its end. */}
-      <main className="max-w-lg mx-auto" style={{ paddingTop: 'var(--sat)', paddingBottom: hideNav ? 'calc(6rem + var(--sab) + var(--kb-h, 0px))' : 'calc(var(--nav-h) + var(--action-h) + 16px + var(--kb-h, 0px))' }}>
+      <main className="max-w-lg mx-auto" style={{ paddingTop: 'var(--sat)', paddingBottom: hideNav ? 'calc(6rem + var(--sab) + var(--kb-h, 0px))' : 'calc(var(--nav-h) + var(--action-h) + var(--banner-h, 0px) + 16px + var(--kb-h, 0px))' }}>
         {/* Fade-in only, no exit wait: the next screen mounts at once, so
             scroll restoration and the first touch see the real page. */}
         <UnsavedChangesProvider>
