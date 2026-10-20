@@ -12,15 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Truck, Plus, Trash2, Building2, MapPin, Users, CheckCircle2, Loader2, Monitor } from "lucide-react";
+import { Truck, Plus, Trash2, Building2, MapPin, Users, CheckCircle2, Loader2, Monitor, LogOut } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
 import { getAccessToken, googleConnection } from "@/lib/googleTokenStore";
-import { getWritableCalendars, defaultJobsCalendar, getJobsCalendarChoice, setJobsCalendarChoice } from "@/lib/calendarSync";
+import { getWritableCalendars, defaultJobsCalendar, getJobsCalendarChoice, setJobsCalendarChoice, pendingCalendarOps } from "@/lib/calendarSync";
 import { JOBS_CALENDAR_NAME } from "@/lib/googleCalendar";
+import { afterSheetsClose } from "@/lib/sheetHistory";
 
 // ─── BUSINESS INFO TAB ────────────────────────────────────────────────────────
 function BusinessTab({ settings, setSetting, isSaving }) {
@@ -620,6 +621,57 @@ function DisplayPreferencesTab() {
   );
 }
 
+// ─── SIGN OUT (bottom of every tab) ───────────────────────────────────────────
+// This phone only. AuthContext.signOut clears the Google tokens, the Jobs
+// calendar choice and cached data here, then opens the sign-in screen.
+export function SignOutSection() {
+  const { user, signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const pending = open ? pendingCalendarOps().length : 0;
+
+  // Close the dialog and let its history entry go first (sheetHistory pops
+  // it with a back step, which would cancel the move to the sign-in screen).
+  const confirm = () => {
+    setBusy(true);
+    setOpen(false);
+    afterSheetsClose(() => { signOut(true); });
+  };
+
+  return (
+    <div className="mt-6 pt-4 border-t border-border">
+      {user?.email && <p className="text-xs text-muted-foreground text-center mb-2">Signed in as {user.email}</p>}
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogTrigger asChild>
+          <button
+            type="button"
+            data-testid="settings-sign-out"
+            disabled={busy}
+            className="w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl border border-destructive/30 text-destructive font-semibold active:bg-destructive/10 transition-colors"
+          >
+            {busy ? <><Loader2 className="w-4 h-4 animate-spin" />Signing out…</> : <><LogOut className="w-4 h-4" />Sign out</>}
+          </button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out of GenFlow?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This signs you out on this phone only. Google Calendar access and your Jobs calendar choice are removed from this phone; sign in with Google again to turn calendar sync back on.
+              {pending > 0 && ` ${pending} calendar ${pending === 1 ? "update" : "updates"} not yet sent from this phone will be dropped.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction data-testid="confirm-sign-out" onClick={confirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sign out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 // ─── MAIN SETTINGS PAGE ───────────────────────────────────────────────────────
 export default function Settings() {
   const { settings, isLoading, setSetting, isSaving } = useSettings();
@@ -668,6 +720,7 @@ export default function Settings() {
             <DisplayPreferencesTab />
           </TabsContent>
         </Tabs>
+        <SignOutSection />
       </div>
     </div>
   );
