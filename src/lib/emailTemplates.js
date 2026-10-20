@@ -4,6 +4,7 @@ import { SURCHARGE_DEFAULTS, surchargeLabel } from './utils/surcharge.js'
 // Escaping lives in one shared module (also used by the printable Service
 // History and api/); re-exported here for existing imports.
 import { escapeHtml, multilineHtml, safeImageSrc } from './utils/escapeHtml.js'
+import { formatEstimate, estimateMinutes } from './jobDuration.js'
 export { escapeHtml, multilineHtml, safeImageSrc }
 
 function fmt(n) {
@@ -296,7 +297,8 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
               <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;vertical-align:top;">📆 Date &amp; Time</td>
               <td style="padding:12px 20px;font-size:13px;color:#374151;">
                 <strong>${fmtDate(job.scheduled_date)}</strong><br>
-                <span style="color:#6b7280;font-size:12px;">Arrival time: ${arrivalTime}</span>
+                <span style="color:#6b7280;font-size:12px;">Arrival time: ${arrivalTime}</span><br>
+                <span style="color:#6b7280;font-size:12px;" data-estimate="1">Estimated time on site: ${escapeHtml(formatEstimate(estimateMinutes(job)))}.</span>
               </td>
             </tr>
             <tr style="border-bottom:1px solid #f0f0f0;">

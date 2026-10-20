@@ -303,7 +303,7 @@ export default function Jobs() {
                               {formatJobDate(job.scheduled_date, use24h)}
                             </p>
                           ) : (
-                            <p className="text-xs text-muted-foreground mt-0.5 italic">No date set</p>
+                            <p className="mt-1"><span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" data-testid="not-scheduled-badge">Not scheduled</span></p>
                           )}
                           {customerMap[job.customer_id]?.property_notes && (
                             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-center gap-1">

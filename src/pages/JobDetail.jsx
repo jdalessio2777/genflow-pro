@@ -48,6 +48,8 @@ import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 import JobSignatureButton from "@/components/signature/JobSignatureButton";
+import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
+import { estimateMinutes, formatEstimate } from "@/lib/jobDuration";
 
 // One attachment row in the Complete Job dialog: checkbox-style toggle,
 // ON = attach this PDF to the completion email.
@@ -163,6 +165,7 @@ export default function JobDetail() {
   const [invoiceNotes, setInvoiceNotes] = useState("");
   const [generatorNotes, setGeneratorNotes] = useState("");
   const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
+  const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false); // B1
   const [nextDate, setNextDate] = useState("");
   const notesInitialized = useRef(false);
   const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
@@ -1139,6 +1142,21 @@ export default function JobDetail() {
                   </div>
                   {job.job_type && (
                     <StatusBadge status={job.job_type} className="mt-5 shrink-0" />
+                  )}
+                </div>
+                {/* B1/B2: appointment + estimated time on site; an approved job
+                    with no date gets "Not scheduled" and a Schedule action. */}
+                <div className="mx-3.5 mb-3.5 rounded-xl border border-border px-3 py-2.5" data-testid="job-appointment">
+                  {job.scheduled_date ? (
+                    <p className="text-xs text-foreground">
+                      <span className="font-semibold">{formatDate(job.scheduled_date)} · {formatTime(job.scheduled_date, use24h)}</span>
+                    </p>
+                  ) : (
+                    <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" data-testid="not-scheduled-badge">Not scheduled</span>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1" data-testid="job-estimate">Estimated time on site: {formatEstimate(estimateMinutes(job))}</p>
+                  {!job.scheduled_date && job.status === "scheduled" && !isClosed && (
+                    <Button size="sm" className="w-full rounded-xl mt-2" onClick={() => setScheduleSheetOpen(true)}>Schedule this job</Button>
                   )}
                 </div>
                 {job.customer_description?.trim() && (
@@ -2166,6 +2184,15 @@ export default function JobDetail() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ScheduleJobSheet
+        open={scheduleSheetOpen}
+        onOpenChange={setScheduleSheetOpen}
+        job={job}
+        customer={customer}
+        from="job"
+        onDone={() => setScheduleSheetOpen(false)}
+      />
 
       {/* Opens after Complete Job, from any tab. */}
       <Dialog open={scheduleNextOpen} onOpenChange={setScheduleNextOpen}>

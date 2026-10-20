@@ -3,8 +3,6 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { goBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
-import { integrationsCore } from "@/lib/coreIntegrations";
-import { confirmationEmailHTML } from "@/lib/emailTemplates";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toDatetimeLocalValue } from "@/lib/formatTime";
 import { useAuth } from "@/lib/AuthContext";
@@ -15,14 +13,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import EstimatedLengthPicker from "@/components/jobs/EstimatedLengthPicker";
 import { Switch } from "@/components/ui/switch";
 import PageHeader from "@/components/layout/PageHeader";
 import { Save, Loader2, Send, BellOff } from "lucide-react";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
-import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
-import { syncJobToCalendar } from "@/lib/calendarSync";
 import { newRequestId, createOnce, showSaveError, dismissSaveError } from "@/lib/saveSafety";
+import { afterJobScheduled } from "@/lib/jobCreate";
+import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
+import { withEstimate } from "@/lib/jobEstimateColumn";
 
 const JOB_TYPES = [
   { value: "maintenance",         label: "Maintenance" },
@@ -52,7 +52,7 @@ export default function JobForm() {
     job_type: "maintenance",
     status: "scheduled",
     scheduled_date: "",
-    estimated_duration: "",
+    estimated_minutes: DEFAULT_ESTIMATE_MINUTES,
     notes: "",
     customer_description: "",
     generator_notes: "",
@@ -86,7 +86,7 @@ export default function JobForm() {
   useEffect(() => {
     if (!isEdit || formLoaded.current || !savedJobRow) return;
     formLoaded.current = true;
-    setForm(prev => ({ ...prev, ...savedJobRow }));
+    setForm(prev => ({ ...prev, ...savedJobRow, estimated_minutes: Number(savedJobRow.estimated_minutes) > 0 ? Number(savedJobRow.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES }));
     setFormFilled(true);
   }, [isEdit, savedJobRow]);
 
@@ -131,69 +131,28 @@ export default function JobForm() {
   const mutation = useMutation({
     mutationFn: async ({ data }) => {
       const jobCustomer = await resolveCustomer(data.customer_id);
-      const payload = cleanPayload({ ...data, customer_name: jobCustomer.name });
+      // estimated_minutes only once its column exists (B2 migration).
+      const payload = await withEstimate(cleanPayload({ ...data, customer_name: jobCustomer.name }), data.estimated_minutes);
       const savedJob = isEdit
         ? await db.Job.update(id, payload)
         : await createOnce(db.Job, createIds.current.job, payload);
       return { savedJob, jobCustomer };
     },
-    onSuccess: async ({ savedJob, jobCustomer }, { sendConfirmation }) => {
+    onSuccess: async ({ savedJob, jobCustomer }, { data, sendConfirmation }) => {
       dismissSaveError("Job NOT saved");
-      if (!isEdit) {
-        try {
-          await createOnce(db.Invoice, createIds.current.invoice, {
-            job_id: savedJob.id,
-            customer_id: savedJob.customer_id,
-            customer_name: savedJob.customer_name,
-            invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`,
-            parts_total: 0, labor_total: 0, total: 0,
-            line_items: [], notes: "", status: "draft",
-          });
-        } catch (e) {
-          // The job is saved; Collect Payment creates the invoice later if needed.
-          toast.warning(`Job saved, but its draft invoice wasn't created yet: ${e.message}`);
-        }
-        notifyTeam({
-          subject: `New Job — ${form.title} · ${jobCustomer.name}`,
-          body: `
-            <p style="font-size:14px;color:#1a1a1a;margin:0 0 4px 0;">${buildEventBadge("New Job Created", "blue")}</p>
-            ${buildTable([
-              buildRow("Customer", jobCustomer.name),
-              buildRow("Job", form.title),
-              buildRow("Type", form.job_type),
-              buildRow("Assigned To", form.assigned_to_name || "Unassigned"),
-              buildRow("Scheduled", form.scheduled_date ? new Date(form.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""),
-            ])}
-          `,
-          triggeredBy: getUserDisplayName(user),
-        });
-
-        // The only other confirmation-send path is JobDetail's "Resend
-        // Confirmation Email" banner (fix #4) — nothing else fires this email.
-        if (sendConfirmation) {
-          if (!jobCustomer?.email) {
-            toast.error(`No email on file for ${jobCustomer?.name || "this customer"} — confirmation not sent`);
-            await db.Job.update(savedJob.id, { confirmation_send_failed: true }).catch(() => {});
-          } else {
-            try {
-              const techFirstName = (savedJob.assigned_to_name || "").split(" ")[0] || "our technician";
-              await integrationsCore.SendEmailWithRetry({
-                to: jobCustomer.email,
-                subject: `Appointment Confirmed — GenShield Generator Service`,
-                html: confirmationEmailHTML({ customer: jobCustomer, job: savedJob, techFirstName, use24h }),
-              });
-              await db.Job.update(savedJob.id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
-              toast.success(`Confirmation sent to ${jobCustomer.name}`);
-            } catch (e) {
-              toast.error(`Failed to send confirmation email: ${e.message}`);
-              await db.Job.update(savedJob.id, { confirmation_send_failed: true }).catch(() => {});
-            }
-          }
-        }
-      }
-
-      // Calendar sync — never blocks the save (calendarSync never throws).
-      await syncJobToCalendar({ job: savedJob, customer: jobCustomer });
+      // One path with the "Schedule this job" sheet (src/lib/jobCreate.js):
+      // draft invoice + team notice + optional confirmation on create, then
+      // calendar sync. The email/calendar use the picked estimate even when
+      // it couldn't be stored yet.
+      await afterJobScheduled({
+        job: jobWithEstimate(savedJob, data.estimated_minutes),
+        customer: jobCustomer,
+        sendConfirmation,
+        use24h,
+        triggeredBy: getUserDisplayName(user),
+        invoiceId: createIds.current.invoice,
+        isNew: !isEdit,
+      });
 
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["job", savedJob.id] });
@@ -320,24 +279,7 @@ export default function JobForm() {
               className="rounded-xl mt-1"
             />
           </div>
-          <div>
-            <Label className="text-xs">Estimated Duration</Label>
-            <Select value={form.estimated_duration || ""} onValueChange={v => update("estimated_duration", v)}>
-              <SelectTrigger className="rounded-xl mt-1">
-                <SelectValue placeholder="How long will this take?" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0.5">30 minutes</SelectItem>
-                <SelectItem value="1">1 hour</SelectItem>
-                <SelectItem value="1.5">1.5 hours</SelectItem>
-                <SelectItem value="2">2 hours</SelectItem>
-                <SelectItem value="3">3 hours</SelectItem>
-                <SelectItem value="4">4 hours</SelectItem>
-                <SelectItem value="6">6 hours</SelectItem>
-                <SelectItem value="8">Full day (8 hours)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <EstimatedLengthPicker value={form.estimated_minutes} onChange={m => update("estimated_minutes", m)} />
           <div>
             <Label className="text-xs">Job Description (customer-facing)</Label>
             <Textarea
