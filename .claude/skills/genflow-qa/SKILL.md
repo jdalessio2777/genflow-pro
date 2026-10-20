@@ -112,6 +112,17 @@ Other test-data rules:
 - No schema/policy changes: write migrations to 
   .qa-scratch/fixes/ for my review and build everything else to 
   work without them (with a safe fallback).
+- New tables: from 2026-10-30 Supabase no longer gives NEW tables in 
+  "public" Data API grants automatically (existing tables keep 
+  theirs). Any migration that CREATEs a table must, in the same 
+  file: (1) enable RLS; (2) grant select/insert/update/delete 
+  explicitly to authenticated and service_role; (3) add the 
+  staff-only policy using (select public.is_staff()). NEVER grant 
+  to anon by default (revoke all from anon), unless a public 
+  website form genuinely needs insert; then grant only insert, 
+  with an insert-only anon policy, and say why in the file. 
+  Privilege or audit tables (staff, history logs) keep writes 
+  blocked with select-only policies and say so in a comment.
 - Emails only to jdalessio2777@gmail.com, 6 max total; log Resend 
   IDs.
 - No merge to main, no push to either repo, no production deploy.
