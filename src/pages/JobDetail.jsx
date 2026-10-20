@@ -1250,7 +1250,7 @@ export default function JobDetail() {
                           {customer.membership_plan === "semi_annual" ? "Semi-Annual" : "Annual"} Protection Plan
                         </p>
                         <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                          10% off all parts & labor
+                          {Math.round((1 - memberDiscountRate) * 100)}% off all parts & labor
                           {customer.membership_expiry ? ` · Expires ${new Date(customer.membership_expiry).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : ""}
                         </p>
                       </div>
