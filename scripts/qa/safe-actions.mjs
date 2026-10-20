@@ -149,7 +149,7 @@ export async function guardedTap(page, locator, opts = {}) {
       } else {
         if (opts.recipient !== ALLOWED_RECIPIENT) throw new GuardError(`recipient ${opts.recipient} is not ${ALLOWED_RECIPIENT}`);
         const body = await page.locator('body').innerText();
-        const others = (body.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || []).filter(e => e.toLowerCase() !== ALLOWED_RECIPIENT && !/genshieldservice\.com$/i.test(e));
+        const others = (body.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || []).map(e => e.replace(/\.+$/, "")).filter(e => e.toLowerCase() !== ALLOWED_RECIPIENT && !/genshieldservice\.com$/i.test(e));
         if (!body.includes(ALLOWED_RECIPIENT)) throw new GuardError('allowed recipient is not shown on screen');
         if (others.length) throw new GuardError(`other email address(es) on screen: ${others.slice(0, 3).join(', ')}`);
       }

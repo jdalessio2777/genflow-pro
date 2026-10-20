@@ -36,6 +36,16 @@ test('refuses send to another recipient', async () => {
   await assert.rejects(guardedTap(p, p.loc, { kind: 'send', record: 'QA-AUDIT-T Job', recipient: 'someone@example.com' }), /recipient/);
   assert.equal(p.clicks.length, 0);
 });
+test('a full stop after the allowed address is not another recipient', async () => {
+  const p = fakePage(PREVIEW, { text: 'QA-AUDIT-T Job Send the summary to jdalessio2777@gmail.com.' });
+  await guardedTap(p, p.loc, { kind: 'send', record: 'QA-AUDIT-T Job', recipient: 'jdalessio2777@gmail.com' });
+  assert.equal(p.clicks.length, 1);
+});
+test('still refuses another address followed by a full stop', async () => {
+  const p = fakePage(PREVIEW, { text: 'QA-AUDIT-T Job jdalessio2777@gmail.com and someone@example.com.' });
+  await assert.rejects(guardedTap(p, p.loc, { kind: 'send', record: 'QA-AUDIT-T Job', recipient: 'jdalessio2777@gmail.com' }), /someone@example\.com(?!\.)/);
+  assert.equal(p.clicks.length, 0);
+});
 test('refuses charge when Stripe is live', async () => {
   const p = fakePage(PREVIEW, { stripe: 'live' });
   await assert.rejects(guardedTap(p, p.loc, { kind: 'charge', record: 'QA-AUDIT-T Job' }), /Stripe mode is live/);
