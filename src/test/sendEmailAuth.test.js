@@ -4,10 +4,19 @@ import { Readable } from 'node:stream'
 
 const getUser = vi.fn()
 const sendEmail = vi.fn()
-vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ auth: { getUser: (...a) => getUser(...a) } }) }))
+const rpc = vi.fn()
+const createClientCalls = []
+process.env.SUPABASE_URL ||= 'http://supabase.test'
+process.env.SUPABASE_ANON_KEY ||= 'anon-test'
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: (...args) => {
+    createClientCalls.push(args)
+    return { auth: { getUser: (...a) => getUser(...a) }, rpc: (...a) => rpc(...a) }
+  },
+}))
 vi.mock('../../api/_lib/sendEmail.js', () => ({ sendEmail: (...a) => sendEmail(...a) }))
 
-const { isAllowedOrigin, requireStaff } = await import('../../api/_lib/staffAuth.js')
+const { isAllowedOrigin, requireStaff, isStaffToken } = await import('../../api/_lib/staffAuth.js')
 const { default: sendEmailHandler } = await import('../../api/send-email.js')
 
 function mockReq({ method = 'POST', headers = {}, body } = {}) {
@@ -29,6 +38,9 @@ function mockRes() {
 const BODY = { to: 'someone@example.com', subject: 'Hi', html: '<p>x</p>' }
 
 beforeEach(() => {
+  createClientCalls.length = 0
+  rpc.mockReset()
+  rpc.mockResolvedValue({ data: true, error: null })
   getUser.mockReset()
   sendEmail.mockReset()
   sendEmail.mockResolvedValue({ id: 'email_1' })
@@ -93,14 +105,51 @@ describe('staffAuth', () => {
     expect(getUser).toHaveBeenCalledWith('garbage')
   })
 
-  it('requireStaff: valid user not on the staff list → 403', async () => {
-    getUser.mockResolvedValue({ data: { user: { email: 'outsider@example.com' } }, error: null })
+  // B6: staff = public.staff via is_staff(), asked as the caller.
+  it('requireStaff: valid user, is_staff() false → 403', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u-out', email: 'outsider@example.com' } }, error: null })
+    rpc.mockResolvedValue({ data: false, error: null })
     expect(await requireStaff({ headers: { authorization: 'Bearer t' } })).toMatchObject({ ok: false, status: 403 })
   })
 
-  it('requireStaff: staff user → ok (case-insensitive email)', async () => {
-    getUser.mockResolvedValue({ data: { user: { email: 'Jeremy.Dalessio@genshieldservice.com' } }, error: null })
+  it('requireStaff: is_staff() true → ok, whatever the email (the staff table is the only list)', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u-new', email: 'new.tech@example.com' } }, error: null })
     expect(await requireStaff({ headers: { authorization: 'Bearer t' } })).toMatchObject({ ok: true })
+    expect(rpc).toHaveBeenCalledWith('is_staff')
+  })
+
+  it("is_staff() is called with the anon key + the CALLER's token (not the service role)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'a@b.c' } }, error: null })
+    await requireStaff({ headers: { authorization: 'Bearer caller-token' } })
+    const asCaller = createClientCalls.find(([, key]) => key === process.env.SUPABASE_ANON_KEY)
+    expect(asCaller).toBeTruthy()
+    expect(asCaller[2].global.headers.Authorization).toBe('Bearer caller-token')
+  })
+
+  it('requireStaff: is_staff() errors → 503 (never treated as staff)', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'a@b.c' } }, error: null })
+    rpc.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    expect(await requireStaff({ headers: { authorization: 'Bearer t' } })).toMatchObject({ ok: false, status: 503 })
+    rpc.mockRejectedValue(new Error('network down'))
+    expect(await requireStaff({ headers: { authorization: 'Bearer t' } })).toMatchObject({ ok: false, status: 503 })
+  })
+
+  it('requireStaff: a non-boolean / null answer is not staff', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'a@b.c' } }, error: null })
+    rpc.mockResolvedValue({ data: null, error: null })
+    expect(await requireStaff({ headers: { authorization: 'Bearer t' } })).toMatchObject({ ok: false, status: 403 })
+  })
+
+  it('isStaffToken: missing anon key config → throws; slow check → times out', async () => {
+    await expect(isStaffToken('t', { env: { SUPABASE_URL: 'http://x' } })).rejects.toThrow(/not configured/)
+    rpc.mockReturnValue(new Promise(() => {}))
+    await expect(isStaffToken('t', { env: { SUPABASE_URL: 'http://x', VITE_SUPABASE_ANON_KEY: 'k' }, timeoutMs: 20 })).rejects.toThrow(/timed out/)
+  })
+
+  it('requireStaff: getUser rejects the token → 401 and is_staff() is never asked', async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: { message: 'invalid JWT' } })
+    expect(await requireStaff({ headers: { authorization: 'Bearer anon-key-as-bearer' } })).toMatchObject({ ok: false, status: 401 })
+    expect(rpc).not.toHaveBeenCalled()
   })
 })
 
@@ -114,9 +163,19 @@ describe('POST /api/send-email', () => {
 
   it('non-staff token → 403 and nothing sent', async () => {
     getUser.mockResolvedValue({ data: { user: { email: 'outsider@example.com' } }, error: null })
+    rpc.mockResolvedValue({ data: false, error: null })
     const res = mockRes()
     await sendEmailHandler(mockReq({ headers: { authorization: 'Bearer t' }, body: BODY }), res)
     expect(res.statusCode).toBe(403)
+    expect(sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('staff check errors → 503 and nothing sent', async () => {
+    getUser.mockResolvedValue({ data: { user: { email: 'genflow-qa-test@genshieldservice.com' } }, error: null })
+    rpc.mockResolvedValue({ data: null, error: { message: 'db down' } })
+    const res = mockRes()
+    await sendEmailHandler(mockReq({ headers: { authorization: 'Bearer t' }, body: BODY }), res)
+    expect(res.statusCode).toBe(503)
     expect(sendEmail).not.toHaveBeenCalled()
   })
 

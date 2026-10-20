@@ -21,7 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from './_lib/sendEmail.js';
 import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './_lib/jobSummary.js';
 import { surchargeConfig, SURCHARGE_SETTING_KEYS } from '../src/lib/utils/surcharge.js';
-import { isAllowedEmail } from '../src/lib/allowedUsers.js';
+import { requireStaff } from './_lib/staffAuth.js';
 import { invoiceTotalCents } from '../src/lib/utils/invoiceTotals.js';
 
 // Dates in the email body render in the business's timezone, same as the
@@ -95,16 +95,12 @@ export function selectionKey(selectedDocs, withAgreement) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
-  if (!token) return res.status(401).json({ error: 'Missing auth token' });
-
   const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: userData, error: userErr } = await db.auth.getUser(token);
-  if (userErr || !userData?.user) return res.status(401).json({ error: 'Invalid session' });
-  if (!isAllowedEmail(userData.user.email)) return res.status(403).json({ error: 'Not allowed' });
+  const auth = await requireStaff(req, { db });
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   const body = await readJsonBody(req);
   const jobId = body.job_id;

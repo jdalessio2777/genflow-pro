@@ -6,12 +6,14 @@ import { owedCents, computeCharge, surchargeCentsFor, validateClientSurcharge, p
 // H1 (E-01/B-03): payment routes are staff-only and compute every amount from
 // the invoice row + the card's funding type from Stripe.
 const getUser = vi.fn()
+process.env.SUPABASE_URL ||= 'http://supabase.test'; process.env.SUPABASE_ANON_KEY ||= 'anon-test'
 let invoiceRow = null
 let appSettings = []
 const dbUpdate = vi.fn()
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     auth: { getUser: (...a) => getUser(...a) },
+    rpc: async (fn) => ({ data: fn === 'is_staff', error: null }),
     from: (table) => {
       if (table === 'app_settings') {
         return { select: () => ({ in: async () => ({ data: appSettings, error: null }) }) }

@@ -14,10 +14,11 @@ vi.mock('../../api/_lib/sendEmail.js', () => ({
     sent.push(msg); return { id: `email-${sent.length}` }
   }),
 }))
-vi.mock('../lib/allowedUsers.js', () => ({ isAllowedEmail: () => true }))
+process.env.SUPABASE_URL ||= 'http://supabase.test'; process.env.SUPABASE_ANON_KEY ||= 'anon-test'
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     auth: { getUser: async () => ({ data: { user: { email: 'qa@x.com' } }, error: null }) },
+    rpc: async (fn) => ({ data: fn === 'is_staff', error: null }),
     from: (table) => fakeTable(table),
   }),
 }))
