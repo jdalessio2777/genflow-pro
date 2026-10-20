@@ -145,7 +145,11 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!guard.busy) onOpenChange(v); }}>
-      <DialogContent className="max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 gap-3" data-testid="schedule-job-sheet">
+      {/* One column that can't grow past the sheet (minmax(0,1fr)): an auto
+          grid column took the width of its widest content (a long line name,
+          the date input), so the chips and lines card ran under the right
+          edge with no padding (B1 sheet, F6). */}
+      <DialogContent className="max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden p-5 gap-3 grid-cols-[minmax(0,1fr)]" data-testid="schedule-job-sheet">
         <DialogHeader className="text-left">
           <DialogTitle>Schedule this job</DialogTitle>
           <DialogDescription className="text-xs">
@@ -179,14 +183,14 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
+          <div className="min-w-0">
             <Label className="text-xs" htmlFor="sched-date">Date</Label>
-            <Input id="sched-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="rounded-xl mt-1" />
+            <Input id="sched-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="rounded-xl mt-1 min-w-0" />
           </div>
-          <div>
+          <div className="min-w-0">
             <Label className="text-xs" htmlFor="sched-time">Arrival time</Label>
-            <Input id="sched-time" type="time" value={time} onChange={e => setTime(e.target.value)} className="rounded-xl mt-1" />
+            <Input id="sched-time" type="time" value={time} onChange={e => setTime(e.target.value)} className="rounded-xl mt-1 min-w-0" />
           </div>
         </div>
 
