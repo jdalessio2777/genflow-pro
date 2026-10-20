@@ -40,7 +40,8 @@ function renderAt(path, route) {
   return { ...utils, qc };
 }
 
-beforeEach(() => { jobCreate.mockClear(); jobUpdate.mockClear(); customersList = () => new Promise(() => {}); });
+// The column check never goes to the network in tests (it made the first test flaky).
+beforeEach(() => { jobCreate.mockClear(); jobUpdate.mockClear(); customersList = () => new Promise(() => {}); __setEstimateColumnForTests(false); });
 
 describe("JobForm weak signal", () => {
   it("A-04: typed notes survive a refetch of the job", async () => {
