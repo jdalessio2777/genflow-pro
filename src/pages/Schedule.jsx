@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useUrlState } from "@/hooks/useUrlState";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { jobsListQuery } from "@/lib/queries";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
@@ -53,10 +54,7 @@ export default function Schedule() {
   const { use24h } = usePreferences();
 
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 200),
-  });
+  const { data: jobs = [] } = useQuery(jobsListQuery(200));
 
   // Keep ref current so the calendar sync closure always reads latest jobs
   useEffect(() => { jobsRef.current = jobs; }, [jobs]);

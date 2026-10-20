@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { invoicesListQuery } from "@/lib/queries";
 import { Link } from "react-router-dom";
 import { useUrlState } from "@/hooks/useUrlState";
 import { useSheetHistory } from "@/lib/sheetHistory";
@@ -24,10 +25,7 @@ export default function Invoices() {
   useSheetHistory(!!payingInvoice && !showCheckNumberDialog, () => setPayingInvoice(null));
   const queryClient = useQueryClient();
 
-  const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ["invoices"],
-    queryFn: () => db.Invoice.list("-created_date"),
-  });
+  const { data: invoices = [], isLoading } = useQuery(invoicesListQuery());
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => db.Invoice.update(id, data),

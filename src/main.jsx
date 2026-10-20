@@ -4,6 +4,9 @@ import App from '@/App.jsx'
 import '@/index.css'
 // Apply stored theme preferences before first render to prevent flash
 import '@/hooks/usePreferences'
+import { installApiWriteTracking } from '@/lib/query-client'
+
+installApiWriteTracking()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <App />

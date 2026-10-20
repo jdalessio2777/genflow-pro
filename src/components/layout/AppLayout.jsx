@@ -6,6 +6,7 @@ import PageTransition from "./PageTransition";
 import { usePreferences } from "../../hooks/usePreferences";
 import { UnsavedChangesProvider } from "../../hooks/useUnsavedChangesGuard";
 import { useKeyboardAware } from "../../hooks/useKeyboardAware";
+import { usePressPrefetch } from "../../hooks/usePressPrefetch";
 
 // Pages with their own fixed bottom action bar — MobileNav (also fixed-bottom,
 // same z-index) would otherwise render on top of it and cover the buttons
@@ -19,6 +20,7 @@ export default function AppLayout() {
   const wakeLockRef = useRef(null);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   useKeyboardAware();
+  usePressPrefetch();
 
   // Acquire / release screen wake lock based on preference
   useEffect(() => {

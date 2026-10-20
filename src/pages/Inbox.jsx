@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, markServiceRequestContacted } from "@/lib/db";
+import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { supabase } from "@/lib/supabaseClient";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUrlState } from "@/hooks/useUrlState";
@@ -41,15 +42,9 @@ export default function Inbox() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 200),
-  });
+  const { data: jobs = [] } = useQuery(jobsListQuery(200));
 
   const activeJobCustomerIds = new Set(
     jobs

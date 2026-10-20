@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { customersListQuery } from "@/lib/queries";
 import { deleteCustomerCascade } from "@/lib/deleteRecords";
 import { isActiveMember } from "@/lib/utils/membership";
 import { Link } from "react-router-dom";
@@ -199,10 +199,7 @@ export default function Customers() {
   const [search, setSearch] = useUrlState("q", "");
   const [listTab, setListTab] = useUrlState("tab", "all");
 
-  const { data: customers = [], isLoading } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("-created_date"),
-  });
+  const { data: customers = [], isLoading } = useQuery(customersListQuery("-created_date"));
 
   const filtered = customers.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||

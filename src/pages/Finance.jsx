@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { customersListQuery, invoicesListQuery, jobsListQuery } from "@/lib/queries";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { mileageLogPayload } from "@/lib/utils/mileage";
 import { useAuth } from "@/lib/AuthContext";
@@ -936,10 +937,7 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
 // ─── MAIN FINANCE PAGE ─────────────────────────────────────────────────────────
 export default function Finance() {
   const { settings = {} } = useSettings() || {};
-  const { data: invoices = [] } = useQuery({
-    queryKey: ["invoices"],
-    queryFn: () => db.Invoice.list("-created_date", 500),
-  });
+  const { data: invoices = [] } = useQuery(invoicesListQuery(500));
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses"],
     queryFn: () => db.Expense.list("-date", 500),
@@ -952,14 +950,8 @@ export default function Finance() {
     queryKey: ["vehicles"],
     queryFn: () => db.Vehicle.list("name"),
   }); // still needed for MileageTab
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
-  const { data: financeJobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 500),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
+  const { data: financeJobs = [] } = useQuery(jobsListQuery(500));
 
   return (
     <div>

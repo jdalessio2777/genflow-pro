@@ -1,12 +1,11 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva } from "class-variance-authority";
-import { motion } from 'framer-motion';
 
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,border-color,transform] duration-100 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -46,11 +45,11 @@ const Button = React.forwardRef(({ className, variant, size, asChild = false, ..
     );
   }
   return (
-    <motion.button
+    // Pressed state is CSS (active:scale + the global :active dim in
+    // index.css): instant, no JS animation per button.
+    <button
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
-      whileTap={{ scale: 0.97 }}
-      transition={{ duration: 0.1 }}
       {...props}
     />
   );

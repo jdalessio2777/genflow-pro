@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { normalizePart, partsCatalogQuery, laborRatesQuery } from "@/lib/queries";
 import { stockStatus } from "@/lib/utils/stockStatus";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
 /** Slugs align with Supabase `parts.category` (AJGS / fix_all_categories). */
@@ -76,21 +78,8 @@ const CATALOG_PART_BROWSE_ROWS = (() => {
 
 const ALL_CATALOG_PART_KEYS = CATALOG_PART_BROWSE_ROWS.filter((r) => r.key !== "other").map((r) => r.key);
 
-// Parts written to Supabase before the recategorization commit used the old
-// singular slugs. Normalize them to the current plural keys on read so existing
-// rows appear in the correct folder without a DB migration.
-const LEGACY_CATEGORY_MAP = {
-  air_filter: "air_filters",
-  oil_filter: "oil_filters",
-  oil:        "oils_fluids",
-  spark_plug: "spark_plugs",
-  battery:    "batteries",
-};
-const normalizePart = (p) =>
-  LEGACY_CATEGORY_MAP[p.category]
-    ? { ...p, category: LEGACY_CATEGORY_MAP[p.category] }
-    : p;
-
+// Old singular category slugs are normalized on read: normalizePart in
+// src/lib/queries.js (shared with every cached copy of the parts catalog).
 const TOP_FOLDERS = [
   { key: "parts", label: "Parts", icon: Package, color: "bg-blue-100 text-blue-700", description: "Parts catalog & inventory" },
   { key: "labor_rates", label: "Labor Rates", icon: Clock, color: "bg-amber-100 text-amber-700", description: "Hourly billing rates" },
@@ -132,8 +121,17 @@ function UnsavedChangesDialog({ guard, count }) {
 }
 
 // ─── PARTS CATEGORY LIST ──────────────────────────────────────────────────────
-function PartsCategoryList({ parts, onSelectCategory }) {
+function PartsCategoryList({ parts, loading, onSelectCategory }) {
   const queryClient = useQueryClient();
+  // Until the catalog is in: placeholder rows the size of the category rows,
+  // so the Reorder List / counts landing don't push the list down (CLS 0.26).
+  if (loading) {
+    return (
+      <div className="space-y-2" aria-hidden="true" data-testid="parts-categories-skeleton">
+        {CATALOG_PART_BROWSE_ROWS.map((cat) => <Skeleton key={cat.key} className="h-[66px] w-full rounded-xl" />)}
+      </div>
+    );
+  }
   const knownKeys = ALL_CATALOG_PART_KEYS;
   const reorderParts = parts.filter(p => p.reorder_flagged && isManaged(p));
   return (
@@ -333,7 +331,7 @@ function LaborRatesList() {
   const [unsavedCount, markDirty] = useDirtyKeys();
   const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery(laborRatesQuery());
   const hourly = rates.filter(r => r.type === "hourly");
 
   const createMutation = useMutation({
@@ -391,7 +389,7 @@ function LaborRatesList() {
 
 // ─── FLAT RATES FOLDER LIST ───────────────────────────────────────────────────
 function FlatRatesFolderList({ onSelectFolder }) {
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery(laborRatesQuery());
   const flatRates = rates.filter(r => r.type === "flat_rate");
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
 
@@ -431,7 +429,7 @@ function FlatRatesItemList({ folder }) {
   const [unsavedCount, markDirty] = useDirtyKeys();
   const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery(laborRatesQuery());
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
   const items = folder.key === "other"
     ? rates.filter(r => r.type === "flat_rate" && !knownKeys.includes(r.category))
@@ -503,7 +501,7 @@ function MaintenanceList() {
   const [unsavedCount, markDirty] = useDirtyKeys();
   const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
+  const { data: rates = [] } = useQuery(laborRatesQuery());
   const items = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
 
   const createMutation = useMutation({
@@ -620,8 +618,8 @@ export default function Catalog() {
     return () => clearTimeout(t);
   }, [partsBrowseSearch]);
 
-  const { data: rates = [] } = useQuery({ queryKey: ["labor-rates"], queryFn: () => db.LaborRate.list("name") });
-  const { data: parts = [] } = useQuery({ queryKey: ["parts-catalog"], queryFn: () => db.Part.list("name").then(rows => rows.map(normalizePart)) });
+  const { data: rates = [] } = useQuery(laborRatesQuery());
+  const { data: parts = [], isPending: partsPending } = useQuery(partsCatalogQuery());
   const { data: docTemplates = [] } = useQuery({ queryKey: ["doc-templates"], queryFn: () => db.DocumentTemplate.list("-created_date") });
 
   const partsBrowseTrim = partsBrowseSearch.trim();
@@ -827,7 +825,7 @@ export default function Catalog() {
             </div>
 
             {!partsBrowseTrim ? (
-              <PartsCategoryList parts={parts} onSelectCategory={(cat) => navigate('/catalog?section=parts&sub=' + cat.key)} />
+              <PartsCategoryList parts={parts} loading={partsPending} onSelectCategory={(cat) => navigate('/catalog?section=parts&sub=' + cat.key)} />
             ) : partsSearchPending ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />

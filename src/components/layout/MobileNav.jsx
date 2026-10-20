@@ -1,6 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
-import { motion } from 'framer-motion';
 import { LayoutDashboard, Users, Wrench, CalendarDays, BookOpen, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -9,7 +8,6 @@ import {
   TAB_ROOTS, currentEntry, defaultTabFor, entryAt, historyIdx, setPendingTab, tabLast, getAppRouter,
 } from "@/lib/navigation";
 
-const MotionLink = motion(Link);
 
 const navItems = [
   { tab: "home", path: TAB_ROOTS.home, icon: LayoutDashboard, label: "Home" },
@@ -97,7 +95,7 @@ export default function MobileNav() {
             const isActive = activeTab === tab;
             const showBadge = path === "/inbox" && newLeadsCount > 0;
             return (
-              <MotionLink
+              <Link
                 key={path}
                 to={path}
                 data-testid={`tab-${tab}`}
@@ -109,16 +107,13 @@ export default function MobileNav() {
                   if (location.pathname === path) window.scrollTo({ top: 0, behavior: "smooth" });
                   else popToTabRoot(navigate, tab, path);
                 }}
-                className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl touch-target relative"
-                whileTap={{ scale: 0.92 }}
-                transition={{ duration: 0.1 }}
+                className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl touch-target relative transition-transform duration-100 active:scale-[0.92]"
               >
+                {/* Plain CSS (no framer-motion): the tab bar is on every
+                    screen, so it must not pull the animation library into
+                    the first download (Feel Phase 3). */}
                 {isActive && (
-                  <motion.span
-                    layoutId="nav-active"
-                    className="absolute inset-0 bg-primary/10 rounded-xl"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
+                  <span className="absolute inset-0 bg-primary/10 rounded-xl" />
                 )}
                 <span className="relative z-10">
                   <Icon
@@ -139,7 +134,7 @@ export default function MobileNav() {
                 )}>
                   {label}
                 </span>
-              </MotionLink>
+              </Link>
             );
           })}
         </div>

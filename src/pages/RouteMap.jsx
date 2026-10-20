@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,15 +16,9 @@ export default function RouteMap() {
   const [techView, setTechView] = useState("all");
   const { use24h } = usePreferences();
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 200),
-  });
+  const { data: jobs = [] } = useQuery(jobsListQuery(200));
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
 
   const todayJobs = sortJobs(jobs

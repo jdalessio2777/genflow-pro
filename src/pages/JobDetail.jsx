@@ -1,6 +1,8 @@
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
+import { DetailSkeleton } from "@/components/ui/skeleton";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -195,25 +197,13 @@ export default function JobDetail() {
   const back = useBack();
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
-  const { data: job, isLoading } = useQuery({
-    queryKey: ["job", id],
-    queryFn: async () => { const r = await db.Job.filter({ id }); return r[0]; },
-  });
+  const { data: job, isLoading } = useQuery(jobQuery(id));
 
-  const { data: parts = [], isSuccess: partsLoaded } = useQuery({
-    queryKey: ["job-parts", id],
-    queryFn: () => db.JobPart.filter({ job_id: id }),
-  });
+  const { data: parts = [], isSuccess: partsLoaded } = useQuery(jobPartsQuery(id));
 
-  const { data: labor = [], isSuccess: laborLoaded } = useQuery({
-    queryKey: ["job-labor", id],
-    queryFn: () => db.JobLabor.filter({ job_id: id }),
-  });
+  const { data: labor = [], isSuccess: laborLoaded } = useQuery(jobLaborQuery(id));
 
-  const { data: documents = [] } = useQuery({
-    queryKey: ["job-docs", id],
-    queryFn: () => db.JobDocument.filter({ job_id: id }),
-  });
+  const { data: documents = [] } = useQuery(jobDocsQuery(id));
 
   // Maintenance agreement signed during THIS job (job_agreements, migration
   // 0022). Its PDF rides on the completion email.
@@ -225,34 +215,19 @@ export default function JobDetail() {
     },
   });
 
-  const { data: catalogParts = [] } = useQuery({
-    queryKey: ["parts-catalog"],
-    queryFn: () => db.Part.list("name"),
-  });
+  const { data: catalogParts = [] } = useQuery(partsCatalogQuery());
 
-  const { data: photos = [] } = useQuery({
-    queryKey: ["job-photos", id],
-    queryFn: () => db.JobPhoto.filter({ job_id: id }),
-  });
+  const { data: photos = [] } = useQuery(jobPhotosQuery(id));
 
   const { data: existingInvoices = [] } = useQuery({
-    queryKey: ["job-invoice", id],
-    queryFn: () => db.Invoice.filter({ job_id: id }),
+    ...jobInvoiceQuery(id),
     initialData: () => queryClient.getQueryData(["job-invoice", id]),
   });
   const existingInvoice = existingInvoices[0] || null;
 
-  const { data: customer } = useQuery({
-    queryKey: ["job-customer", job?.customer_id],
-    queryFn: async () => { const r = await db.Customer.filter({ id: job.customer_id }); return r[0]; },
-    enabled: !!job?.customer_id,
-  });
+  const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), enabled: !!job?.customer_id });
 
-  const { data: customerHistory = [] } = useQuery({
-    queryKey: ["customer-history", job?.customer_id],
-    queryFn: () => db.Job.filter({ customer_id: job?.customer_id }, "-created_date"),
-    enabled: !!job?.customer_id,
-  });
+  const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), enabled: !!job?.customer_id });
   const previousJobs = sortJobs(customerHistory
     .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status)))
     .slice(0, 10);
@@ -989,7 +964,7 @@ export default function JobDetail() {
     return () => root.style.removeProperty("--status-bar-bg");
   }, [statusBarColor]);
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  if (isLoading) return <DetailSkeleton />;
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
   const isClosed = ["invoiced", "canceled"].includes(job.status);

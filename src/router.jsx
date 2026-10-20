@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createBrowserRouter, Outlet, ScrollRestoration } from "react-router-dom";
 import { OfflineProvider } from "@/lib/OfflineContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -9,33 +10,14 @@ import {
   ROUTE_META, recordNavigation, markNavigating, markSettled, setAppRouter,
 } from "@/lib/navigation";
 
-import Dashboard from "./pages/Dashboard";
-import Customers from "./pages/Customers";
-import CustomerForm from "./pages/CustomerForm";
-import CustomerDetail from "./pages/CustomerDetail";
-import Jobs from "./pages/Jobs";
-import JobForm from "./pages/JobForm";
-import JobDetail from "./pages/JobDetail";
-import Invoices from "./pages/Invoices";
-import InvoiceDetail from "./pages/InvoiceDetail";
-import Documents from "./pages/Documents";
-import QuoteBuilder from "./pages/QuoteBuilder";
-import QuoteDetail from "./pages/QuoteDetail";
-import DocumentTemplateForm from "./pages/DocumentTemplateForm";
-import DocumentFill from "./pages/DocumentFill";
-import Catalog from "./pages/Catalog";
-import Schedule from "./pages/Schedule";
-import RouteMap from "./pages/RouteMap";
-import MembershipAgreement from "./pages/MembershipAgreement";
-import Inbox from "./pages/Inbox";
-import Finance from "./pages/Finance";
-import InvoicePDF from "./pages/InvoicePDF";
-import Settings from "./pages/Settings";
-import Referrals from "./pages/Referrals";
+import { lazyRoute, hasPage, preloadLikelyPages } from "@/lib/lazyPages";
+import { loaderFor, shouldRevalidate, setLoadersReady } from "@/lib/routeLoaders";
 import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
 
 function RootLayout() {
+  // Warm the likely next screens' code while the phone is idle.
+  useEffect(() => { preloadLikelyPages(); }, []);
   return (
     <OfflineProvider>
       {/* One scroll position per history entry: back lands where you were. */}
@@ -65,47 +47,22 @@ function AuthGate() {
     }
   }
 
+  setLoadersReady(true);
   return <Outlet />;
 }
 
-const PAGES = {
-  "/": Dashboard,
-  "/customers": Customers,
-  "/customers/new": CustomerForm,
-  "/customers/:id": CustomerDetail,
-  "/customers/:id/edit": CustomerForm,
-  "/customers/:id/membership": MembershipAgreement,
-  "/jobs": Jobs,
-  "/jobs/new": JobForm,
-  "/jobs/:id": JobDetail,
-  "/jobs/:id/edit": JobForm,
-  "/invoices": Invoices,
-  "/invoices/:id": InvoiceDetail,
-  "/invoices/:id/send": InvoicePDF,
-  "/quotes/new": QuoteBuilder,
-  "/quotes/:id": QuoteDetail,
-  "/documents": Documents,
-  "/documents/new": DocumentTemplateForm,
-  "/documents/:id/edit": DocumentTemplateForm,
-  "/documents/fill/:id": DocumentFill,
-  "/catalog": Catalog,
-  "/catalog/documents/new": DocumentTemplateForm,
-  "/catalog/documents/:id": DocumentTemplateForm,
-  "/schedule": Schedule,
-  "/route": RouteMap,
-  "/inbox": Inbox,
-  "/call-list": Inbox,
-  "/finance": Finance,
-  "/settings": Settings,
-  "/referrals": Referrals,
-};
 
 // Each screen carries its navigation meta (logical parent + tab) as the
 // route handle (src/lib/navigation.js ROUTE_META is the single table).
-const appRoutes = ROUTE_META.map(({ path, parent, tab }) => {
-  const Page = PAGES[path];
-  return { path, element: <Page />, handle: { parent, tab } };
-});
+// Every screen is code-split (src/lib/lazyPages.js); the router loads its
+// chunk — and, for the main screens, its first data (src/lib/routeLoaders.js,
+// at most 350 ms) — before committing the navigation, so the old screen
+// stays up until the new one can render with content.
+const appRoutes = ROUTE_META.filter(({ path }) => hasPage(path)).map(({ path, parent, tab }) => (
+  loaderFor(path)
+    ? { path, lazy: lazyRoute(path), loader: loaderFor(path), shouldRevalidate, handle: { parent, tab } }
+    : { path, lazy: lazyRoute(path), handle: { parent, tab } }
+));
 
 export const routes = [
   {
