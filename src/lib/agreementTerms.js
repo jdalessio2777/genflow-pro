@@ -2,6 +2,12 @@
 // Plain ESM shared by the signing page (src/pages/MembershipAgreement.jsx) and
 // the server-side agreement PDF (api/_lib/pdf). A copy of the plan/terms as
 // signed is also snapshotted into job_agreements.snapshot at signing time.
+// Member benefit, both plans (Run 6 B4). Techs apply it by hand on the
+// service call (the first half hour of diagnostic labor is not charged) —
+// no invoice/pricing logic reads this. Signed agreements keep the text they
+// were signed with (job_agreements.snapshot), so this only affects new ones.
+export const DIAGNOSTIC_BENEFIT = "First 30 minutes of diagnostic labor free on service calls during the agreement term.";
+
 export const PLANS = {
   annual: {
     name: "Guardian Plan (Annual)",
@@ -13,6 +19,7 @@ export const PLANS = {
       "One (1) full annual maintenance service",
       "10% off all parts, labor, and repair services",
       "Priority emergency service (24-hour response)",
+      DIAGNOSTIC_BENEFIT,
     ],
   },
   semi_annual: {
@@ -25,7 +32,7 @@ export const PLANS = {
       "Two (2) maintenance visits per year",
       "15% off all parts, labor, and repair services",
       "Priority emergency service (24-hour response)",
-      "First 30 minutes of diagnostic labor free, per visit, during normal business hours",
+      DIAGNOSTIC_BENEFIT,
     ],
   },
 };
