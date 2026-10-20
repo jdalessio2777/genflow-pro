@@ -102,7 +102,7 @@ export default function QuoteDetail() {
       }
 
       const job = await createOnce(db.Job, createIds.current.job,
-        jobFromApprovedQuote(quote, { customerId: finalCustomerId, customerName }));
+        jobFromApprovedQuote(quote, { customerId: finalCustomerId, customerName, lineItems }));
 
       const [catalogParts, catalogRates] = await Promise.all([
         Promise.all(lineItems.filter(l => l.source_part_id).map(l => db.Part.filter({ id: l.source_part_id }))).then(r => r.flat()),

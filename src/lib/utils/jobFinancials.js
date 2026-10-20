@@ -24,6 +24,10 @@ export function computeJobFinancials(parts, labor) {
     .map(l => ({ description: l.description, amount: l.total_price || 0 }));
   const discountTotal = discountLines.reduce((s, d) => s + d.amount, 0);
   const laborGross = laborTotal - discountTotal;
+  // NJ sales tax is on the whole subtotal: parts, labor, flat rates AND the
+  // Service Agreement lines (all 4 agreement catalog items are taxable — owner
+  // decision, Run 7). Agreement lines are job_labor rows, so they are in
+  // laborTotal. Nothing is tax-exempt; locked by src/test/agreementTax.test.js.
   const subtotal = partsTotal + laborTotal;
   const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
   const total = subtotal + taxAmount;

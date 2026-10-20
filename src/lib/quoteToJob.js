@@ -1,15 +1,19 @@
+import { inferServiceType } from "./jobTypes.js";
+
 // Job row created when staff mark a quote Approved (QuoteDetail.jsx).
 // - quote.scope_notes ("Scope of Work", customer-facing — already in the quote
 //   email) -> jobs.customer_description (customer-facing; shown in the
 //   appointment confirmation email).
 // - quote.notes ("Notes (internal)") -> internal job fields only
 //   (jobs.notes / jobs.quote_notes), never customer_description.
-export function jobFromApprovedQuote(quote, { customerId, customerName }) {
+// job_type: the service type the quote's lines make obvious, else null (the
+// "Schedule this job" sheet asks for it). Never "quote" (Run 7).
+export function jobFromApprovedQuote(quote, { customerId, customerName, lineItems = [] }) {
   return {
     customer_id: customerId,
     customer_name: customerName,
     title: `Quote Follow-up — ${customerName}`,
-    job_type: "quote",
+    job_type: inferServiceType(lineItems.map(l => l.description)),
     status: "scheduled",
     customer_description: quote?.scope_notes?.trim() || null,
     notes: quote?.notes || null,

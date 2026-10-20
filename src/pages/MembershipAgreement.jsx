@@ -15,7 +15,7 @@ import { ArrowLeft, CheckCircle2, Loader2, Shield } from "lucide-react";
 import { formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
-import { PLANS, TERMS, UNIT_TYPE_LABEL } from "@/lib/agreementTerms";
+import { PLANS, TERMS, UNIT_TYPE_LABEL, PLAN_TAX_NOTE } from "@/lib/agreementTerms";
 import { agreementTerm } from "@/lib/utils/membershipTerm";
 import SignaturePad from "@/components/signature/SignaturePad";
 
@@ -138,7 +138,7 @@ export default function MembershipAgreement() {
 
     if (customer?.email && !jobLinked) {
       const plan = PLANS[selectedPlan];
-      const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr)" : "Guardian Plan (Annual $325/yr)";
+      const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr plus NJ sales tax)" : "Guardian Plan (Annual $325/yr plus NJ sales tax)";
       const expiryStr = expiry.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       const startStr = start.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       try {
@@ -164,7 +164,7 @@ export default function MembershipAgreement() {
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:11px;margin-bottom:14px;">
                 <p style="margin:0;font-size:13px;color:#166534;">✓ Your ${selectedPlan === "semi_annual" ? "15%" : "10%"} member discount will be automatically applied to all qualifying services.</p>
               </div>
-              <p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are free on service calls during the agreement term.</p>
+              <p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are free on service calls during normal business hours, during the agreement term (not on emergency or after-hours calls).</p>
               <p style="font-size:12px;color:#666;margin-top:16px;">Thank you for choosing GenShield.</p>
             </div>
           </div>`,
@@ -176,7 +176,7 @@ export default function MembershipAgreement() {
       }
     }
 
-    const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr)" : "Guardian Plan (Annual $325/yr)";
+    const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr plus NJ sales tax)" : "Guardian Plan (Annual $325/yr plus NJ sales tax)";
     notifyTeam({
       subject: `Membership Signed — ${customer.name} · ${planName}`,
       body: `
@@ -289,7 +289,7 @@ export default function MembershipAgreement() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="text-sm font-bold">{p.name}</p>
-                      <p className="text-xl font-bold mt-0.5">{p.billingLabel}</p>
+                      <p className="text-xl font-bold mt-0.5">{p.priceLabel} <span className="text-xs font-medium text-muted-foreground">{PLAN_TAX_NOTE}</span></p>
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${selectedPlan === key ? (key === "annual" ? "border-blue-500 bg-blue-500" : "border-emerald-500 bg-emerald-500") : "border-border"}`}>
                       {selectedPlan === key && <div className="w-2 h-2 rounded-full bg-white" />}

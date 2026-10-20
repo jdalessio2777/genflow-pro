@@ -7,7 +7,7 @@ import { PLANS, TERMS, DIAGNOSTIC_BENEFIT } from '@/lib/agreementTerms'
 import { buildAgreementPdf } from '../../api/_lib/pdf/agreementPdf.js'
 import { pdfText } from './helpers/pdfText.js'
 
-const LINE = 'First 30 minutes of diagnostic labor free on service calls during the agreement term.'
+const LINE = 'First 30 minutes of diagnostic labor free on service calls during normal business hours, during the agreement term.'
 const base = {
   job_id: 'j1', customer_id: 'c1', start_date: '2026-10-20T14:00:00.000Z', expiry_date: '2027-10-20T14:00:00.000Z',
   signed_at: '2026-10-20T14:00:00.000Z', signature: null,
@@ -19,6 +19,16 @@ const snap = (key, includes) => ({
 
 describe('B4 free-diagnostic member benefit', () => {
   it('uses the exact wording', () => { expect(DIAGNOSTIC_BENEFIT).toBe(LINE) })
+  it('Term 1 covers renewals starting at the end of the current term (Run 7)', () => {
+    expect(TERMS[0].body).toMatch(/^This Agreement is valid for one \(1\) year from the date of signing or, for a renewal, for one \(1\) year from the end of the current term\./)
+  })
+  it('every plan price carries "plus NJ sales tax" on screen and in the PDF (Run 7)', async () => {
+    for (const k of ['annual', 'semi_annual']) {
+      expect(PLANS[k].billingLabel).toBe(`${PLANS[k].priceLabel} plus NJ sales tax`)
+      const txt = pdfText(await buildAgreementPdf({ agreement: { ...base, plan: k, snapshot: snap(k, PLANS[k].includes) } }))
+      expect(txt).toContain('plus NJ sales tax')
+    }
+  })
   it('is listed exactly once in both plans', () => {
     for (const k of ['annual', 'semi_annual']) expect(PLANS[k].includes.filter(i => /diagnostic/i.test(i))).toEqual([LINE])
   })

@@ -23,16 +23,7 @@ import { newRequestId, createOnce, showSaveError, dismissSaveError } from "@/lib
 import { afterJobScheduled } from "@/lib/jobCreate";
 import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
 import { withEstimate } from "@/lib/jobEstimateColumn";
-
-const JOB_TYPES = [
-  { value: "maintenance",         label: "Maintenance" },
-  { value: "diagnostic_repair",   label: "Diagnostic/Repair" },
-  { value: "emergency",           label: "Emergency" },
-  { value: "battery_replacement", label: "Battery Replacement" },
-  { value: "warranty",            label: "Warranty" },
-  { value: "quote",               label: "Quote" },
-  { value: "other",               label: "Other" },
-];
+import { JOB_TYPES, SERVICE_TYPES } from "@/lib/jobTypes";
 
 export default function JobForm() {
   const { id } = useParams();
@@ -231,7 +222,7 @@ export default function JobForm() {
             <Select value={form.job_type} onValueChange={v => update("job_type", v)}>
               <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {JOB_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                {(form.job_type === "quote" ? JOB_TYPES : SERVICE_TYPES).map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

@@ -9,6 +9,7 @@ const jobCreate = vi.fn();
 const jobUpdate = vi.fn();
 const sync = vi.fn(async () => ({ status: "skipped" }));
 const sendEmail = vi.fn(async () => ({ id: "re_test" }));
+const toastError = vi.fn();
 
 function api(key, extra = {}) {
   return {
@@ -30,6 +31,7 @@ const dbMock = {
 const origJobCreate = dbMock.Job.create; dbMock.Job.create = vi.fn(async (r) => { jobCreate(r); return origJobCreate(r); });
 const origJobUpdate = dbMock.Job.update; dbMock.Job.update = vi.fn(async (id, p) => { jobUpdate(id, p); return origJobUpdate(id, p); });
 vi.mock("@/lib/db", () => ({ db: dbMock }));
+vi.mock("sonner", async (orig) => { const m = await orig(); return { ...m, toast: Object.assign((...a) => m.toast(...a), m.toast, { error: (...a) => toastError(...a) }) }; });
 vi.mock("@/lib/coreIntegrations", () => ({ integrationsCore: { SendEmailWithRetry: (...a) => sendEmail(...a) } }));
 vi.mock("@/lib/notifyTeam", () => ({ notifyTeam: vi.fn(), buildTable: vi.fn(() => ""), buildRow: vi.fn(() => ""), buildEventBadge: vi.fn(() => "") }));
 vi.mock("@/lib/calendarSync", () => ({ syncJobToCalendar: (...a) => sync(...a), removeJobFromCalendar: vi.fn() }));
@@ -140,7 +142,8 @@ describe("B1 approve -> Schedule this job", () => {
     await screen.findByText("Schedule this job", { selector: "h2" });
     expect(jobCreate).toHaveBeenCalledTimes(1);
     expect(store.jobs).toHaveLength(1);
-    expect(store.jobs[0]).toMatchObject({ customer_description: "Replace starter", status: "scheduled" });
+    expect(store.jobs[0]).toMatchObject({ customer_description: "Replace starter", status: "scheduled", job_type: "diagnostic_repair" });
+    expect(screen.getByTestId("schedule-sheet-type")).toHaveTextContent("Diagnostic/Repair");
     expect(store.jobs[0].scheduled_date).toBeUndefined();
     expect(store.labor).toHaveLength(1);
     expect(store.parts).toHaveLength(1);
@@ -159,7 +162,7 @@ describe("B1 approve -> Schedule this job", () => {
     fireEvent.click(screen.getByRole("button", { name: /Create & Skip Notification/ }));
     await waitFor(() => expect(sync).toHaveBeenCalled());
     const [, patch] = jobUpdate.mock.calls.find(([, p]) => p.scheduled_date);
-    expect(patch).toMatchObject({ scheduled_date: new Date("2026-11-03T10:00").toISOString(), assigned_to_name: "Alex", customer_description: "Replace starter" });
+    expect(patch).toMatchObject({ scheduled_date: new Date("2026-11-03T10:00").toISOString(), assigned_to_name: "Alex", customer_description: "Replace starter", job_type: "diagnostic_repair" });
     expect(patch).not.toHaveProperty("estimated_minutes"); // column missing -> not sent
     expect(sync.mock.calls[0][0].job).toMatchObject({ estimated_minutes: 180, estimated_duration: 3 });
     expect(sendEmail).not.toHaveBeenCalled();
@@ -182,6 +185,23 @@ describe("B1 approve -> Schedule this job", () => {
     expect(patch.estimated_minutes).toBe(180);
     expect(sendEmail.mock.calls[0][0].to).toBe("pat@example.com");
     expect(sendEmail.mock.calls[0][0].html).toContain("Estimated time on site: about 3 hours.");
+    expect(sendEmail.mock.calls[0][0].html).toContain("Diagnostic Repair");
+    expect(sendEmail.mock.calls[0][0].html).not.toMatch(/>\s*Quote\s*</);
+  });
+
+  it("asks for the service type when the lines don't make it obvious (never \"Quote\")", async () => {
+    seedQuote();
+    store.quoteLines.forEach(l => { l.description = "QA custom line"; });
+    __setEstimateColumnForTests(false);
+    renderQuote();
+    fireEvent.click(await screen.findByRole("button", { name: /Mark Approved/ }));
+    await screen.findByText("Schedule this job", { selector: "h2" });
+    expect(store.jobs[0].job_type).toBeNull();
+    expect(screen.getByTestId("schedule-sheet-type")).toHaveTextContent("Pick the service type");
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-11-03" } });
+    fireEvent.click(screen.getByRole("button", { name: /Create & Skip Notification/ }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Pick the service type"));
+    expect(jobUpdate.mock.calls.find(([, p]) => p.scheduled_date)).toBeUndefined();
   });
 
   it("an already-approved quote reuses its job (no second job) and can reopen the sheet", async () => {

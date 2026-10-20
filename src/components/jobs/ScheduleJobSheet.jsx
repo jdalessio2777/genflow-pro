@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Send, BellOff, Clock } from "lucide-react";
 import EstimatedLengthPicker from "@/components/jobs/EstimatedLengthPicker";
 import { useAuth } from "@/lib/AuthContext";
@@ -15,6 +16,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
 import { withEstimate } from "@/lib/jobEstimateColumn";
 import { afterJobScheduled } from "@/lib/jobCreate";
+import { SERVICE_TYPES, serviceTypePrefill } from "@/lib/jobTypes";
 import { newRequestId, showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
 import { haptics } from "@/lib/haptics";
 import { toast } from "sonner";
@@ -32,7 +34,8 @@ export function appointmentIso(date, time) {
  * "Schedule this job" (B1). Opens right after a quote is approved, and from
  * the job screen of an approved job that isn't scheduled yet. The job row
  * already exists (created at Approve, with the quote's lines); this sheet
- * only gives it a date, arrival time, tech and estimated time on site, so
+ * only gives it a service type, date, arrival time, tech and estimated time
+ * on site, so
  * opening it twice or tapping twice never makes a second job.
  *
  * onDone("scheduled" | "later", job) — the caller closes the sheet / moves on.
@@ -51,6 +54,8 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
   const [tech, setTech] = useState("");
   const [estimate, setEstimate] = useState(DEFAULT_ESTIMATE_MINUTES);
   const [description, setDescription] = useState("");
+  const [serviceType, setServiceType] = useState("");
+  const typeTouched = useRef(false);
   const filledFor = useRef(null);
 
   // Prefill once per job each time the sheet opens.
@@ -63,6 +68,8 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     setTech(job.assigned_to_name || (TECHS.includes(me) ? me : ""));
     setEstimate(Number(job.estimated_minutes) > 0 ? Number(job.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES);
     setDescription(job.customer_description || "");
+    typeTouched.current = false;
+    setServiceType(serviceTypePrefill(job.job_type, []));
   }, [open, job, me]);
 
   const jobId = job?.id;
@@ -86,9 +93,17 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     ...labor.map(l => ({ id: l.id, name: l.description, amount: Number(l.total_price) || 0, kind: "Labor" })),
     ...parts.map(p => ({ id: p.id, name: p.name, amount: Number(p.total_price) || 0, kind: `Part · ×${p.quantity || 1}` })),
   ];
+  // Lines load after the sheet opens: prefill the type from them once they
+  // arrive, unless the tech already picked one (Run 7: never "Quote").
+  const lineKey = lines.map(l => l.name).join("\n");
+  useEffect(() => {
+    if (!open || typeTouched.current) return;
+    setServiceType(serviceTypePrefill(job?.job_type, lineKey.split("\n")));
+  }, [open, job?.job_type, lineKey]);
 
   const save = (sendConfirmation) => guard.run(async function scheduleIt() {
     const scheduled_date = appointmentIso(date, time);
+    if (!serviceType) { haptics.error(); toast.error("Pick the service type"); return; }
     if (!scheduled_date) { haptics.error(); toast.error("Pick a date and arrival time"); return; }
     if (sendConfirmation && !customer?.email) {
       haptics.error();
@@ -99,6 +114,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     try {
       const payload = await withEstimate({
         scheduled_date,
+        job_type: serviceType,
         assigned_to_name: tech || null,
         customer_description: description.trim() || null,
       }, estimate);
@@ -150,6 +166,18 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
             ))}
           </div>
         )}
+
+        <div>
+          <Label className="text-xs" htmlFor="sched-type">Service Type</Label>
+          <Select value={serviceType} onValueChange={(v) => { typeTouched.current = true; setServiceType(v); }}>
+            <SelectTrigger id="sched-type" className="rounded-xl mt-1" data-testid="schedule-sheet-type">
+              <SelectValue placeholder="Pick the service type" />
+            </SelectTrigger>
+            <SelectContent>
+              {SERVICE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div>
