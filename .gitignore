@@ -32,3 +32,8 @@ dist-ssr
 .vercel
 .qa-scratch
 .env*
+
+# Claude Code: only the project skills are tracked (B8). settings.local.json,
+# worktrees/ and everything else under .claude/ stay local.
+.claude/*
+!.claude/skills/

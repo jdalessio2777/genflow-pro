@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { isAllowedEmail } from '../../src/lib/allowedUsers.js';
 
 const PRODUCTION_ORIGIN = 'https://genflow-pro.vercel.app';
 
@@ -35,14 +34,39 @@ export function applyCors(req, res, methods) {
   }
 }
 
+// Staff = a row in public.staff, asked of the database itself: public.is_staff()
+// is called AS THE CALLER (anon key + the caller's own access token), so it
+// answers for auth.uid() of that token. Adding or removing someone in
+// public.staff is the only step; there is no second list to keep in sync.
+// Throws when the check itself fails (network, Supabase down, missing config)
+// so callers can tell "not staff" (403) apart from "couldn't check" (503).
+export async function isStaffToken(token, { env = process.env, timeoutMs = 8000 } = {}) {
+  const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+  const anonKey = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) throw new Error('Staff check not configured (Supabase URL / anon key missing)');
+  const asCaller = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Staff check timed out')), timeoutMs);
+  });
+  try {
+    const { data, error } = await Promise.race([asCaller.rpc('is_staff'), timeout]);
+    if (error) throw new Error(error.message || 'is_staff failed');
+    return data === true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Authorization: Bearer <Supabase access token of a staff user>.
 // auth.getUser() asks Supabase Auth to validate the token, so forged, expired,
-// and signed-out (session revoked) tokens are rejected server-side. Staff =
-// the shared allow-list in src/lib/allowedUsers.js, the same list the sign-in
-// gate and api/send-job-summary.js use.
-// TODO(CRIT-1): once public.staff + is_staff() exist, check the staff table
-// here instead of the email list.
-export async function requireStaff(req, { db } = {}) {
+// and signed-out (session revoked) tokens are rejected server-side (401).
+// Then is_staff() decides: not staff → 403; the check failing → 503 (never
+// treated as staff).
+export async function requireStaff(req, { db, staffCheck = isStaffToken } = {}) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (!token) return { ok: false, status: 401, error: 'Missing auth token' };
 
@@ -51,6 +75,13 @@ export async function requireStaff(req, { db } = {}) {
   });
   const { data, error } = await client.auth.getUser(token);
   if (error || !data?.user) return { ok: false, status: 401, error: 'Invalid session' };
-  if (!isAllowedEmail(data.user.email)) return { ok: false, status: 403, error: 'Not allowed' };
+  let staff;
+  try {
+    staff = await staffCheck(token, data.user);
+  } catch (e) {
+    console.error('[staffAuth] staff check failed:', e.message);
+    return { ok: false, status: 503, error: 'Staff check failed, try again' };
+  }
+  if (!staff) return { ok: false, status: 403, error: 'Not allowed' };
   return { ok: true, user: data.user };
 }

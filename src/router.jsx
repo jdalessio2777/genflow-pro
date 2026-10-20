@@ -1,7 +1,8 @@
-import { createBrowserRouter, Outlet, ScrollRestoration } from "react-router-dom";
+import { createBrowserRouter, Navigate, Outlet, ScrollRestoration } from "react-router-dom";
 import { OfflineProvider } from "@/lib/OfflineContext";
 import { useAuth } from "@/lib/AuthContext";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
+import StaffCheckScreen from "@/components/StaffCheckScreen";
 import PageNotFound from "./lib/PageNotFound";
 import AppLayout from "./components/layout/AppLayout";
 import RouteError from "./components/layout/RouteError";
@@ -46,7 +47,7 @@ function RootLayout() {
 }
 
 function AuthGate() {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, isAuthenticated, staffStatus, staffCheckError, retryStaffCheck, signOut } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -62,7 +63,16 @@ function AuthGate() {
     } else if (authError.type === 'auth_required') {
       navigateToLogin();
       return null;
+    } else if (authError.type === 'access_denied') {
+      // B6: not staff — the login screen shows the message (router navigation,
+      // not a reload, so the message survives).
+      return <Navigate to="/login" replace />;
     }
+  }
+
+  // B6: staff check (is_staff()) still pending on first sign-in, or failed.
+  if (isAuthenticated && staffStatus !== 'staff') {
+    return <StaffCheckScreen status={staffStatus} error={staffCheckError} onRetry={retryStaffCheck} onSignOut={() => signOut(true)} />;
   }
 
   return <Outlet />;

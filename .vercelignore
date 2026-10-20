@@ -1,0 +1,40 @@
+# B7 DEPLOY SAFEGUARD — what a `vercel deploy` may upload (gitignore syntax).
+# ALLOW-LIST: everything at the repo root is excluded unless listed below, so
+# new folders (.qa-scratch, .claude, archives, sessions, keys, scratch files)
+# are never uploaded by default. Previews are still meant to be deployed from a
+# clean copy (git archive), never from the repo folder — this is the backstop.
+# src/test/vercelignore.test.js checks this file.
+
+/*
+
+# What the build (vite) and the functions (api/, which import src/lib) need:
+!/api
+!/src
+!/public
+!/index.html
+!/package.json
+!/package-lock.json
+!/vite.config.js
+!/tailwind.config.js
+!/postcss.config.js
+!/jsconfig.json
+!/components.json
+!/vercel.json
+
+# Never upload, even inside allowed folders:
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/id_rsa*
+**/*session*.json
+**/*token*.json
+**/*cookie*.json
+**/storageState*.json
+**/.qa-*
+**/.bypass-secret
+**/*.log
+**/.DS_Store
+src/test
