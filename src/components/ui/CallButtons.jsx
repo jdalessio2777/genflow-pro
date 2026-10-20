@@ -24,14 +24,16 @@ export default function CallButtons({ phone }) {
 
   return (
     <div className="grid grid-cols-2 gap-1.5 w-full">
-      <a href={`tel:${phone}`} className="min-w-0">
-        <button className="w-full flex items-center justify-center gap-1 h-9 px-1.5 rounded-xl bg-green-50 border border-green-200 text-xs font-semibold text-green-700 hover:bg-green-100 active:scale-95 transition-all">
-          <Phone className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Call</span>
-        </button>
+      <a
+        href={`tel:${phone}`}
+        className="relative hit-44 min-w-0 w-full flex items-center justify-center gap-1 h-9 px-1.5 rounded-xl bg-green-50 border border-green-200 text-xs font-semibold text-green-700 hover:bg-green-100 active:scale-95 transition-all"
+      >
+        <Phone className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Call</span>
       </a>
       <button
+        type="button"
         onClick={handleNextiva}
-        className="min-w-0 w-full flex items-center justify-center gap-1 h-9 px-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all"
+        className="relative hit-44 min-w-0 w-full flex items-center justify-center gap-1 h-9 px-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all"
       >
         <PhoneCall className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Nextiva</span>
       </button>

@@ -1,3 +1,4 @@
+import { removeJobFromCalendar } from "@/lib/calendarSync";
 import { db } from "@/lib/db";
 import { removePartFromJob } from "@/lib/inventory";
 
@@ -55,6 +56,7 @@ export async function deleteJobCascade(jobId) {
   if (blockers.length) throw new Error(`Not deleted — ${blockers.join("; ")}. Nothing was removed.`);
   const job = (await db.Job.filter({ id: jobId }))[0];
   await deleteJobRows(jobId, job?.status);
+  await removeJobFromCalendar({ job }); // never throws
 }
 
 export async function deleteCustomerCascade(customerId) {
@@ -68,7 +70,7 @@ export async function deleteCustomerCascade(customerId) {
   if (requests.length) blockers.push(`${requests.length} website request${requests.length > 1 ? "s are" : " is"} linked to this customer`);
   if (blockers.length) throw new Error(`Not deleted — ${blockers.join("; ")}. Nothing was removed.`);
 
-  for (const job of jobs) await deleteJobRows(job.id, job.status);
+  for (const job of jobs) { await deleteJobRows(job.id, job.status); removeJobFromCalendar({ job }); } // calendar: never throws (B3)
   const invoices = await db.Invoice.filter({ customer_id: customerId });
   await Promise.all(invoices.map(inv => db.Invoice.delete(inv.id)));
   await db.Customer.delete(customerId);

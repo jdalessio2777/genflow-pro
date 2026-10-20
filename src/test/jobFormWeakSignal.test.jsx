@@ -25,6 +25,7 @@ vi.mock("@/lib/googleCalendar", () => ({ createCalendarEvent: vi.fn(), updateCal
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
 const { default: JobForm } = await import("../pages/JobForm.jsx");
+const { __setEstimateColumnForTests } = await import("../lib/jobEstimateColumn.js");
 
 function renderAt(path, route) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -39,7 +40,8 @@ function renderAt(path, route) {
   return { ...utils, qc };
 }
 
-beforeEach(() => { jobCreate.mockClear(); jobUpdate.mockClear(); customersList = () => new Promise(() => {}); });
+// The column check never goes to the network in tests (it made the first test flaky).
+beforeEach(() => { jobCreate.mockClear(); jobUpdate.mockClear(); customersList = () => new Promise(() => {}); __setEstimateColumnForTests(false); });
 
 describe("JobForm weak signal", () => {
   it("A-04: typed notes survive a refetch of the job", async () => {
@@ -77,5 +79,31 @@ describe("JobForm weak signal", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save/i }));
     await waitFor(() => expect(jobUpdate).toHaveBeenCalled());
     expect(jobUpdate.mock.calls[0][1]).toMatchObject({ customer_id: "c1", customer_name: "Real Name", notes: "original note" });
+  });
+
+  it("B2: Estimated time on site defaults to 2 hr; a pick is saved once the column exists", async () => {
+    __setEstimateColumnForTests(true);
+    customersList = async () => [{ id: "c1", name: "Cust" }];
+    const { container } = renderAt("/jobs/new?customer=c1", "/jobs/new");
+    expect(screen.getByRole("button", { name: "2 hr" })).toHaveAttribute("aria-pressed", "true");
+    const inputs = [...container.querySelectorAll("input")].filter(i => i.type === "text" || !i.type);
+    fireEvent.change(inputs[0], { target: { value: "QA job" } });
+    fireEvent.click(screen.getByRole("button", { name: "3 hr" }));
+    fireEvent.click(screen.getByRole("button", { name: /Create & Skip/i }));
+    await waitFor(() => expect(jobCreate).toHaveBeenCalled());
+    expect(jobCreate.mock.calls[0][0].estimated_minutes).toBe(180);
+    __setEstimateColumnForTests(false);
+  });
+
+  it("B2: without the column the estimate is left out of the save", async () => {
+    __setEstimateColumnForTests(false);
+    customersList = async () => [{ id: "c1", name: "Cust" }];
+    const { container } = renderAt("/jobs/new?customer=c1", "/jobs/new");
+    const inputs = [...container.querySelectorAll("input")].filter(i => i.type === "text" || !i.type);
+    fireEvent.change(inputs[0], { target: { value: "QA job" } });
+    fireEvent.click(screen.getByRole("button", { name: "3 hr" }));
+    fireEvent.click(screen.getByRole("button", { name: /Create & Skip/i }));
+    await waitFor(() => expect(jobCreate).toHaveBeenCalled());
+    expect(jobCreate.mock.calls[0][0]).not.toHaveProperty("estimated_minutes");
   });
 });

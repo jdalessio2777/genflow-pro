@@ -13,7 +13,7 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} fallbackElement={<div className="fixed inset-0 bg-background" />} />
         {/* sonner is the only toaster. (The old shadcn <Toaster /> rendered two
             empty full-width fixed divs over the top 32 px of every screen and
             swallowed taps on back/edit/New buttons — F-03.) */}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { customersListQuery, invoicesListQuery, jobsListQuery } from "@/lib/queries";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { mileageLogPayload } from "@/lib/utils/mileage";
 import { useAuth } from "@/lib/AuthContext";
@@ -75,7 +76,7 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
       <div className="flex gap-1.5 flex-wrap">
         {[["month", "This Month"], ["quarter", "This Quarter"], ["year", "This Year"], ["all", "All Time"]].map(([key, label]) => (
           <button key={key} onClick={() => setPeriod(key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             {label}
           </button>
         ))}
@@ -763,7 +764,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
       <div className="flex items-center gap-1.5 flex-wrap">
         {[["week", "This Week"], ["month", "This Month"], ["all", "All Time"]].map(([key, label]) => (
           <button key={key} onClick={() => setView(key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             {label}
           </button>
         ))}
@@ -772,12 +773,12 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
       {activeVehicles.length > 1 && (
         <div className="flex items-center gap-1.5 flex-wrap">
           <button onClick={() => setVehicleFilter("all")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${vehicleFilter === "all" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${vehicleFilter === "all" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             <Truck className="w-3 h-3" /> All Vehicles
           </button>
           {activeVehicles.map(v => (
             <button key={v.id} onClick={() => setVehicleFilter(v.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${vehicleFilter === v.id ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+              className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${vehicleFilter === v.id ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
               {v.name.split(" ").slice(0, 2).join(" ")}
             </button>
           ))}
@@ -936,10 +937,7 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
 // ─── MAIN FINANCE PAGE ─────────────────────────────────────────────────────────
 export default function Finance() {
   const { settings = {} } = useSettings() || {};
-  const { data: invoices = [] } = useQuery({
-    queryKey: ["invoices"],
-    queryFn: () => db.Invoice.list("-created_date", 500),
-  });
+  const { data: invoices = [] } = useQuery(invoicesListQuery(500));
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses"],
     queryFn: () => db.Expense.list("-date", 500),
@@ -952,14 +950,8 @@ export default function Finance() {
     queryKey: ["vehicles"],
     queryFn: () => db.Vehicle.list("name"),
   }); // still needed for MileageTab
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
-  const { data: financeJobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 500),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
+  const { data: financeJobs = [] } = useQuery(jobsListQuery(500));
 
   return (
     <div>

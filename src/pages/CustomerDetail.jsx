@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { customerQuery, customerJobsQuery, customerInvoicesQuery } from "@/lib/queries";
+import { DetailSkeleton } from "@/components/ui/skeleton";
 import { deleteCustomerCascade } from "@/lib/deleteRecords";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,25 +32,13 @@ export default function CustomerDetail() {
     onError: (e) => { toast.error("Failed to delete: " + e.message, { duration: Infinity, closeButton: true }); },
   });
 
-  const { data: customer, isLoading } = useQuery({
-    queryKey: ["customer", id],
-    queryFn: async () => {
-      const res = await db.Customer.filter({ id });
-      return res[0];
-    },
-  });
+  const { data: customer, isLoading } = useQuery(customerQuery(id));
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["customer-jobs", id],
-    queryFn: () => db.Job.filter({ customer_id: id }, "-created_date"),
-  });
+  const { data: jobs = [] } = useQuery(customerJobsQuery(id));
 
-  const { data: invoices = [] } = useQuery({
-    queryKey: ["customer-invoices", id],
-    queryFn: () => db.Invoice.filter({ customer_id: id }),
-  });
+  const { data: invoices = [] } = useQuery(customerInvoicesQuery(id));
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  if (isLoading) return <DetailSkeleton />;
   if (!customer) return <div className="p-4 text-center">Customer not found</div>;
 
   const totalRevenue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.total || 0), 0);

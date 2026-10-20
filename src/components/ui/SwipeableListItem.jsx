@@ -154,8 +154,10 @@ export default function SwipeableListItem({
         ))}
       </div>
 
-      {/* Draggable content layer */}
+      {/* Draggable content layer. Opaque page-coloured backing: a pressed
+          (dimmed) row must not show the Call/Nav buttons underneath. */}
       <div
+        className="bg-background rounded-2xl"
         style={{
           transform: `translateX(${translateX}px)`,
           transition: isAnimating ? "transform 0.3s ease" : "none",

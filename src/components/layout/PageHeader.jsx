@@ -12,7 +12,7 @@ export default function PageHeader({ title, subtitle, back, backLabel, actions, 
 
   return (
     <header className={cn(
-      "sticky top-[var(--sat)] z-40 bg-background/90 backdrop-blur-xl border-b border-border/60 px-4 py-3.5",
+      "sticky top-[var(--sat)] z-40 bg-background border-b border-border/60 px-4 py-3.5",
       className
     )}>
       <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
@@ -40,7 +40,7 @@ export default function PageHeader({ title, subtitle, back, backLabel, actions, 
           </div>
         </div>
         {actions && (
-          <div className="flex items-center gap-1.5 shrink-0">{actions}</div>
+          <div className="flex items-center gap-1.5 shrink-0" data-hit44>{actions}</div>
         )}
       </div>
     </header>

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { supabase } from "@/lib/supabaseClient";
 import { integrationsCore } from "@/lib/coreIntegrations";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
@@ -15,7 +15,8 @@ import { ArrowLeft, CheckCircle2, Loader2, Shield } from "lucide-react";
 import { formatDate } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
-import { PLANS, TERMS, UNIT_TYPE_LABEL } from "@/lib/agreementTerms";
+import { PLANS, TERMS, UNIT_TYPE_LABEL, PLAN_TAX_NOTE } from "@/lib/agreementTerms";
+import { agreementTerm } from "@/lib/utils/membershipTerm";
 import SignaturePad from "@/components/signature/SignaturePad";
 
 export default function MembershipAgreement() {
@@ -43,6 +44,26 @@ export default function MembershipAgreement() {
     queryFn: async () => { const r = await db.Customer.filter({ id }); return r[0]; },
   });
 
+  // Agreement already signed on this job (re-sign keeps its term — B5a).
+  const { data: jobAgreement = null } = useQuery({
+    queryKey: ["job-agreement", fromJobId],
+    enabled: !!fromJobId,
+    queryFn: async () => {
+      try { const r = await db.JobAgreement.filter({ job_id: fromJobId }); return r[0] || null; }
+      catch { return null; }
+    },
+  });
+
+  // "Renew or Change Plan" starts on the customer's current plan, not always
+  // Annual (audit D-06). A plan in the URL (from a job's agreement line) wins.
+  const planTouched = useRef(!!PLANS[planParam]);
+  useEffect(() => {
+    if (!planTouched.current && PLANS[customer?.membership_plan]) {
+      planTouched.current = true;
+      setSelectedPlan(customer.membership_plan);
+    }
+  }, [customer?.membership_plan]);
+
   const updateCustomer = useMutation({
     mutationFn: (data) => db.Customer.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer", id] }),
@@ -50,12 +71,13 @@ export default function MembershipAgreement() {
 
   const handleSign = async (dataUrl) => {
     haptics.success();
-    const start = new Date();
-    const expiry = new Date(start);
-    expiry.setFullYear(expiry.getFullYear() + 1);
+    // One membership per customer: this updates the customer row (B5a).
+    const { start, expiry, kind } = agreementTerm({ customer, plan: selectedPlan, jobAgreement });
+    const signedAt = new Date();
 
-    // Log prior agreement to history before overwriting (skip on first-time signup)
-    if (customer.membership_expiry) {
+    // Log prior agreement to history before overwriting (skip on first-time
+    // signup, and on a re-sign of this job's agreement — same term).
+    if (customer.membership_expiry && kind !== "resign") {
       try {
         await db.MembershipRenewal.create({
           customer_id: customer.id,
@@ -93,7 +115,7 @@ export default function MembershipAgreement() {
         start_date: start.toISOString(),
         expiry_date: expiry.toISOString(),
         signature: dataUrl,
-        signed_at: start.toISOString(),
+        signed_at: signedAt.toISOString(),
         signed_by: user?.email ?? null,
         snapshot: {
           customer: { name: customer.name, address: customer.address || null, email: customer.email || null, phone: customer.phone || null },
@@ -116,7 +138,7 @@ export default function MembershipAgreement() {
 
     if (customer?.email && !jobLinked) {
       const plan = PLANS[selectedPlan];
-      const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr)" : "Guardian Plan (Annual $325/yr)";
+      const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr plus NJ sales tax)" : "Guardian Plan (Annual $325/yr plus NJ sales tax)";
       const expiryStr = expiry.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       const startStr = start.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       try {
@@ -142,7 +164,7 @@ export default function MembershipAgreement() {
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:11px;margin-bottom:14px;">
                 <p style="margin:0;font-size:13px;color:#166534;">✓ Your ${selectedPlan === "semi_annual" ? "15%" : "10%"} member discount will be automatically applied to all qualifying services.</p>
               </div>
-              ${selectedPlan === "semi_annual" ? `<p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are complimentary on each visit.</p>` : ""}
+              <p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are free on service calls during normal business hours, during the agreement term (not on emergency or after-hours calls).</p>
               <p style="font-size:12px;color:#666;margin-top:16px;">Thank you for choosing GenShield.</p>
             </div>
           </div>`,
@@ -154,7 +176,7 @@ export default function MembershipAgreement() {
       }
     }
 
-    const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr)" : "Guardian Plan (Annual $325/yr)";
+    const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr plus NJ sales tax)" : "Guardian Plan (Annual $325/yr plus NJ sales tax)";
     notifyTeam({
       subject: `Membership Signed — ${customer.name} · ${planName}`,
       body: `
@@ -182,15 +204,19 @@ export default function MembershipAgreement() {
   if (!customer) return <div className="p-4 text-center">Customer not found</div>;
 
   const plan = PLANS[selectedPlan];
-  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const expiryDate = new Date(); expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-  const expiryStr = expiryDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const longDate = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const term = agreementTerm({ customer, plan: selectedPlan, jobAgreement });
+  const today = longDate(term.start);
+  const expiryStr = longDate(term.expiry);
+  const termNote = term.kind === "renewal"
+    ? `Renewal — the current plan runs to ${longDate(term.start)}; the new year starts then.`
+    : term.kind === "change" ? "Plan change — the new plan starts today." : null;
 
   // Already a member
   if (customer.membership_plan && customer.membership_signed && step !== "done" && !renewing) {
     return (
       <div>
-        <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
+        <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background z-40">
           <button onClick={() => goBack()} aria-label="Back" data-testid="back-button" className="touch-target flex items-center justify-center w-9 h-9 rounded-xl hover:bg-muted">
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -211,7 +237,7 @@ export default function MembershipAgreement() {
               </div>
             </div>
             <div className="text-sm space-y-1 text-emerald-800 dark:text-emerald-200">
-              <p><span className="font-medium">Started:</span> {formatDate(customer.membership_start)}</p>
+              <p><span className="font-medium">{customer.membership_start && new Date(customer.membership_start) > new Date() ? "Renewed — new term starts:" : "Started:"}</span> {formatDate(customer.membership_start)}</p>
               <p><span className="font-medium">Expires:</span> {formatDate(customer.membership_expiry)}</p>
             </div>
           </Card>
@@ -225,7 +251,7 @@ export default function MembershipAgreement() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
+      <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background z-40">
         <button
           onClick={() => { if (step === "terms") setStep("plan"); else if (step === "sign") setStep("terms"); else if (renewing && !fromJobId) setRenewing(false); else goBack(); }}
           aria-label="Back" data-testid="back-button"
@@ -263,7 +289,7 @@ export default function MembershipAgreement() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="text-sm font-bold">{p.name}</p>
-                      <p className="text-xl font-bold mt-0.5">{p.billingLabel}</p>
+                      <p className="text-xl font-bold mt-0.5">{p.priceLabel} <span className="text-xs font-medium text-muted-foreground">{PLAN_TAX_NOTE}</span></p>
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${selectedPlan === key ? (key === "annual" ? "border-blue-500 bg-blue-500" : "border-emerald-500 bg-emerald-500") : "border-border"}`}>
                       {selectedPlan === key && <div className="w-2 h-2 rounded-full bg-white" />}
@@ -309,6 +335,7 @@ export default function MembershipAgreement() {
                 <span className="text-muted-foreground">Start Date</span><span className="font-medium">{today}</span>
                 <span className="text-muted-foreground">Expires</span><span className="font-medium">{expiryStr}</span>
               </div>
+              {termNote && <p data-testid="term-note" className="text-xs text-muted-foreground mt-2">{termNote}</p>}
             </Card>
 
             {/* Terms list */}

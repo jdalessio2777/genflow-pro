@@ -1,14 +1,17 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import PageHeader from "@/components/layout/PageHeader";
-import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink, CalendarPlus } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
-import { jobFromApprovedQuote } from "@/lib/quoteToJob";
+import { jobFromApprovedQuote, jobLinesFromQuote } from "@/lib/quoteToJob";
+import { createOnce, newRequestId } from "@/lib/saveSafety";
+import { afterSheetsClose } from "@/lib/sheetHistory";
+import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
 import { computeQuoteTotals, agreementTypeForRate } from "@/lib/utils/quoteTotals";
 
 const STATUS_STYLES = {
@@ -59,19 +62,34 @@ export default function QuoteDetail() {
   });
 
   // Approve: create customer (if prospect) -> job -> job_parts/job_labor from the
-  // quote's line items, in that order. The job lands in status "scheduled" with
-  // no scheduled_date yet. This never sends a confirmation email — the quote
-  // email already served that purpose. Staff pick a real appointment time via
-  // the normal job-edit flow; if a confirmation is wanted, JobDetail's "Resend
-  // Confirmation Email" banner (shown for any job with no confirmation sent
-  // yet) covers it.
+  // quote's line items -> quote approved (resulting_job_id), in that order. The
+  // job lands in status "scheduled" with no scheduled_date; the "Schedule this
+  // job" sheet (B1) opens right away to give it a date, arrival time, tech and
+  // estimated time on site — or "Schedule later" leaves it Not scheduled.
+  //
+  // Never two jobs for one quote: the quote is re-read first and an existing
+  // resulting_job_id is reused (second device / stale screen / reopened
+  // quote); every row uses an id fixed for this screen, so a Retry after a
+  // lost response finds what it already made (createOnce).
+  const createIds = useRef(null);
+  if (!createIds.current) createIds.current = { customer: newRequestId(), job: newRequestId(), lines: {} };
+  const [sheetJob, setSheetJob] = useState(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const openSheetFor = (job) => { setSheetJob(job); setSheetOpen(true); };
+
   const approveMutation = useMutation({
     mutationFn: async () => {
-      let finalCustomerId = quote.customer_id;
+      const fresh = (await db.Quote.filter({ id }))[0];
+      if (fresh?.resulting_job_id) {
+        const existing = (await db.Job.filter({ id: fresh.resulting_job_id }))[0];
+        if (existing) return { job: existing, reused: true };
+      }
+
+      let finalCustomerId = fresh?.customer_id || quote.customer_id;
       let customerName = customer?.name;
 
       if (!finalCustomerId) {
-        const newCustomer = await db.Customer.create({
+        const newCustomer = await createOnce(db.Customer, createIds.current.customer, {
           name: quote.prospect_name,
           phone: quote.prospect_phone || null,
           email: quote.prospect_email || null,
@@ -79,65 +97,62 @@ export default function QuoteDetail() {
         });
         finalCustomerId = newCustomer.id;
         customerName = newCustomer.name;
+      } else if (!customerName) {
+        customerName = (await db.Customer.filter({ id: finalCustomerId }))[0]?.name || quote.customer_name;
       }
 
-      const job = await db.Job.create(jobFromApprovedQuote(quote, { customerId: finalCustomerId, customerName }));
+      const job = await createOnce(db.Job, createIds.current.job,
+        jobFromApprovedQuote(quote, { customerId: finalCustomerId, customerName, lineItems }));
 
-      // Lines keep the quoted price (already member-priced). Catalog parts
-      // keep their catalog link and cost; agreement lines keep the signing
-      // requirement (B-01/B-02).
       const [catalogParts, catalogRates] = await Promise.all([
         Promise.all(lineItems.filter(l => l.source_part_id).map(l => db.Part.filter({ id: l.source_part_id }))).then(r => r.flat()),
         Promise.all(lineItems.filter(l => l.source_labor_rate_id).map(l => db.LaborRate.filter({ id: l.source_labor_rate_id }))).then(r => r.flat()),
       ]);
-      await Promise.all(lineItems.map(l => {
-        if (l.type === "part") {
-          const cat = catalogParts.find(p => p.id === l.source_part_id);
-          const qty = l.quantity || 1;
-          return db.JobPart.create({
-            job_id: job.id,
-            name: l.description,
-            quantity: qty,
-            price: l.unit_price || 0,
-            cost: Number(cat?.cost) || 0,
-            total_price: l.total_price || 0,
-            total_cost: (Number(cat?.cost) || 0) * qty,
-            charge_for_part: true,
-            part_id: cat?.id || null,
-          });
-        }
-        const rate = catalogRates.find(r => r.id === l.source_labor_rate_id);
-        return db.JobLabor.create({
-          job_id: job.id,
-          description: l.description,
-          is_flat_rate: true,
-          flat_rate_amount: l.total_price || 0,
-          flat_rate_cost: 0,
-          total_price: l.total_price || 0,
-          total_cost: 0,
-          ...(agreementTypeForRate(rate) ? { requires_agreement: agreementTypeForRate(rate) } : {}),
-        });
-      }));
+      const ids = createIds.current.lines;
+      lineItems.forEach(l => { ids[l.id] ??= newRequestId(); });
+      const rows = jobLinesFromQuote(lineItems, { jobId: job.id, catalogParts, catalogRates, ids, agreementTypeForRate });
+      await Promise.all([
+        ...rows.parts.map(r => createOnce(db.JobPart, r.id, r)),
+        ...rows.labor.map(r => createOnce(db.JobLabor, r.id, r)),
+      ]);
 
-      const updatedQuote = await db.Quote.update(id, {
+      await db.Quote.update(id, {
         status: "approved",
         approved_at: new Date().toISOString(),
         customer_id: finalCustomerId,
         resulting_job_id: job.id,
       });
 
-      return { quote: updatedQuote, job };
+      return { job, reused: false };
     },
-    onSuccess: ({ job }) => {
+    onSuccess: ({ job, reused }) => {
       queryClient.invalidateQueries({ queryKey: ["quote", id] });
       queryClient.invalidateQueries({ queryKey: ["quotes-inbox"] });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
-      toast.success("Quote approved — job created");
-      navigate(`/jobs/${job.id}`, { replace: true });
+      toast.success(reused ? "Quote already approved — opening its job" : "Quote approved — job created");
+      if (!job.scheduled_date && !["canceled", "completed", "invoiced"].includes(job.status)) openSheetFor(job);
+      else navigate(`/jobs/${job.id}`, { replace: true });
     },
     onError: (e) => toast.error(`Failed to approve quote: ${e.message}`),
   });
+
+  // An approved quote whose job still has no date: offer the sheet again.
+  const { data: resultingJob } = useQuery({
+    queryKey: ["job", quote?.resulting_job_id],
+    queryFn: async () => (await db.Job.filter({ id: quote.resulting_job_id }))[0] ?? null,
+    enabled: !!quote?.resulting_job_id,
+  });
+  const canScheduleResultingJob = !!resultingJob && !resultingJob.scheduled_date && resultingJob.status === "scheduled";
+
+  // Created / scheduled, or "Schedule later": the job replaces this quote
+  // screen (back from the job returns to where the quote was opened from),
+  // after the sheet's history entry is gone.
+  const finishSheet = (_kind, job) => {
+    setSheetOpen(false);
+    const jobId = job?.id || sheetJob?.id;
+    afterSheetsClose(() => navigate(`/jobs/${jobId}`, { replace: true }));
+  };
 
   if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   if (!quote) return <div className="p-4 text-center">Quote not found</div>;
@@ -165,6 +180,11 @@ export default function QuoteDetail() {
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-3">
               New prospect — no customer record yet. Approving will create one.
             </p>
+          )}
+          {canScheduleResultingJob && (
+            <Button size="sm" className="w-full rounded-xl gap-1.5 mt-3" onClick={() => openSheetFor(resultingJob)}>
+              <CalendarPlus className="w-3.5 h-3.5" /> Schedule this job
+            </Button>
           )}
           {quote.resulting_job_id && (
             <Link to={`/jobs/${quote.resulting_job_id}`}>
@@ -243,6 +263,15 @@ export default function QuoteDetail() {
           </div>
         )}
       </div>
+
+      <ScheduleJobSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        job={sheetJob}
+        customer={sheetJob?.customer_id && customer?.id === sheetJob.customer_id ? customer : undefined}
+        from="quote"
+        onDone={finishSheet}
+      />
     </div>
   );
 }

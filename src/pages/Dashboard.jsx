@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { customersListQuery, invoicesListQuery, jobsListQuery, partsCatalogQuery } from "@/lib/queries";
 import { stockStatus, stockAlertText } from "@/lib/utils/stockStatus";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { renewalEmailHTML, renewalEmailSubject } from "@/lib/emailTemplates/renewalEmail";
@@ -16,6 +17,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { isManaged } from "@/lib/utils/partsManaged";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function ExpiredMembershipCard({ c }) {
   const daysAgo = Math.abs(Math.ceil((new Date(c.membership_expiry) - new Date()) / (1000 * 60 * 60 * 24)));
@@ -116,33 +118,34 @@ function StatCard({ icon: Icon, label, value, sub, color }) {
   );
 }
 
+// Sized like the usual content: a section title + 2 job rows, then a section
+// title + 3 rows (row = the 72 px job card + 8 px gap).
+function DashboardSkeleton() {
+  const row = <Skeleton className="h-[72px] w-full rounded-2xl" />;
+  return (
+    <div aria-hidden="true" data-testid="dashboard-skeleton" className="space-y-5">
+      <div><Skeleton className="h-4 w-32 mb-2.5" /><div className="space-y-2">{row}{row}</div></div>
+      <div><Skeleton className="h-4 w-24 mb-2.5" /><div className="space-y-2">{row}{row}{row}</div></div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { use24h } = usePreferences();
   const { user } = useAuth();
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 100),
-  });
+  const { data: jobs = [], isPending: jobsPending } = useQuery(jobsListQuery(100));
 
-  const { data: invoices = [] } = useQuery({
-    queryKey: ["invoices"],
-    queryFn: () => db.Invoice.list("-created_date", 100),
-  });
+  const { data: invoices = [] } = useQuery(invoicesListQuery(100));
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("-created_date"),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
 
-  const { data: allCustomers = [] } = useQuery({
-    queryKey: ["all-customers-svc"],
-    queryFn: () => db.Customer.list("name"),
-  });
+  const { data: allCustomers = [], isPending: customersPending } = useQuery(customersListQuery("name"));
+  // Until jobs + customers are in, the sections that depend on them (Today,
+  // Service Due, Active Jobs) show one placeholder block instead of popping
+  // in one by one and pushing the rest of the screen down (CLS 0.39, F-16).
+  const coreLoading = jobsPending || customersPending;
 
-  const { data: parts = [] } = useQuery({
-    queryKey: ["parts-catalog"],
-    queryFn: () => db.Part.list("name"),
-  });
+  const { data: parts = [] } = useQuery(partsCatalogQuery());
   // Includes parts needing a recount (stock below 0) — see stockAlertText.
   const lowStockParts = parts.filter(p => stockStatus(p.in_stock) === "recount" ||
     (isManaged(p) && (["out", "low"].includes(stockStatus(p.in_stock)) || p.reorder_flagged))
@@ -239,15 +242,18 @@ export default function Dashboard() {
               <p className="text-blue-200/80 text-sm mt-0.5">Here's what's happening today.</p>
             </div>
             <div className="flex items-center gap-2">
-              <Link to="/settings">
-                <button className="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white border border-white/20 rounded-xl p-2 transition-colors backdrop-blur-sm">
-                  <SettingsIcon className="w-4 h-4" />
-                </button>
+              <Link
+                to="/settings"
+                aria-label="Settings"
+                className="relative hit-44 block bg-white/10 hover:bg-white/20 active:bg-white/30 text-white border border-white/20 rounded-xl p-2 transition-colors backdrop-blur-sm"
+              >
+                <SettingsIcon className="w-4 h-4" />
               </Link>
-              <Link to="/jobs/new">
-                <button className="bg-white/20 hover:bg-white/30 active:bg-white/40 text-white border border-white/20 rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5 transition-colors backdrop-blur-sm">
-                  <Plus className="w-4 h-4" /> New Job
-                </button>
+              <Link
+                to="/jobs/new"
+                className="relative hit-44 bg-white/20 hover:bg-white/30 active:bg-white/40 text-white border border-white/20 rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap transition-colors backdrop-blur-sm"
+              >
+                <Plus className="w-4 h-4" /> New Job
               </Link>
             </div>
           </div>
@@ -266,8 +272,10 @@ export default function Dashboard() {
 
       <div className="px-4 pb-4 space-y-5 max-w-lg mx-auto mt-4">
 
+        {coreLoading && <DashboardSkeleton />}
+
         {/* Today's jobs */}
-        {todayJobs.length > 0 && (
+        {!coreLoading && todayJobs.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2.5">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -300,7 +308,7 @@ export default function Dashboard() {
         )}
 
         {/* Service due soon */}
-        {serviceDueCustomers.length > 0 && (
+        {!coreLoading && serviceDueCustomers.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2.5">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -334,7 +342,7 @@ export default function Dashboard() {
         )}
 
         {/* Active jobs */}
-        <div>
+        {!coreLoading && <div>
           <div className="flex items-center justify-between mb-2.5">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Active Jobs</p>
             <Link to="/jobs" className="text-xs text-primary font-medium">View all</Link>
@@ -369,7 +377,7 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Quick actions */}
         <div>

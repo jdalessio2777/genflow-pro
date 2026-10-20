@@ -1,5 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+    // hover: styles only where a real pointer can hover — on iPhone a tapped
+    // row otherwise keeps its hover look until you tap elsewhere (Feel Phase 4).
+    future: { hoverOnlyWhenSupported: true },
     darkMode: ["class"],
     content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {

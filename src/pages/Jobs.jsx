@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { deleteJobCascade } from "@/lib/deleteRecords";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
@@ -53,17 +53,11 @@ export default function Jobs() {
   const { user } = useAuth();
   const { use24h } = usePreferences();
 
-  const { data: jobs = [], isLoading } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 200),
-  });
+  const { data: jobs = [], isLoading } = useQuery(jobsListQuery(200));
 
   const queryClient = useQueryClient();
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
 
   const deleteMutation = useMutation({
@@ -105,11 +99,11 @@ export default function Jobs() {
         title="Jobs"
         subtitle={`${jobs.length} total`}
         actions={
-          <Link to="/jobs/new">
-            <Button size="sm" className="rounded-xl gap-1.5">
+          <Button asChild size="sm" className="rounded-xl gap-1.5">
+            <Link to="/jobs/new">
               <Plus className="w-4 h-4" /> New
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         }
       />
 
@@ -137,7 +131,7 @@ export default function Jobs() {
               <button
                 key={f}
                 onClick={() => setTechFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                   techFilter === f ? "bg-primary text-white" : "bg-muted text-muted-foreground"
                 }`}
               >
@@ -203,7 +197,7 @@ export default function Jobs() {
                       label: "Call",
                       icon: <Phone size={18} className="text-white" />,
                       color: "bg-green-500",
-                      onAction: () => window.open("tel:" + customerMap[job.customer_id].phone),
+                      onAction: () => { window.location.href = "tel:" + customerMap[job.customer_id].phone; },
                     }] : []),
                     ...(customerMap[job.customer_id]?.address ? [{
                       label: "Nav",
@@ -244,7 +238,7 @@ export default function Jobs() {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <button
-                        className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        className="absolute top-[3px] right-[3px] p-[15px] rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                         onClick={e => e.stopPropagation()}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -274,7 +268,7 @@ export default function Jobs() {
                       label: "Call",
                       icon: <Phone size={18} className="text-white" />,
                       color: "bg-green-500",
-                      onAction: () => window.open("tel:" + customerMap[job.customer_id].phone),
+                      onAction: () => { window.location.href = "tel:" + customerMap[job.customer_id].phone; },
                     }] : []),
                     ...(customerMap[job.customer_id]?.address ? [{
                       label: "Nav",
@@ -303,7 +297,7 @@ export default function Jobs() {
                               {formatJobDate(job.scheduled_date, use24h)}
                             </p>
                           ) : (
-                            <p className="text-xs text-muted-foreground mt-0.5 italic">No date set</p>
+                            <p className="mt-1"><span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" data-testid="not-scheduled-badge">Not scheduled</span></p>
                           )}
                           {customerMap[job.customer_id]?.property_notes && (
                             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-center gap-1">
@@ -313,7 +307,8 @@ export default function Jobs() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <StatusBadge status={job.status} />
+                          {/* An approved-but-unscheduled job shows only "Not scheduled", not also "Scheduled". */}
+                          {!(job.status === "scheduled" && !job.scheduled_date) && <StatusBadge status={job.status} />}
                           <StatusBadge status={job.job_type} />
                           {job.assigned_to_name && (
                             <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
@@ -334,7 +329,7 @@ export default function Jobs() {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <button
-                        className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        className="absolute top-[3px] right-[3px] p-[15px] rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                         onClick={e => e.stopPropagation()}
                       >
                         <Trash2 className="w-3.5 h-3.5" />

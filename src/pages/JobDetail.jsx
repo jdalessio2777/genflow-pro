@@ -1,11 +1,16 @@
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
+import { DetailSkeleton } from "@/components/ui/skeleton";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import BottomActionBar from "@/components/layout/BottomActionBar";
+import { afterSheetsClose } from "@/lib/sheetHistory";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
@@ -17,6 +22,7 @@ import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { jobHeaderStatus } from "@/lib/jobStatus";
 import { TAX_RATE, computeJobFinancials, partChargeTotal } from "@/lib/utils/jobFinancials";
 import { formatTime, toDatetimeLocalValue } from "@/lib/formatTime";
 import { sortJobs } from "@/lib/utils/jobSort";
@@ -33,8 +39,9 @@ import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId, useSaveGuard } from "@/lib/saveSafety";
 import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
+import { syncJobToCalendar, removeJobFromCalendar } from "@/lib/calendarSync";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
-import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
+import { buildLaborLine, groupLaborRates, memberPrice, ratePrice, descriptionAfterPriceEdit } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
 import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
 import { useBack, goBack } from "@/hooks/useBack";
@@ -44,6 +51,8 @@ import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 import JobSignatureButton from "@/components/signature/JobSignatureButton";
+import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
+import { estimateMinutes, formatEstimate } from "@/lib/jobDuration";
 
 // One attachment row in the Complete Job dialog: checkbox-style toggle,
 // ON = attach this PDF to the completion email.
@@ -159,6 +168,7 @@ export default function JobDetail() {
   const [invoiceNotes, setInvoiceNotes] = useState("");
   const [generatorNotes, setGeneratorNotes] = useState("");
   const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
+  const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false); // B1
   const [nextDate, setNextDate] = useState("");
   const notesInitialized = useRef(false);
   const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
@@ -173,6 +183,10 @@ export default function JobDetail() {
   const [customerExpanded, setCustomerExpanded] = useState(false);
   const [titleExpanded, setTitleExpanded] = useState(false);
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
+  // Completing with an empty Service Summary: ask once (Add / Skip); never blocks.
+  const [summaryAskOpen, setSummaryAskOpen] = useState(false);
+  const summarySkipped = useRef(false);
+  const serviceSummaryRef = useRef(null);
   const [completionSnapshot, setCompletionSnapshot] = useState(null);
   const [emailOnComplete, setEmailOnComplete] = useState(true);
   // Per-attachment toggles in the Complete Job dialog (all ON by default).
@@ -187,25 +201,13 @@ export default function JobDetail() {
   const back = useBack();
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
-  const { data: job, isLoading } = useQuery({
-    queryKey: ["job", id],
-    queryFn: async () => { const r = await db.Job.filter({ id }); return r[0]; },
-  });
+  const { data: job, isLoading } = useQuery(jobQuery(id));
 
-  const { data: parts = [], isSuccess: partsLoaded } = useQuery({
-    queryKey: ["job-parts", id],
-    queryFn: () => db.JobPart.filter({ job_id: id }),
-  });
+  const { data: parts = [], isSuccess: partsLoaded } = useQuery(jobPartsQuery(id));
 
-  const { data: labor = [], isSuccess: laborLoaded } = useQuery({
-    queryKey: ["job-labor", id],
-    queryFn: () => db.JobLabor.filter({ job_id: id }),
-  });
+  const { data: labor = [], isSuccess: laborLoaded } = useQuery(jobLaborQuery(id));
 
-  const { data: documents = [] } = useQuery({
-    queryKey: ["job-docs", id],
-    queryFn: () => db.JobDocument.filter({ job_id: id }),
-  });
+  const { data: documents = [] } = useQuery(jobDocsQuery(id));
 
   // Maintenance agreement signed during THIS job (job_agreements, migration
   // 0022). Its PDF rides on the completion email.
@@ -217,34 +219,19 @@ export default function JobDetail() {
     },
   });
 
-  const { data: catalogParts = [] } = useQuery({
-    queryKey: ["parts-catalog"],
-    queryFn: () => db.Part.list("name"),
-  });
+  const { data: catalogParts = [] } = useQuery(partsCatalogQuery());
 
-  const { data: photos = [] } = useQuery({
-    queryKey: ["job-photos", id],
-    queryFn: () => db.JobPhoto.filter({ job_id: id }),
-  });
+  const { data: photos = [] } = useQuery(jobPhotosQuery(id));
 
   const { data: existingInvoices = [] } = useQuery({
-    queryKey: ["job-invoice", id],
-    queryFn: () => db.Invoice.filter({ job_id: id }),
+    ...jobInvoiceQuery(id),
     initialData: () => queryClient.getQueryData(["job-invoice", id]),
   });
   const existingInvoice = existingInvoices[0] || null;
 
-  const { data: customer } = useQuery({
-    queryKey: ["job-customer", job?.customer_id],
-    queryFn: async () => { const r = await db.Customer.filter({ id: job.customer_id }); return r[0]; },
-    enabled: !!job?.customer_id,
-  });
+  const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), enabled: !!job?.customer_id });
 
-  const { data: customerHistory = [] } = useQuery({
-    queryKey: ["customer-history", job?.customer_id],
-    queryFn: () => db.Job.filter({ customer_id: job?.customer_id }, "-created_date"),
-    enabled: !!job?.customer_id,
-  });
+  const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), enabled: !!job?.customer_id });
   const previousJobs = sortJobs(customerHistory
     .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status)))
     .slice(0, 10);
@@ -319,10 +306,13 @@ export default function JobDetail() {
     const newPrice = parseFloat(editingLaborPriceValue);
     // Flat-rate items (e.g. discounts) may be negative to reduce the invoice; hourly rates may not.
     if (isNaN(newPrice) || (newPrice < 0 && !item.is_flat_rate)) { toast.error("Enter a valid price"); return; }
+    // B5b: keep the "(Member N% off)" label in step with the edited price.
+    const description = descriptionAfterPriceEdit({ line: item, newPrice, rates: laborRates, memberDiscountRate: memberDiscountRateFor(customer) });
+    const label = description !== item.description ? { description } : {};
     if (item.is_flat_rate) {
-      updateLaborPriceMutation.mutate({ id: item.id, data: { flat_rate_amount: newPrice, total_price: newPrice } });
+      updateLaborPriceMutation.mutate({ id: item.id, data: { flat_rate_amount: newPrice, total_price: newPrice, ...label } });
     } else {
-      updateLaborPriceMutation.mutate({ id: item.id, data: { rate: newPrice, total_price: newPrice * (item.hours || 0) } });
+      updateLaborPriceMutation.mutate({ id: item.id, data: { rate: newPrice, total_price: newPrice * (item.hours || 0), ...label } });
     }
   };
 
@@ -394,6 +384,21 @@ export default function JobDetail() {
     setGeneratorNotes(notes);
     handleGeneratorNotesChange(notes);
   };
+
+  // F-11: notes typed just before switching apps / locking the phone / leaving
+  // the job were lost while the 1.2-1.5 s autosave timer was still waiting.
+  // Save them right away when the app is hidden or the job screen closes.
+  useEffect(() => {
+    const flush = () => { debouncedSaveNotes.flush(); handleGeneratorNotesChange.flush(); };
+    const onVisibility = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+      flush();
+    };
+  }, [debouncedSaveNotes, handleGeneratorNotesChange]);
 
   const formatElapsed = (s) => {
     const h = Math.floor(s / 3600);
@@ -551,6 +556,7 @@ export default function JobDetail() {
       if (!(await handleStatusChange("canceled", { cancel_reason: cancelReason }, { retry: () => statusGuard.run(attempt) }))) return;
       snap.canceled = true;
       setCancelOpen(false);
+      removeJobFromCalendar({ job }); // never throws or blocks
     }
     try {
       const n = await returnChosenParts(snap);
@@ -628,6 +634,27 @@ export default function JobDetail() {
     setExcludedDocIds([]);
     setIncludeAgreementPdf(true);
     setCompleteJobOpen(true);
+  };
+  const requestCompleteJob = () => {
+    if (!invoiceNotes.trim() && !summarySkipped.current) { setSummaryAskOpen(true); return; }
+    openCompleteJob();
+  };
+  const addServiceSummaryFirst = () => {
+    setSummaryAskOpen(false);
+    // Switch tabs only after the prompt's history entry is popped, or the
+    // pop would undo the switch (Complete Job is reachable from every tab).
+    afterSheetsClose(() => {
+      setActiveJobTab("overview");
+      setTimeout(() => {
+        serviceSummaryRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+        serviceSummaryRef.current?.focus();
+      }, 350);
+    });
+  };
+  const skipServiceSummary = () => {
+    summarySkipped.current = true;
+    setSummaryAskOpen(false);
+    openCompleteJob();
   };
   // Back from "Collect now" (Complete dialog → invoice → payment recorded):
   // reopen the Complete dialog once. Paid in full now → no collect prompt.
@@ -932,6 +959,20 @@ export default function JobDetail() {
     toast.success("Service Agreement added to job · Customer signs at completion");
   };
 
+  // Height of the pinned job header + tab strip, for things pinned below it.
+  const jobHeaderRef = useRef(null);
+  const hasJob = !!job;
+  useEffect(() => {
+    const el = jobHeaderRef.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty("--job-header-h", `${el.offsetHeight}px`);
+    set();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty("--job-header-h"); };
+  }, [hasJob]);
+
   // Tint the status-bar band (AppLayout) to the colored job header.
   const statusBarColor = !job ? null
     : job.status === "on_site" ? "#b45309"
@@ -945,7 +986,7 @@ export default function JobDetail() {
     return () => root.style.removeProperty("--status-bar-bg");
   }, [statusBarColor]);
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  if (isLoading) return <DetailSkeleton />;
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
   const isClosed = ["invoiced", "canceled"].includes(job.status);
@@ -962,6 +1003,8 @@ export default function JobDetail() {
   // Item 1: Collect Payment from On Site onward while the job is open, and
   // after completion. Paid in full = nothing left to collect.
   const jobIsOpenOnSite = job.status === "on_site" || job.status === "in_progress";
+  // Completed job with money still owed: Collect Payment Now is its main action.
+  const showCollectNow = job.status === "completed" && !isNoChargeJob && existingInvoice?.status !== "paid";
   const invoicePaidInFull = existingInvoice?.status === "paid";
   const invoicePartlyPaid = existingInvoice?.status === "partial";
   const balanceDue = existingInvoice ? balanceCentsOf(existingInvoice) / 100 : computeJobFinancials(parts, labor).total;
@@ -983,8 +1026,11 @@ export default function JobDetail() {
   const tabActiveColor = job.status === "on_site" ? "#b45309" : job.status === "dispatched" ? "#0e7490" : "hsl(var(--primary))";
 
   return (
-    <div className="flex flex-col bg-muted/30" style={{ height: "calc(100vh - var(--sat))" }}>
+    <div className="bg-muted/30">
 
+      {/* Colored header + tab strip stay pinned under the status bar while the
+          page (the document — the only scroller) moves beneath them. */}
+      <div ref={jobHeaderRef} data-sticky-header="" className="sticky top-[var(--sat)] z-30">
       {/* ── COLORED ACTIVE JOB HEADER ── */}
       <div className={`${headerBg} px-4 pt-3 pb-3 shrink-0`}>
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto min-w-0">
@@ -993,20 +1039,15 @@ export default function JobDetail() {
               onClick={back}
               aria-label="Back"
               data-testid="back-button"
-              className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
+              className="relative hit-44 w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-white" />
             </button>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 {isActive && <div className={`w-1.5 h-1.5 rounded-full ${headerDot} animate-pulse shrink-0`} />}
-                <span className="text-white text-xs font-bold uppercase tracking-wider">
-                  {job.status === "on_site" ? "On Site" :
-                   job.status === "dispatched" ? "Dispatched" :
-                   job.status === "completed" ? "Completed" :
-                   job.status === "invoiced" ? "Invoiced" :
-                   job.status === "canceled" ? "Canceled" :
-                   job.status?.replace(/_/g, " ")}
+                <span className="text-white text-xs font-bold uppercase tracking-wider" data-testid="job-header-status">
+                  {jobHeaderStatus(job)}
                 </span>
               </div>
               {/* Long titles: clamp to 2 lines on phones; tap to show the full
@@ -1034,7 +1075,7 @@ export default function JobDetail() {
             )}
             {canEditOrCancel && (
               <Link to={`/jobs/${id}/edit`}>
-                <button className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center">
+                <button className="relative hit-44 w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center">
                   <Pencil className="w-4 h-4 text-white" />
                 </button>
               </Link>
@@ -1045,7 +1086,7 @@ export default function JobDetail() {
 
       {/* ── HORIZONTAL TAB BAR ── */}
       <div className="bg-white dark:bg-gray-900 border-b border-border shrink-0 shadow-sm min-w-0">
-      <div className="flex overflow-x-auto max-w-lg mx-auto" style={{ scrollbarWidth: "none" }}>
+      <div className="flex overflow-x-auto max-w-lg mx-auto scroll-hint-x" style={{ scrollbarWidth: "none" }}>
       {[
         { key: "overview", label: "Overview", icon: "⚡" },
         { key: "items", label: "Items", icon: "📦" },
@@ -1057,8 +1098,8 @@ export default function JobDetail() {
       ].map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveJobTab(tab.key)}
-              className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0"
+              onClick={(e) => { setActiveJobTab(tab.key); e.currentTarget.scrollIntoView?.({ inline: "nearest", block: "nearest" }); if (window.scrollY > 0) window.scrollTo(0, 0); }}
+              className="min-h-[44px] flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0"
               style={{
                 borderBottomColor: activeJobTab === tab.key ? tabActiveColor : "transparent",
                 color: activeJobTab === tab.key ? tabActiveColor : "#6b7280",
@@ -1071,8 +1112,10 @@ export default function JobDetail() {
         </div>
       </div>
 
+      </div>
+
       {/* ── TAB CONTENT ── */}
-      <div className="flex-1 overflow-y-auto" style={{ touchAction: "pan-y" }}>
+      <div>
         <div className="max-w-lg mx-auto">
 
           {/* ════ OVERVIEW TAB ════ */}
@@ -1090,6 +1133,21 @@ export default function JobDetail() {
                     <StatusBadge status={job.job_type} className="mt-5 shrink-0" />
                   )}
                 </div>
+                {/* B1/B2: appointment + estimated time on site; an approved job
+                    with no date gets "Not scheduled" and a Schedule action. */}
+                <div className="mx-3.5 mb-3.5 rounded-xl border border-border px-3 py-2.5" data-testid="job-appointment">
+                  {job.scheduled_date ? (
+                    <p className="text-xs text-foreground">
+                      <span className="font-semibold">{formatDate(job.scheduled_date)} · {formatTime(job.scheduled_date, use24h)}</span>
+                    </p>
+                  ) : (
+                    <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" data-testid="not-scheduled-badge">Not scheduled</span>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1" data-testid="job-estimate">Estimated time on site: {formatEstimate(estimateMinutes(job))}</p>
+                  {!job.scheduled_date && job.status === "scheduled" && !isClosed && (
+                    <Button size="sm" className="w-full rounded-xl mt-2" onClick={() => setScheduleSheetOpen(true)}>Schedule this job</Button>
+                  )}
+                </div>
                 {job.customer_description?.trim() && (
                   <div className="mx-3.5 mb-3.5 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 dark:bg-emerald-900/20 dark:border-emerald-700">
                     <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider mb-1">Job Description · Customer-facing</p>
@@ -1100,7 +1158,7 @@ export default function JobDetail() {
                 )}
                 {(job.quote_notes || job.notes) && (
                   <div className="mx-3.5 mb-3.5 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5 dark:bg-sky-900/20 dark:border-sky-700">
-                    <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider mb-1">Summary</p>
+                    <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider mb-1">Internal Notes</p>
                     <p className="text-xs text-sky-800 dark:text-sky-200 leading-relaxed">
                       {job.quote_notes || job.notes}
                     </p>
@@ -1178,7 +1236,7 @@ export default function JobDetail() {
                           {customer.membership_plan === "semi_annual" ? "Semi-Annual" : "Annual"} Protection Plan
                         </p>
                         <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                          10% off all parts & labor
+                          {Math.round((1 - memberDiscountRate) * 100)}% off all parts & labor
                           {customer.membership_expiry ? ` · Expires ${new Date(customer.membership_expiry).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : ""}
                         </p>
                       </div>
@@ -1224,6 +1282,7 @@ export default function JobDetail() {
               <Card className="px-4 pt-3.5 pb-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
                 <Textarea
+                  ref={serviceSummaryRef}
                   value={invoiceNotes}
                   onChange={e => handleNotesChange(e.target.value)}
                   className="text-sm rounded-xl resize-none border-border bg-muted/20 min-h-[64px]"
@@ -1254,12 +1313,26 @@ export default function JobDetail() {
                     <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed contract (PDF) is emailed with the job summary at completion</p>
                   </Card>
                 ) : isActiveMember ? (
+                  // B5a: an active member renewing (agreement line on this job)
+                  // can sign the renewal here. Same customer row, no 2nd membership.
                   <Card className="p-3.5 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
-                    <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
-                      ✅ SERVICE AGREEMENT ACTIVE
-                    </p>
-                    <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{pendingAgreementLine?.description}</p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Signed · Discounts applied automatically</p>
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-green-900 dark:text-green-200 flex items-center gap-1.5">
+                          ✅ SERVICE AGREEMENT ACTIVE
+                        </p>
+                        <p className="text-xs text-green-800 dark:text-green-300 mt-0.5">{pendingAgreementLine?.description}</p>
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                          Current plan{customer?.membership_expiry ? ` expires ${new Date(customer.membership_expiry).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""} · Renewal signature not collected yet
+                        </p>
+                      </div>
+                      {!isClosed && (
+                        <Button size="sm" data-testid="sign-renewal" className="rounded-xl h-8 text-xs bg-green-700 hover:bg-green-800 shrink-0 ml-2"
+                          onClick={goSignAgreement}>
+                          Sign renewal
+                        </Button>
+                      )}
+                    </div>
                   </Card>
                 ) : (
                   <Card className="p-3.5 border-indigo-200 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20">
@@ -1301,36 +1374,15 @@ export default function JobDetail() {
               {/* Status action buttons */}
               {!isClosed && (
                 <div className="space-y-2">
-                  {job.status === "scheduled" && (
-                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-600 hover:bg-cyan-700" disabled={statusGuard.busy}
-                      onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
-                      {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />} Dispatch — Head Out
-                    </Button>
-                  )}
                   {job.status === "dispatched" && (
                     <>
                       <div className="flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-xl px-3 py-2.5">
                         <Navigation className="w-3.5 h-3.5 shrink-0" />
                         <span>En route — tap when you arrive to start the clock</span>
                       </div>
-                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-500 hover:bg-amber-600" disabled={statusGuard.busy}
-                        onClick={() => statusGuard.run(async () => {
-                          const now = new Date().toISOString();
-                          setOptimisticOnSiteTime(now);
-                          // Clock only keeps running if the arrival was saved.
-                          if (!(await handleStatusChange("on_site", { on_site_time: now }))) setOptimisticOnSiteTime(null);
-                        })}>
-                        {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />} Arrived — Start Clock
-                      </Button>
                     </>
                   )}
                   {jobIsOpenOnSite && isNoChargeJob && signatureButton}
-                  {jobIsOpenOnSite && (
-                    <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
-                      onClick={openCompleteJob}>
-                      <CheckCircle2 className="w-4 h-4" /> Complete Job
-                    </Button>
-                  )}
                   {job.status === "completed" && (
                     <div className="space-y-2">
                       {/* Legacy: agreement left unsigned on an already-completed job.
@@ -1372,11 +1424,7 @@ export default function JobDetail() {
                             </Button>
                           )}
                         </>
-                      ) : (
-                        <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={() => handleCollectPayment()} disabled={collectGuard.busy}>
-                          <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
-                        </Button>
-                      )}
+                      ) : null}
                       {customer?.email && job.completion_send_failed && (
                         <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
                           <div className="flex items-center gap-2">
@@ -1466,132 +1514,7 @@ export default function JobDetail() {
                 </DialogContent>
               </Dialog>
 
-              {/* Complete Job modal */}
-              <Dialog open={completeJobOpen} onOpenChange={setCompleteJobOpen}>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader><DialogTitle>Complete Job</DialogTitle></DialogHeader>
 
-                  {isNoChargeJob ? (
-                    <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
-                      <p className="text-xs font-semibold">No charge — {formatCurrency(0)}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect. The invoice will be closed as no charge.</p>
-                    </div>
-                  ) : !invoicePaidInFull && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5" data-testid="complete-unpaid-box">
-                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-                        {invoicePartlyPaid ? `⚠ Partly paid — ${formatCurrency(balanceDue)} still due` : `⚠ Unpaid — ${formatCurrency(balanceDue)} due`}
-                      </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">Collect now, or complete it as unpaid and collect later.</p>
-                    </div>
-                  )}
-                  {invoicePaidInFull && !isNoChargeJob && (
-                    <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20 px-3 py-2.5">
-                      <p className="text-xs font-semibold text-green-800 dark:text-green-200">✓ Paid in full</p>
-                    </div>
-                  )}
-
-                  {customer?.email ? (
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => setEmailOnComplete(v => !v)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${emailOnComplete ? "border-primary bg-primary/5" : "border-border bg-card"}`}
-                      >
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${emailOnComplete ? "border-primary bg-primary" : "border-muted-foreground"}`}>
-                          {emailOnComplete && <CheckCircle2 className="w-3 h-3 text-white" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold">Email job summary</p>
-                          <p className="text-xs text-muted-foreground truncate">{customer.email}</p>
-                        </div>
-                      </button>
-                      {emailOnComplete && (
-                        <ul className="text-xs text-muted-foreground space-y-1 px-1">
-                          {existingInvoice && (
-                            <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} in the email — {isNoChargeJob ? "no charge" : invoicePaidInFull ? "PAID" : invoicePartlyPaid ? `${formatCurrency(balanceDue)} balance due` : `UNPAID, ${formatCurrency(balanceDue)} due`}</li>
-                          )}
-                          {completedDocuments.map(doc => (
-                            <AttachmentToggle
-                              key={doc.id}
-                              label={doc.template_name || "Service checklist"}
-                              on={!excludedDocIds.includes(doc.id)}
-                              onToggle={() => setExcludedDocIds(ids => ids.includes(doc.id) ? ids.filter(x => x !== doc.id) : [...ids, doc.id])}
-                            />
-                          ))}
-                          {jobAgreement && (
-                            <AttachmentToggle label="Signed Maintenance Agreement" on={includeAgreementPdf} onToggle={() => setIncludeAgreementPdf(v => !v)} />
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
-                  )}
-
-                  {!isNoChargeJob && !invoicePaidInFull ? (
-                    // Unpaid / partly paid: collect now, or complete as unpaid.
-                    <div className="space-y-2 mt-2">
-                      <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" disabled={completingJob || collectGuard.busy}
-                        onClick={() => { setCompleteJobOpen(false); handleCollectPayment({ completeAfter: true }); }}>
-                        <DollarSign className="w-4 h-4" /> Collect now
-                      </Button>
-                      <Button variant="outline" className="w-full rounded-xl gap-1.5 h-11" disabled={completingJob} onClick={doCompleteJob}>
-                        {completingJob
-                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
-                          : <><CheckCircle2 className="w-4 h-4" /> Complete as unpaid</>}
-                      </Button>
-                      <Button variant="ghost" className="w-full rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2 mt-2">
-                      <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
-                      <Button
-                        className="flex-1 rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
-                        disabled={completingJob}
-                        onClick={doCompleteJob}
-                      >
-                        {completingJob
-                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
-                          : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
-                      </Button>
-                    </div>
-                  )}
-                </DialogContent>
-              </Dialog>
-
-              <Dialog open={scheduleNextOpen} onOpenChange={setScheduleNextOpen}>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader><DialogTitle>Schedule Next Service?</DialogTitle></DialogHeader>
-                  <p className="text-sm text-muted-foreground">Would you like to pre-schedule {job.customer_name}'s next maintenance visit?</p>
-                  <div>
-                    <Label className="text-xs">Next Service Date</Label>
-                    <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); goBack(navigate, location, "/jobs"); }}>Skip</Button>
-                    <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
-                      if (!nextDate) return;
-                      try {
-                        // Fixed id: a double tap or a Retry can't create a second job (A-05).
-                        await createOnce(db.Job, scheduleNextId.current, {
-                          customer_id: job.customer_id, customer_name: job.customer_name,
-                          title: job.title, job_type: "maintenance", status: "scheduled",
-                          scheduled_date: new Date(nextDate).toISOString(),
-                          notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
-                        });
-                      } catch (e) {
-                        haptics.error();
-                        showSaveError("Next service NOT scheduled", e, () => scheduleNextGuard.run(scheduleIt), { id: "schedule-next-error" });
-                        return;
-                      }
-                      dismissSaveError("", { id: "schedule-next-error" });
-                      setScheduleNextOpen(false);
-                      toast.success("Next service scheduled");
-                      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-                      goBack(navigate, location, "/jobs");
-                    })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
 
             </div>
           )}
@@ -1621,7 +1544,7 @@ export default function JobDetail() {
               {/* Work search */}
               {/* Parts: filters this job's parts AND searches the whole catalog
                   (name or part #) — JobPartsTab renders tap-to-add matches. */}
-              <div className="sticky top-0 z-10 bg-background px-4 pt-2 pb-1">
+              <div className="sticky z-10 bg-background px-4 pt-2 pb-1" style={{ top: "calc(var(--sat) + var(--job-header-h, 0px))" }}>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <Input
@@ -1953,7 +1876,7 @@ export default function JobDetail() {
               {/* Job notes */}
               {(job.notes || job.quote_notes) && (
                 <Card className="p-3.5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Job Notes</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Internal Notes</p>
                   {job.quote_notes && <p className="text-xs font-semibold text-muted-foreground mb-1">Quote Scope</p>}
                   {job.quote_notes && <p className="text-sm leading-relaxed mb-2">{job.quote_notes}</p>}
                   {job.notes && <p className="text-sm text-muted-foreground leading-relaxed">{job.notes}</p>}
@@ -2158,6 +2081,190 @@ export default function JobDetail() {
         </div>
       </div>
 
+      {/* Complete Job is in the bottom bar on every tab, so its prompts live
+          outside the Overview tab too (as does Schedule Next, which follows). */}
+      <AlertDialog open={summaryAskOpen} onOpenChange={setSummaryAskOpen}>
+        <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="summary-ask">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add a Service Summary?</AlertDialogTitle>
+            <AlertDialogDescription>It appears on the customer's email.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-11 rounded-xl" onClick={skipServiceSummary}>Skip</AlertDialogCancel>
+            <AlertDialogAction className="h-11 rounded-xl" onClick={addServiceSummaryFirst}>Add</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Complete Job modal */}
+      <Dialog open={completeJobOpen} onOpenChange={setCompleteJobOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Complete Job</DialogTitle></DialogHeader>
+
+          {isNoChargeJob ? (
+            <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
+              <p className="text-xs font-semibold">No charge — {formatCurrency(0)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Nothing to collect. The invoice will be closed as no charge.</p>
+            </div>
+          ) : !invoicePaidInFull && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-3 py-2.5" data-testid="complete-unpaid-box">
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                {invoicePartlyPaid ? `⚠ Partly paid — ${formatCurrency(balanceDue)} still due` : `⚠ Unpaid — ${formatCurrency(balanceDue)} due`}
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">Collect now, or complete it as unpaid and collect later.</p>
+            </div>
+          )}
+          {invoicePaidInFull && !isNoChargeJob && (
+            <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20 px-3 py-2.5">
+              <p className="text-xs font-semibold text-green-800 dark:text-green-200">✓ Paid in full</p>
+            </div>
+          )}
+
+          {customer?.email ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => setEmailOnComplete(v => !v)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-colors text-left ${emailOnComplete ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+              >
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${emailOnComplete ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                  {emailOnComplete && <CheckCircle2 className="w-3 h-3 text-white" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Email job summary</p>
+                  <p className="text-xs text-muted-foreground truncate">{customer.email}</p>
+                </div>
+              </button>
+              {emailOnComplete && (
+                <ul className="text-xs text-muted-foreground space-y-1 px-1">
+                  {existingInvoice && (
+                    <li className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 shrink-0" /> Invoice {existingInvoice.invoice_number} in the email — {isNoChargeJob ? "no charge" : invoicePaidInFull ? "PAID" : invoicePartlyPaid ? `${formatCurrency(balanceDue)} balance due` : `UNPAID, ${formatCurrency(balanceDue)} due`}</li>
+                  )}
+                  {completedDocuments.map(doc => (
+                    <AttachmentToggle
+                      key={doc.id}
+                      label={doc.template_name || "Service checklist"}
+                      on={!excludedDocIds.includes(doc.id)}
+                      onToggle={() => setExcludedDocIds(ids => ids.includes(doc.id) ? ids.filter(x => x !== doc.id) : [...ids, doc.id])}
+                    />
+                  ))}
+                  {jobAgreement && (
+                    <AttachmentToggle label="Signed Maintenance Agreement" on={includeAgreementPdf} onToggle={() => setIncludeAgreementPdf(v => !v)} />
+                  )}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No email on file — nothing will be sent, but the job will still complete.</p>
+          )}
+
+          {!isNoChargeJob && !invoicePaidInFull ? (
+            // Unpaid / partly paid: collect now, or complete as unpaid.
+            <div className="space-y-2 mt-2">
+              <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" disabled={completingJob || collectGuard.busy}
+                onClick={() => { setCompleteJobOpen(false); handleCollectPayment({ completeAfter: true }); }}>
+                <DollarSign className="w-4 h-4" /> Collect now
+              </Button>
+              <Button variant="outline" className="w-full rounded-xl gap-1.5 h-11" disabled={completingJob} onClick={doCompleteJob}>
+                {completingJob
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                  : <><CheckCircle2 className="w-4 h-4" /> Complete as unpaid</>}
+              </Button>
+              <Button variant="ghost" className="w-full rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <div className="flex gap-2 mt-2">
+              <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
+              <Button
+                className="flex-1 rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
+                disabled={completingJob}
+                onClick={doCompleteJob}
+              >
+                {completingJob
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Completing...</>
+                  : <><CheckCircle2 className="w-4 h-4" /> Complete Job</>}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <ScheduleJobSheet
+        open={scheduleSheetOpen}
+        onOpenChange={setScheduleSheetOpen}
+        job={job}
+        customer={customer}
+        from="job"
+        onDone={() => setScheduleSheetOpen(false)}
+      />
+
+      {/* Opens after Complete Job, from any tab. */}
+      <Dialog open={scheduleNextOpen} onOpenChange={setScheduleNextOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Schedule Next Service?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Would you like to pre-schedule {job.customer_name}'s next maintenance visit?</p>
+          <div>
+            <Label className="text-xs">Next Service Date</Label>
+            <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); goBack(navigate, location, "/jobs"); }}>Skip</Button>
+            <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
+              if (!nextDate) return;
+              try {
+                // Fixed id: a double tap or a Retry can't create a second job (A-05).
+                const nextJob = await createOnce(db.Job, scheduleNextId.current, {
+                  customer_id: job.customer_id, customer_name: job.customer_name,
+                  title: job.title, job_type: "maintenance", status: "scheduled",
+                  scheduled_date: new Date(nextDate).toISOString(),
+                  notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
+                });
+              } catch (e) {
+                haptics.error();
+                showSaveError("Next service NOT scheduled", e, () => scheduleNextGuard.run(scheduleIt), { id: "schedule-next-error" });
+                return;
+              }
+              dismissSaveError("", { id: "schedule-next-error" });
+              syncJobToCalendar({ job: nextJob, customer }); // never throws or blocks
+              setScheduleNextOpen(false);
+              toast.success("Next service scheduled");
+              queryClient.invalidateQueries({ queryKey: ["jobs"] });
+              goBack(navigate, location, "/jobs");
+            })}>{scheduleNextGuard.busy ? "Scheduling…" : "Schedule It"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* The job's main action, just above the tab bar on every job tab. */}
+      <BottomActionBar>
+        {!isClosed && job.status === "scheduled" && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-700 hover:bg-cyan-800" disabled={statusGuard.busy}
+            onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
+            {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />} Dispatch — Head Out
+          </Button>
+        )}
+        {!isClosed && job.status === "dispatched" && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-amber-700 hover:bg-amber-800" disabled={statusGuard.busy}
+            onClick={() => statusGuard.run(async () => {
+              const now = new Date().toISOString();
+              setOptimisticOnSiteTime(now);
+              // Clock only keeps running if the arrival was saved.
+              if (!(await handleStatusChange("on_site", { on_site_time: now }))) setOptimisticOnSiteTime(null);
+            })}>
+            {statusGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />} Arrived — Start Clock
+          </Button>
+        )}
+        {!isClosed && jobIsOpenOnSite && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700"
+            onClick={requestCompleteJob}>
+            <CheckCircle2 className="w-4 h-4" /> Complete Job
+          </Button>
+        )}
+        {showCollectNow && (
+          <Button className="w-full rounded-xl gap-1.5 h-11 bg-green-600 hover:bg-green-700" onClick={() => handleCollectPayment()} disabled={collectGuard.busy}>
+            <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
+          </Button>
+        )}
+      </BottomActionBar>
     </div>
   );
 }

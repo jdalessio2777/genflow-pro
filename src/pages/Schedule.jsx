@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useUrlState } from "@/hooks/useUrlState";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { jobsListQuery } from "@/lib/queries";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { Link } from "react-router-dom";
@@ -11,8 +12,9 @@ import { ChevronLeft, ChevronRight, Plus, CalendarCheck } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
 import { getRecentCalendarChanges } from "@/lib/googleCalendar";
+import { getAccessToken } from "@/lib/googleTokenStore";
+import { resolveJobsCalendar } from "@/lib/calendarSync";
 import { formatTime } from "@/lib/formatTime";
 import { sortJobs, etDateKey, localDateKey } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -53,22 +55,34 @@ export default function Schedule() {
   const { use24h } = usePreferences();
 
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 200),
-  });
+  const { data: jobs = [] } = useQuery(jobsListQuery(200));
 
   // Keep ref current so the calendar sync closure always reads latest jobs
   useEffect(() => { jobsRef.current = jobs; }, [jobs]);
 
   useEffect(() => {
-    if (calendarSyncedRef.current || !googleToken) return;
+    if (calendarSyncedRef.current || jobs.length === 0) return;
     calendarSyncedRef.current = true;
 
     const lastSync = localStorage.getItem("genflow_last_calendar_sync");
 
-    getRecentCalendarChanges(googleToken, lastSync)
-      .then(async (changes) => {
+    // B3: pull moves made in Google — Jobs calendar + primary, and ONLY events
+    // carrying a GenFlow job marker (getRecentCalendarChanges filters).
+    (async () => {
+      const { token } = await getAccessToken();
+      if (!token) return null;
+      const target = await resolveJobsCalendar(token);
+      const ids = [...new Set([target.id, "primary"])];
+      const lists = await Promise.all(ids.map(id => getRecentCalendarChanges(token, lastSync, id)));
+      return lists.flat();
+    })()
+      .then(async (all) => {
+        if (!all) return; // no Google access on this device
+        // Only real moves of jobs we know (not our own writes echoing back).
+        const changes = all.filter(c => {
+          const j = jobsRef.current.find(x => x.id === c.jobId);
+          return j && c.newStartTime && new Date(c.newStartTime).getTime() !== new Date(j.scheduled_date).getTime();
+        });
         localStorage.setItem("genflow_last_calendar_sync", new Date().toISOString());
         if (changes.length === 0) return;
 
@@ -111,12 +125,10 @@ export default function Schedule() {
         }
       })
       .catch((e) => {
-        if (e?.message?.startsWith("401")) {
-          toast.warning("Please sign out and sign back in to refresh your Google connection");
-        }
-        // all other calendar errors are silent
+        // Pulling is best-effort; pushing problems show the calendar banner.
+        console.warn("[Schedule] calendar pull failed:", e?.message);
       });
-  }, [googleToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [googleToken, jobs.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConflictUpdate = async () => {
     const { change } = pendingConflicts[0];
@@ -214,7 +226,7 @@ export default function Schedule() {
             <button
               key={f}
               onClick={() => setTechFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 techFilter === f ? "bg-primary text-white" : "bg-muted text-muted-foreground"
               }`}
             >
@@ -226,10 +238,10 @@ export default function Schedule() {
         {/* Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={prev}>
+            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-xl" onClick={prev}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={next}>
+            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-xl" onClick={next}>
               <ChevronRight className="w-4 h-4" />
             </Button>
             <Button variant="outline" size="sm" className="rounded-xl h-9 ml-1 text-xs" onClick={goToday}>
@@ -237,13 +249,15 @@ export default function Schedule() {
             </Button>
           </div>
           <div className="flex items-center gap-1 bg-muted/60 rounded-xl p-1">
-            <button onClick={() => setView("month")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "month" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Month</button>
-            <button onClick={() => setView("week")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "week" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Week</button>
+            <button onClick={() => setView("month")} className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "month" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Month</button>
+            <button onClick={() => setView("week")} className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "week" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Week</button>
           </div>
         </div>
 
-        {/* Day headers */}
-        <div className="grid grid-cols-7 gap-px">
+        {/* Day headers. On a narrow phone (SE, 320 pt) the month grid runs
+            edge to edge so each day is >= 44 pt wide (7 across 288 pt would
+            be 40); the headers follow so the columns stay lined up. */}
+        <div className="grid grid-cols-7 gap-px max-[359px]:-mx-4">
           {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
             <div key={d} className="text-center text-[11px] font-semibold text-muted-foreground py-1">{d}</div>
           ))}
@@ -251,7 +265,7 @@ export default function Schedule() {
 
         {/* Month view */}
         {view === "month" && (
-          <div className="grid grid-cols-7 gap-px bg-border rounded-2xl overflow-hidden border border-border">
+          <div className="grid grid-cols-7 gap-px bg-border rounded-2xl overflow-hidden border border-border max-[359px]:-mx-4 max-[359px]:rounded-none max-[359px]:border-x-0">
             {getMonthDays().map(({ date, inMonth }, i) => {
               const dayJobs = getJobsForDate(date);
               const isSelected = selectedDate?.toDateString() === date.toDateString();

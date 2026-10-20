@@ -1,8 +1,20 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ALLOWED_EMAILS } from '@/lib/allowedUsers';
+import { checkIsStaff, getConfirmedStaffId, rememberConfirmedStaff, forgetConfirmedStaff } from '@/lib/staffCheck';
+import { captureGoogleTokens, clearGoogleTokens, onGoogleTokenChange } from '@/lib/googleTokenStore';
+
+// B3: only what the app uses — events on the Jobs calendar + reading the
+// calendar list for Settings → "Jobs calendar". (gmail.send and full
+// calendar access were requested before; nothing used them.)
+export const GOOGLE_SCOPES = 'email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+export const RETURN_TO_KEY = 'genflow_auth_return_to';
 
 const AuthContext = createContext();
+
+const ACCESS_DENIED = {
+  type: 'access_denied',
+  message: 'Access denied. This app is restricted to GenShield team members.',
+};
 
 function mapSupabaseUser(supabaseUser) {
   if (!supabaseUser) return null;
@@ -26,13 +38,17 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings, setAppPublicSettings] = useState(null);
   const [googleToken, setGoogleToken] = useState(null);
   const [googleTokenExpiry, setGoogleTokenExpiry] = useState(null);
+  const deniedRef = useRef(false); // B6: signed out because the staff check said no
 
   const applySession = useCallback((sess) => {
     const nextUser = mapSupabaseUser(sess?.user ?? null);
     setSession(sess);
     setUser(nextUser);
     setIsAuthenticated(!!sess);
-    setGoogleToken(sess?.provider_token ?? null);
+    // B3: keep the Google tokens Supabase hands out only right after the
+    // Google redirect (they vanish from the session at its next refresh).
+    const google = captureGoogleTokens(sess);
+    setGoogleToken(google?.accessToken ?? null);
     if (sess) {
       setAuthError(null);
     } else {
@@ -62,36 +78,83 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkAppState();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      if (_event === 'SIGNED_IN' && sess?.user) {
-        if (!ALLOWED_EMAILS.has(sess.user.email)) {
-          await supabase.auth.signOut();
-          setUser(null);
-          setSession(null);
-          setIsAuthenticated(false);
-          setGoogleToken(null);
-          setAuthError({
-            type: 'access_denied',
-            message: 'Access denied. This app is restricted to GenShield team members.',
-          });
-          setIsLoadingAuth(false);
-          setIsLoadingPublicSettings(false);
-          return;
-        }
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      // Staff check (B6) runs in the effect below, not here: supabase calls
+      // awaited inside this callback can deadlock the auth lock.
+      if (sess) deniedRef.current = false;
       applySession(sess);
+      // Signed out because the staff check said no: keep "Access denied"
+      // instead of the generic "Authentication required".
+      if (!sess && deniedRef.current) setAuthError(ACCESS_DENIED);
       setIsLoadingAuth(false);
       setIsLoadingPublicSettings(false);
     });
     return () => subscription.unsubscribe();
   }, [applySession, checkAppState]);
 
-  const signInWithGoogle = async () => {
+  // ── Staff gate (B6) ──────────────────────────────────────────────────────
+  // public.staff via is_staff() is the only list. 'checking' | 'staff' |
+  // 'error' while signed in; 'idle' otherwise. A user this device already
+  // confirmed renders immediately while the check re-runs in the background;
+  // a definite "not staff" signs out with "Access denied"; a failed check
+  // with no prior confirmation shows a Retry screen — never a sign-out.
+  const [staffStatus, setStaffStatus] = useState('idle');
+  const [staffCheckError, setStaffCheckError] = useState(null);
+  const [staffCheckRun, setStaffCheckRun] = useState(0);
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    if (!userId) { setStaffStatus('idle'); return undefined; }
+    let cancelled = false;
+    const confirmedBefore = getConfirmedStaffId() === userId;
+    setStaffStatus(confirmedBefore ? 'staff' : 'checking');
+    setStaffCheckError(null);
+    checkIsStaff(supabase).then(async (isStaff) => {
+      if (cancelled) return;
+      if (isStaff) {
+        rememberConfirmedStaff(userId);
+        setStaffStatus('staff');
+        return;
+      }
+      forgetConfirmedStaff();
+      deniedRef.current = true;
+      setStaffStatus('denied');
+      setAuthError(ACCESS_DENIED);
+      try { await supabase.auth.signOut(); } catch (e) { console.warn('[Auth] sign-out after denial failed:', e.message); }
+      setUser(null);
+      setSession(null);
+      setIsAuthenticated(false);
+      clearGoogleTokens();
+      setGoogleToken(null);
+      setAuthError(ACCESS_DENIED);
+    }).catch((e) => {
+      if (cancelled) return;
+      console.warn('[Auth] staff check failed:', e.message);
+      if (confirmedBefore) return; // keep working; the database still enforces staff-only access
+      setStaffCheckError(e.message || 'The access check failed');
+      setStaffStatus('error');
+    });
+    return () => { cancelled = true; };
+  }, [userId, staffCheckRun]);
+
+  const retryStaffCheck = useCallback(() => setStaffCheckRun((n) => n + 1), []);
+  // Before the effect's first run for a new user, a device-confirmed user is
+  // already 'staff' (no one-frame spinner flash).
+  const effectiveStaffStatus = staffStatus === 'idle' && userId
+    ? (getConfirmedStaffId() === userId ? 'staff' : 'checking')
+    : staffStatus;
+
+  // returnTo: where AuthCallback lands afterwards (Reconnect Google from any screen).
+  const signInWithGoogle = async ({ returnTo } = {}) => {
     setAuthError(null);
+    try {
+      if (returnTo) sessionStorage.setItem(RETURN_TO_KEY, returnTo);
+      else sessionStorage.removeItem(RETURN_TO_KEY);
+    } catch { /* ignore */ }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        scopes: 'email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send',
+        scopes: GOOGLE_SCOPES,
         redirectTo: window.location.origin + '/auth/callback',
         queryParams: { access_type: 'offline', prompt: 'consent' },
       },
@@ -102,7 +165,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async (shouldRedirect = true) => {
+    forgetConfirmedStaff();
     await supabase.auth.signOut();
+    clearGoogleTokens();
     setUser(null);
     setSession(null);
     setIsAuthenticated(false);
@@ -118,30 +183,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const id = setInterval(async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        const refreshToken = currentSession?.provider_refresh_token;
-        if (!refreshToken) return;
-        const res = await fetch('/api/refresh-google-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-        if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
-        const { access_token, expires_in } = await res.json();
-        if (access_token) {
-          setGoogleToken(access_token);
-          setGoogleTokenExpiry(Date.now() + expires_in * 1000);
-        }
-      } catch (e) {
-        console.warn('[Auth] Token refresh failed:', e.message);
-      }
-    }, 45 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [isAuthenticated]);
+  // Google access tokens are refreshed on demand by googleTokenStore (via the
+  // staff-only /api/refresh-google-token); mirror the current one here.
+  useEffect(() => onGoogleTokenChange(rec => {
+    setGoogleToken(rec?.accessToken ?? null);
+    setGoogleTokenExpiry(rec?.expiresAt ?? null);
+  }), []);
 
   return (
     <AuthContext.Provider
@@ -161,6 +208,9 @@ export const AuthProvider = ({ children }) => {
         logout: signOut,
         navigateToLogin,
         checkAppState,
+        staffStatus: effectiveStaffStatus,
+        staffCheckError,
+        retryStaffCheck,
       }}
     >
       {children}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildLaborLine, groupLaborRates, memberPrice, ratePrice } from "@/lib/utils/laborPricing";
+import { buildLaborLine, groupLaborRates, memberPrice, ratePrice, descriptionAfterPriceEdit, stripMemberLabel } from "@/lib/utils/laborPricing";
 import { isActiveMember, memberDiscountRateFor } from "@/lib/utils/membership";
 
 // H-5 / B-04: job labor choices come from the catalog; the price shown is
@@ -77,3 +77,35 @@ describe("membership (D-01)", () => {
     expect(memberDiscountRateFor({ membership_plan: "annual", membership_signed: false }, now)).toBe(1.0);
   });
 });
+
+// B5b: the member label always matches the price after a manual edit.
+describe('descriptionAfterPriceEdit (B5b)', () => {
+  const rates = [
+    { name: 'Standard Labor', type: 'hourly', category: 'labor', rate: 150 },
+    { name: 'Starter Replacement', type: 'flat_rate', category: 'starters', flat_price: 400 },
+    { name: 'Annual Agreement', type: 'flat_rate', category: 'service_agreements', flat_price: 325 },
+  ]
+  const hourly = { description: 'Standard Labor (Member 10% off)', is_flat_rate: false, rate: 135, hours: 1 }
+  const flat = { description: 'Starter Replacement (Member 15% off)', is_flat_rate: true, flat_rate_amount: 340 }
+  it('drops the label when the edited price is not the member price', () => {
+    expect(descriptionAfterPriceEdit({ line: hourly, newPrice: 120, rates, memberDiscountRate: 0.9 })).toBe('Standard Labor')
+    expect(descriptionAfterPriceEdit({ line: flat, newPrice: 400, rates, memberDiscountRate: 0.85 })).toBe('Starter Replacement')
+  })
+  it('keeps / restores the label when the price is (set back to) the member price', () => {
+    expect(descriptionAfterPriceEdit({ line: { ...hourly, description: 'Standard Labor', rate: 120 }, newPrice: 135, rates, memberDiscountRate: 0.9 })).toBe('Standard Labor (Member 10% off)')
+    expect(descriptionAfterPriceEdit({ line: { ...flat, flat_rate_amount: 300 }, newPrice: 340, rates, memberDiscountRate: 0.85 })).toBe('Starter Replacement (Member 15% off)')
+  })
+  it('leaves the description alone when the price did not change', () => {
+    expect(descriptionAfterPriceEdit({ line: hourly, newPrice: 135, rates: [], memberDiscountRate: 1 })).toBe(hourly.description)
+  })
+  it('non-members, unknown lines, agreements and type mismatches never get a label', () => {
+    expect(descriptionAfterPriceEdit({ line: { ...hourly, rate: 150, description: 'Standard Labor' }, newPrice: 135, rates, memberDiscountRate: 1 })).toBe('Standard Labor')
+    expect(descriptionAfterPriceEdit({ line: { description: 'Custom thing (Member 10% off)', is_flat_rate: true, flat_rate_amount: 90 }, newPrice: 80, rates, memberDiscountRate: 0.9 })).toBe('Custom thing')
+    expect(descriptionAfterPriceEdit({ line: { description: 'Annual Agreement', is_flat_rate: true, flat_rate_amount: 325 }, newPrice: 292.5, rates, memberDiscountRate: 0.9 })).toBe('Annual Agreement')
+    expect(descriptionAfterPriceEdit({ line: { description: 'Standard Labor', is_flat_rate: true, flat_rate_amount: 150 }, newPrice: 135, rates, memberDiscountRate: 0.9 })).toBe('Standard Labor')
+  })
+  it('stripMemberLabel only removes the trailing member suffix', () => {
+    expect(stripMemberLabel('A (Member 10% off)')).toBe('A')
+    expect(stripMemberLabel('A (note)')).toBe('A (note)')
+  })
+})

@@ -2,36 +2,50 @@
 // Plain ESM shared by the signing page (src/pages/MembershipAgreement.jsx) and
 // the server-side agreement PDF (api/_lib/pdf). A copy of the plan/terms as
 // signed is also snapshotted into job_agreements.snapshot at signing time.
+// Member benefit, both plans (Run 6 B4; wording Run 7). Techs apply it by hand
+// on a normal-hours service call (the first half hour of diagnostic labor is
+// not charged; never on emergency/after-hours calls) —
+// no invoice/pricing logic reads this. Signed agreements keep the text they
+// were signed with (job_agreements.snapshot), so this only affects new ones.
+export const DIAGNOSTIC_BENEFIT = "First 30 minutes of diagnostic labor free on service calls during normal business hours, during the agreement term.";
+
+// Plan prices are shown with this note wherever the agreement shows a price
+// (Run 7): the agreement line is taxed like every other invoice line.
+export const PLAN_TAX_NOTE = "plus NJ sales tax";
+
 export const PLANS = {
   annual: {
     name: "Guardian Plan (Annual)",
     price: 325,
-    billingLabel: "$325.00 / year",
+    priceLabel: "$325.00 / year",
+    billingLabel: "$325.00 / year plus NJ sales tax",
     color: "border-blue-200 bg-blue-50",
     headerColor: "bg-blue-600",
     includes: [
       "One (1) full annual maintenance service",
       "10% off all parts, labor, and repair services",
       "Priority emergency service (24-hour response)",
+      DIAGNOSTIC_BENEFIT,
     ],
   },
   semi_annual: {
     name: "Sentinel Plan (Semi-Annual)",
     price: 575,
-    billingLabel: "$575.00 / year",
+    priceLabel: "$575.00 / year",
+    billingLabel: "$575.00 / year plus NJ sales tax",
     color: "border-emerald-200 bg-emerald-50",
     headerColor: "bg-emerald-600",
     includes: [
       "Two (2) maintenance visits per year",
       "15% off all parts, labor, and repair services",
       "Priority emergency service (24-hour response)",
-      "First 30 minutes of diagnostic labor free, per visit, during normal business hours",
+      DIAGNOSTIC_BENEFIT,
     ],
   },
 };
 
 export const TERMS = [
-  { n: "1", title: "Term & Payment", body: "This Agreement is valid for one (1) year from the date of execution. Payment is due in full at the time of signing. Annual billing only — no monthly payment option is available." },
+  { n: "1", title: "Term & Payment", body: "This Agreement is valid for one (1) year from the date of signing or, for a renewal, for one (1) year from the end of the current term. Payment is due in full at the time of signing. Annual billing only — no monthly payment option is available." },
   { n: "2", title: "Automatic Renewal", body: "If a credit card is on file, this Agreement auto-renews annually. You will be notified by email at least 30 days before renewal with the amount to be charged and the option to cancel. If no credit card is on file, you will receive an email 30 days before expiration advising that the Agreement will expire without further action." },
   { n: "3", title: "Cancellation", body: "After automatic renewal, cancellations submitted in writing within 7 days receive a full refund. Cancellations after that period and mid-term cancellations are non-refundable." },
   { n: "4", title: "Included Services", body: "Scheduled maintenance includes engine oil and filter replacement, air filtration inspection, spark plug inspection, battery and charging system check, fuel system verification, and full operational load test." },
