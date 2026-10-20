@@ -12,7 +12,7 @@ export function takeReturnTo() {
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoadingAuth, authError } = useAuth();
+  const { isAuthenticated, isLoadingAuth } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -21,11 +21,14 @@ export default function AuthCallback() {
       navigate(takeReturnTo(), { replace: true });
       return;
     }
-    // Non-auth-required error (e.g. access_denied) — go to login to show the message
-    if (!isLoadingAuth && authError && authError.type !== 'auth_required') {
+    // No session from this URL — an error (e.g. access_denied, shown on the
+    // sign-in screen), or an old /auth/callback#… entry reached with Back
+    // after Sign out (supabase-js leaves it in history; its tokens are
+    // revoked): go to the sign-in screen instead of spinning forever.
+    if (!isLoadingAuth) {
       navigate('/login', { replace: true });
     }
-  }, [isAuthenticated, isLoadingAuth, authError, navigate]);
+  }, [isAuthenticated, isLoadingAuth, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">

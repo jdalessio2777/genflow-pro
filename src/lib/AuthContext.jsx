@@ -189,6 +189,9 @@ export const AuthProvider = ({ children }) => {
       // Blank the old page first, so a back-forward cache snapshot shows nothing.
       document.body.style.visibility = 'hidden';
       window.location.replace('/login');
+      // A same-page history step (e.g. a closing dialog's entry) cancels a
+      // page load in progress: if we're still here, go again.
+      setTimeout(() => window.location.replace('/login'), 2500);
     }
   };
 

@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { getAccessToken, googleConnection } from "@/lib/googleTokenStore";
 import { getWritableCalendars, defaultJobsCalendar, getJobsCalendarChoice, setJobsCalendarChoice, pendingCalendarOps } from "@/lib/calendarSync";
 import { JOBS_CALENDAR_NAME } from "@/lib/googleCalendar";
+import { afterSheetsClose } from "@/lib/sheetHistory";
 
 // ─── BUSINESS INFO TAB ────────────────────────────────────────────────────────
 function BusinessTab({ settings, setSetting, isSaving }) {
@@ -629,23 +630,26 @@ export function SignOutSection() {
   const [busy, setBusy] = useState(false);
   const pending = open ? pendingCalendarOps().length : 0;
 
-  const confirm = async (e) => {
-    e.preventDefault(); // keep the dialog up (spinner) until the sign-in screen loads
+  // Close the dialog and let its history entry go first (sheetHistory pops
+  // it with a back step, which would cancel the move to the sign-in screen).
+  const confirm = () => {
     setBusy(true);
-    await signOut(true);
+    setOpen(false);
+    afterSheetsClose(() => { signOut(true); });
   };
 
   return (
     <div className="mt-6 pt-4 border-t border-border">
       {user?.email && <p className="text-xs text-muted-foreground text-center mb-2">Signed in as {user.email}</p>}
-      <AlertDialog open={open} onOpenChange={(v) => { if (!busy) setOpen(v); }}>
+      <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogTrigger asChild>
           <button
             type="button"
             data-testid="settings-sign-out"
+            disabled={busy}
             className="w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl border border-destructive/30 text-destructive font-semibold active:bg-destructive/10 transition-colors"
           >
-            <LogOut className="w-4 h-4" />Sign out
+            {busy ? <><Loader2 className="w-4 h-4 animate-spin" />Signing out…</> : <><LogOut className="w-4 h-4" />Sign out</>}
           </button>
         </AlertDialogTrigger>
         <AlertDialogContent>
@@ -657,9 +661,9 @@ export function SignOutSection() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction data-testid="confirm-sign-out" onClick={confirm} disabled={busy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign out"}
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction data-testid="confirm-sign-out" onClick={confirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sign out
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

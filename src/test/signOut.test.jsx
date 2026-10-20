@@ -115,6 +115,18 @@ describe('AuthContext.signOut', () => {
     expect(replaceSpy).toHaveBeenCalledWith('/login')
   })
 
+  it('if the page load to /login is cancelled (same-page history step), it tries again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      await mount(makeSession())
+      await act(async () => { await mockAuth.current.signOut(true) })
+      expect(replaceSpy).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(2600)
+      expect(replaceSpy).toHaveBeenCalledTimes(2)
+      expect(replaceSpy).toHaveBeenLastCalledWith('/login')
+    } finally { vi.useRealTimers() }
+  })
+
   it('a back-forward-cache restore of the signed-out page goes to /login', async () => {
     await mount(makeSession())
     await act(async () => { await mockAuth.current.signOut(true) })
@@ -166,10 +178,30 @@ describe('Settings → Sign out', () => {
       expect(signOut).not.toHaveBeenCalled()
       fireEvent.click(screen.getByTestId('settings-sign-out'))
       await act(async () => { fireEvent.click(screen.getByTestId('confirm-sign-out')) })
+      // the dialog closes first (its history entry must go before the page load starts)
+      expect(screen.queryByText('Sign out of GenFlow?')).toBeNull()
+      await act(async () => { await new Promise((r) => setTimeout(r, 100)) })
       expect(signOut).toHaveBeenCalledWith(true)
+      expect(screen.getByTestId('settings-sign-out').textContent).toContain('Signing out')
       expect(confirmSpy).not.toHaveBeenCalled()
     } finally {
       useAuthSpy.mockRestore()
     }
+  })
+})
+
+// ─── /auth/callback reached with Back after Sign out ───────────────────────
+describe('AuthCallback', () => {
+  it('no session from the URL (revoked tokens / error) → sign-in screen, not an endless spinner', async () => {
+    const { MemoryRouter, Routes, Route } = await import('react-router-dom')
+    const { default: AuthCallback } = await import('@/pages/AuthCallback')
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null })
+    await act(async () => {
+      render(<AuthProvider><MemoryRouter initialEntries={['/auth/callback']}><Routes>
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/login" element={<p>SIGN-IN SCREEN</p>} />
+      </Routes></MemoryRouter></AuthProvider>)
+    })
+    expect(screen.getByText('SIGN-IN SCREEN')).toBeTruthy()
   })
 })
