@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, markServiceRequestContacted } from "@/lib/db";
+import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { supabase } from "@/lib/supabaseClient";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUrlState } from "@/hooks/useUrlState";
@@ -41,15 +42,9 @@ export default function Inbox() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 200),
-  });
+  const { data: jobs = [] } = useQuery(jobsListQuery(200));
 
   const activeJobCustomerIds = new Set(
     jobs
@@ -319,13 +314,13 @@ export default function Inbox() {
       <div className="px-4 pt-3">
         <div className="flex gap-1 bg-muted/50 p-1 rounded-xl max-w-lg mx-auto">
           <button
-            className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all ${activeTab === "service_due" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+            className={`flex-1 min-h-[40px] hit-44 relative text-xs font-semibold py-2 rounded-lg transition-all ${activeTab === "service_due" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
             onClick={() => setActiveTab("service_due")}
           >
             Service Due
           </button>
           <button
-            className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "new_leads" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+            className={`flex-1 min-h-[40px] hit-44 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "new_leads" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
             onClick={() => setActiveTab("new_leads")}
           >
             New Leads
@@ -336,7 +331,7 @@ export default function Inbox() {
             )}
           </button>
           <button
-            className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "quotes" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+            className={`flex-1 min-h-[40px] hit-44 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "quotes" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
             onClick={() => setActiveTab("quotes")}
           >
             Quotes

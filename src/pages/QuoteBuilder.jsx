@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { customersListQuery, partsCatalogQuery } from "@/lib/queries";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { quoteEmailHTML } from "@/lib/emailTemplates";
 import { Card } from "@/components/ui/card";
@@ -43,15 +44,9 @@ export default function QuoteBuilder() {
   const [scopeNotes, setScopeNotes] = useState("");
   const [sending, setSending] = useState(false);
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
 
-  const { data: parts = [] } = useQuery({
-    queryKey: ["parts-catalog"],
-    queryFn: () => db.Part.list("name"),
-  });
+  const { data: parts = [] } = useQuery(partsCatalogQuery());
 
   const { data: rates = [] } = useQuery({
     queryKey: ["labor-rates"],

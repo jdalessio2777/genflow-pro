@@ -1,6 +1,8 @@
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
+import { DetailSkeleton } from "@/components/ui/skeleton";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -198,25 +200,13 @@ export default function JobDetail() {
   const back = useBack();
   const [optimisticOnSiteTime, setOptimisticOnSiteTime] = useState(null);
 
-  const { data: job, isLoading } = useQuery({
-    queryKey: ["job", id],
-    queryFn: async () => { const r = await db.Job.filter({ id }); return r[0]; },
-  });
+  const { data: job, isLoading } = useQuery(jobQuery(id));
 
-  const { data: parts = [], isSuccess: partsLoaded } = useQuery({
-    queryKey: ["job-parts", id],
-    queryFn: () => db.JobPart.filter({ job_id: id }),
-  });
+  const { data: parts = [], isSuccess: partsLoaded } = useQuery(jobPartsQuery(id));
 
-  const { data: labor = [], isSuccess: laborLoaded } = useQuery({
-    queryKey: ["job-labor", id],
-    queryFn: () => db.JobLabor.filter({ job_id: id }),
-  });
+  const { data: labor = [], isSuccess: laborLoaded } = useQuery(jobLaborQuery(id));
 
-  const { data: documents = [] } = useQuery({
-    queryKey: ["job-docs", id],
-    queryFn: () => db.JobDocument.filter({ job_id: id }),
-  });
+  const { data: documents = [] } = useQuery(jobDocsQuery(id));
 
   // Maintenance agreement signed during THIS job (job_agreements, migration
   // 0022). Its PDF rides on the completion email.
@@ -228,34 +218,19 @@ export default function JobDetail() {
     },
   });
 
-  const { data: catalogParts = [] } = useQuery({
-    queryKey: ["parts-catalog"],
-    queryFn: () => db.Part.list("name"),
-  });
+  const { data: catalogParts = [] } = useQuery(partsCatalogQuery());
 
-  const { data: photos = [] } = useQuery({
-    queryKey: ["job-photos", id],
-    queryFn: () => db.JobPhoto.filter({ job_id: id }),
-  });
+  const { data: photos = [] } = useQuery(jobPhotosQuery(id));
 
   const { data: existingInvoices = [] } = useQuery({
-    queryKey: ["job-invoice", id],
-    queryFn: () => db.Invoice.filter({ job_id: id }),
+    ...jobInvoiceQuery(id),
     initialData: () => queryClient.getQueryData(["job-invoice", id]),
   });
   const existingInvoice = existingInvoices[0] || null;
 
-  const { data: customer } = useQuery({
-    queryKey: ["job-customer", job?.customer_id],
-    queryFn: async () => { const r = await db.Customer.filter({ id: job.customer_id }); return r[0]; },
-    enabled: !!job?.customer_id,
-  });
+  const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), enabled: !!job?.customer_id });
 
-  const { data: customerHistory = [] } = useQuery({
-    queryKey: ["customer-history", job?.customer_id],
-    queryFn: () => db.Job.filter({ customer_id: job?.customer_id }, "-created_date"),
-    enabled: !!job?.customer_id,
-  });
+  const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), enabled: !!job?.customer_id });
   const previousJobs = sortJobs(customerHistory
     .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status)))
     .slice(0, 10);
@@ -408,6 +383,21 @@ export default function JobDetail() {
     setGeneratorNotes(notes);
     handleGeneratorNotesChange(notes);
   };
+
+  // F-11: notes typed just before switching apps / locking the phone / leaving
+  // the job were lost while the 1.2-1.5 s autosave timer was still waiting.
+  // Save them right away when the app is hidden or the job screen closes.
+  useEffect(() => {
+    const flush = () => { debouncedSaveNotes.flush(); handleGeneratorNotesChange.flush(); };
+    const onVisibility = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+      flush();
+    };
+  }, [debouncedSaveNotes, handleGeneratorNotesChange]);
 
   const formatElapsed = (s) => {
     const h = Math.floor(s / 3600);
@@ -995,7 +985,7 @@ export default function JobDetail() {
     return () => root.style.removeProperty("--status-bar-bg");
   }, [statusBarColor]);
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  if (isLoading) return <DetailSkeleton />;
   if (!job) return <div className="p-4 text-center">Job not found</div>;
 
   const isClosed = ["invoiced", "canceled"].includes(job.status);
@@ -1048,7 +1038,7 @@ export default function JobDetail() {
               onClick={back}
               aria-label="Back"
               data-testid="back-button"
-              className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
+              className="relative hit-44 w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-white" />
             </button>
@@ -1089,7 +1079,7 @@ export default function JobDetail() {
             )}
             {canEditOrCancel && (
               <Link to={`/jobs/${id}/edit`}>
-                <button className="w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center">
+                <button className="relative hit-44 w-8 h-8 rounded-xl bg-white/20 active:bg-white/30 flex items-center justify-center">
                   <Pencil className="w-4 h-4 text-white" />
                 </button>
               </Link>
@@ -1100,7 +1090,7 @@ export default function JobDetail() {
 
       {/* ── HORIZONTAL TAB BAR ── */}
       <div className="bg-white dark:bg-gray-900 border-b border-border shrink-0 shadow-sm min-w-0">
-      <div className="flex overflow-x-auto max-w-lg mx-auto" style={{ scrollbarWidth: "none" }}>
+      <div className="flex overflow-x-auto max-w-lg mx-auto scroll-hint-x" style={{ scrollbarWidth: "none" }}>
       {[
         { key: "overview", label: "Overview", icon: "⚡" },
         { key: "items", label: "Items", icon: "📦" },
@@ -1112,8 +1102,8 @@ export default function JobDetail() {
       ].map(tab => (
             <button
               key={tab.key}
-              onClick={() => { setActiveJobTab(tab.key); if (window.scrollY > 0) window.scrollTo(0, 0); }}
-              className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0"
+              onClick={(e) => { setActiveJobTab(tab.key); e.currentTarget.scrollIntoView?.({ inline: "nearest", block: "nearest" }); if (window.scrollY > 0) window.scrollTo(0, 0); }}
+              className="min-h-[44px] flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0"
               style={{
                 borderBottomColor: activeJobTab === tab.key ? tabActiveColor : "transparent",
                 color: activeJobTab === tab.key ? tabActiveColor : "#6b7280",

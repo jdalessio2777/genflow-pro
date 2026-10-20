@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,15 +16,9 @@ export default function RouteMap() {
   const [techView, setTechView] = useState("all");
   const { use24h } = usePreferences();
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => db.Job.list("-created_date", 200),
-  });
+  const { data: jobs = [] } = useQuery(jobsListQuery(200));
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("name"),
-  });
+  const { data: customers = [] } = useQuery(customersListQuery("name"));
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
 
   const todayJobs = sortJobs(jobs
@@ -61,7 +55,7 @@ export default function RouteMap() {
         <div className="flex items-center gap-1.5 flex-wrap">
           {["all", "Jeremy", "Alex", "Derek", "Sean"].map(name => (
             <button key={name} onClick={() => setTechView(name)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`min-h-[44px] min-w-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 techView === name
                   ? name === "Jeremy" ? "bg-blue-600 text-white"
                     : name === "Alex" ? "bg-green-600 text-white"
@@ -126,7 +120,7 @@ export default function RouteMap() {
                             <MapPin className="w-3 h-3 shrink-0" />
                             <span className="truncate">{cust.address}</span>
                           </p>
-                          <button onClick={() => openSingleAddress(cust.address)} className="text-primary shrink-0">
+                          <button onClick={() => openSingleAddress(cust.address)} className="relative hit-44 text-primary shrink-0" aria-label="Open in Maps">
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
                         </div>

@@ -7,11 +7,15 @@ import { usePreferences } from "../../hooks/usePreferences";
 import { UnsavedChangesProvider } from "../../hooks/useUnsavedChangesGuard";
 import { useKeyboardAware } from "../../hooks/useKeyboardAware";
 import CalendarSyncBanner from "../CalendarSyncBanner";
+import { usePressPrefetch } from "../../hooks/usePressPrefetch";
+import { usePullToRefresh, PullToRefreshIndicator } from "../../hooks/usePullToRefresh";
 
 // Pages with their own fixed bottom action bar — MobileNav (also fixed-bottom,
 // same z-index) would otherwise render on top of it and cover the buttons
 // with no way to scroll past a fixed element to reach them.
 const HIDE_NAV_PREFIXES = ["/documents/fill/", "/quotes/new"];
+// Main lists with pull-to-refresh (Feel Phase 4).
+const PULL_TO_REFRESH = ["/", "/jobs", "/customers", "/schedule", "/inbox"];
 
 export default function AppLayout() {
   const location = useLocation();
@@ -20,6 +24,8 @@ export default function AppLayout() {
   const wakeLockRef = useRef(null);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   useKeyboardAware();
+  usePressPrefetch();
+  const ptr = usePullToRefresh(PULL_TO_REFRESH.includes(location.pathname));
 
   // Acquire / release screen wake lock based on preference
   useEffect(() => {
@@ -78,6 +84,7 @@ export default function AppLayout() {
         data-testid="status-bar-scrim"
         style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 'var(--sat)', background: 'var(--status-bar-bg)', zIndex: 45, pointerEvents: 'none' }}
       />
+      <PullToRefreshIndicator {...ptr} />
       {wakeLockActive && (
         <div
           style={{

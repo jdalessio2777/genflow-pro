@@ -1,22 +1,13 @@
-import { motion, useReducedMotion } from 'framer-motion';
-
+// List row wrapper. Feel Phase 3: was a framer-motion component per row with
+// a staggered fade (up to 280 ms delay) — on a 200-row Jobs list that was the
+// biggest part of the 1.5 s tap-to-usable at 4x CPU (F-16). Now a plain div
+// with a short CSS opacity fade (compositor-only, no JS per frame, no
+// stagger), skipped under reduced motion. `index` is kept for callers.
+// eslint-disable-next-line no-unused-vars
 export default function AnimatedListItem({ children, index = 0, className }) {
-  const reduced = useReducedMotion();
   return (
-    <motion.div
-      // Opacity-only fade — see PageTransition.jsx for why an active `y` transform
-      // right under the user's thumb causes the same dropped-first-touchmove bug.
-      initial={reduced ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{
-        duration: 0.18,
-        delay: reduced ? 0 : Math.min(index * 0.04, 0.28),
-        ease: 'easeOut',
-      }}
-      style={{ touchAction: 'pan-y' }}
-      className={className}
-    >
+    <div className={className ? `list-fade ${className}` : "list-fade"} style={{ touchAction: "pan-y" }}>
       {children}
-    </motion.div>
+    </div>
   );
 }

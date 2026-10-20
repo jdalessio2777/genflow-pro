@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db } from "@/lib/db";
+import { customersListQuery } from "@/lib/queries";
 import { deleteCustomerCascade } from "@/lib/deleteRecords";
 import { isActiveMember } from "@/lib/utils/membership";
 import { Link } from "react-router-dom";
@@ -70,7 +70,7 @@ function CustomerCard({ customer }) {
           label: "Call",
           icon: <Phone size={18} className="text-white" />,
           color: "bg-green-500",
-          onAction: () => window.open("tel:" + customer.phone),
+          onAction: () => { window.location.href = "tel:" + customer.phone; },
         }] : []),
         {
           label: "Jobs",
@@ -111,7 +111,7 @@ function CustomerCard({ customer }) {
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
-            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+            className="absolute top-[3px] right-[3px] p-[15px] rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
             onClick={e => e.stopPropagation()}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -199,10 +199,7 @@ export default function Customers() {
   const [search, setSearch] = useUrlState("q", "");
   const [listTab, setListTab] = useUrlState("tab", "all");
 
-  const { data: customers = [], isLoading } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => db.Customer.list("-created_date"),
-  });
+  const { data: customers = [], isLoading } = useQuery(customersListQuery("-created_date"));
 
   const filtered = customers.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||

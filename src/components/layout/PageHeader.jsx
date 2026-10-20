@@ -40,7 +40,7 @@ export default function PageHeader({ title, subtitle, back, backLabel, actions, 
           </div>
         </div>
         {actions && (
-          <div className="flex items-center gap-1.5 shrink-0">{actions}</div>
+          <div className="flex items-center gap-1.5 shrink-0" data-hit44>{actions}</div>
         )}
       </div>
     </header>
