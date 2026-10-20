@@ -314,13 +314,13 @@ export default function Inbox() {
       <div className="px-4 pt-3">
         <div className="flex gap-1 bg-muted/50 p-1 rounded-xl max-w-lg mx-auto">
           <button
-            className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all ${activeTab === "service_due" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+            className={`flex-1 min-h-[40px] hit-44 relative text-xs font-semibold py-2 rounded-lg transition-all ${activeTab === "service_due" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
             onClick={() => setActiveTab("service_due")}
           >
             Service Due
           </button>
           <button
-            className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "new_leads" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+            className={`flex-1 min-h-[40px] hit-44 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "new_leads" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
             onClick={() => setActiveTab("new_leads")}
           >
             New Leads
@@ -331,7 +331,7 @@ export default function Inbox() {
             )}
           </button>
           <button
-            className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "quotes" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+            className={`flex-1 min-h-[40px] hit-44 text-xs font-semibold py-2 rounded-lg transition-all relative ${activeTab === "quotes" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
             onClick={() => setActiveTab("quotes")}
           >
             Quotes

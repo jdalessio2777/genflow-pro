@@ -70,7 +70,7 @@ function CustomerCard({ customer }) {
           label: "Call",
           icon: <Phone size={18} className="text-white" />,
           color: "bg-green-500",
-          onAction: () => window.open("tel:" + customer.phone),
+          onAction: () => { window.location.href = "tel:" + customer.phone; },
         }] : []),
         {
           label: "Jobs",
@@ -111,7 +111,7 @@ function CustomerCard({ customer }) {
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
-            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+            className="absolute top-[3px] right-[3px] p-[15px] rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
             onClick={e => e.stopPropagation()}
           >
             <Trash2 className="w-3.5 h-3.5" />

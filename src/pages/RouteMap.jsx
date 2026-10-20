@@ -55,7 +55,7 @@ export default function RouteMap() {
         <div className="flex items-center gap-1.5 flex-wrap">
           {["all", "Jeremy", "Alex", "Derek", "Sean"].map(name => (
             <button key={name} onClick={() => setTechView(name)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`min-h-[44px] min-w-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 techView === name
                   ? name === "Jeremy" ? "bg-blue-600 text-white"
                     : name === "Alex" ? "bg-green-600 text-white"
@@ -120,7 +120,7 @@ export default function RouteMap() {
                             <MapPin className="w-3 h-3 shrink-0" />
                             <span className="truncate">{cust.address}</span>
                           </p>
-                          <button onClick={() => openSingleAddress(cust.address)} className="text-primary shrink-0">
+                          <button onClick={() => openSingleAddress(cust.address)} className="relative hit-44 text-primary shrink-0" aria-label="Open in Maps">
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
                         </div>

@@ -212,7 +212,7 @@ export default function Schedule() {
             <button
               key={f}
               onClick={() => setTechFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 techFilter === f ? "bg-primary text-white" : "bg-muted text-muted-foreground"
               }`}
             >
@@ -224,10 +224,10 @@ export default function Schedule() {
         {/* Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={prev}>
+            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-xl" onClick={prev}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={next}>
+            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-xl" onClick={next}>
               <ChevronRight className="w-4 h-4" />
             </Button>
             <Button variant="outline" size="sm" className="rounded-xl h-9 ml-1 text-xs" onClick={goToday}>
@@ -235,8 +235,8 @@ export default function Schedule() {
             </Button>
           </div>
           <div className="flex items-center gap-1 bg-muted/60 rounded-xl p-1">
-            <button onClick={() => setView("month")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "month" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Month</button>
-            <button onClick={() => setView("week")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "week" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Week</button>
+            <button onClick={() => setView("month")} className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "month" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Month</button>
+            <button onClick={() => setView("week")} className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "week" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>Week</button>
           </div>
         </div>
 

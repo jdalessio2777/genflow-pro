@@ -153,7 +153,7 @@ function PartsCategoryList({ parts, loading, onSelectCategory }) {
                     db.Part.update(part.id, { reorder_flagged: false, in_stock: 1, ...firstManagedPatch(part) })
                       .then(() => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }));
                   }}
-                  className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-orange-600 text-white shrink-0 active:scale-95"
+                  className="relative hit-44 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-orange-600 text-white shrink-0 active:scale-95"
                 >
                   ✓ Reordered
                 </button>

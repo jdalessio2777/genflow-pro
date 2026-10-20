@@ -131,7 +131,7 @@ export default function Jobs() {
               <button
                 key={f}
                 onClick={() => setTechFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                className={`relative hit-44 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                   techFilter === f ? "bg-primary text-white" : "bg-muted text-muted-foreground"
                 }`}
               >
@@ -197,7 +197,7 @@ export default function Jobs() {
                       label: "Call",
                       icon: <Phone size={18} className="text-white" />,
                       color: "bg-green-500",
-                      onAction: () => window.open("tel:" + customerMap[job.customer_id].phone),
+                      onAction: () => { window.location.href = "tel:" + customerMap[job.customer_id].phone; },
                     }] : []),
                     ...(customerMap[job.customer_id]?.address ? [{
                       label: "Nav",
@@ -238,7 +238,7 @@ export default function Jobs() {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <button
-                        className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        className="absolute top-[3px] right-[3px] p-[15px] rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                         onClick={e => e.stopPropagation()}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -268,7 +268,7 @@ export default function Jobs() {
                       label: "Call",
                       icon: <Phone size={18} className="text-white" />,
                       color: "bg-green-500",
-                      onAction: () => window.open("tel:" + customerMap[job.customer_id].phone),
+                      onAction: () => { window.location.href = "tel:" + customerMap[job.customer_id].phone; },
                     }] : []),
                     ...(customerMap[job.customer_id]?.address ? [{
                       label: "Nav",
@@ -328,7 +328,7 @@ export default function Jobs() {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <button
-                        className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        className="absolute top-[3px] right-[3px] p-[15px] rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                         onClick={e => e.stopPropagation()}
                       >
                         <Trash2 className="w-3.5 h-3.5" />

@@ -76,7 +76,7 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
       <div className="flex gap-1.5 flex-wrap">
         {[["month", "This Month"], ["quarter", "This Quarter"], ["year", "This Year"], ["all", "All Time"]].map(([key, label]) => (
           <button key={key} onClick={() => setPeriod(key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             {label}
           </button>
         ))}
@@ -764,7 +764,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
       <div className="flex items-center gap-1.5 flex-wrap">
         {[["week", "This Week"], ["month", "This Month"], ["all", "All Time"]].map(([key, label]) => (
           <button key={key} onClick={() => setView(key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             {label}
           </button>
         ))}
@@ -773,12 +773,12 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
       {activeVehicles.length > 1 && (
         <div className="flex items-center gap-1.5 flex-wrap">
           <button onClick={() => setVehicleFilter("all")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${vehicleFilter === "all" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${vehicleFilter === "all" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             <Truck className="w-3 h-3" /> All Vehicles
           </button>
           {activeVehicles.map(v => (
             <button key={v.id} onClick={() => setVehicleFilter(v.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${vehicleFilter === v.id ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+              className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${vehicleFilter === v.id ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
               {v.name.split(" ").slice(0, 2).join(" ")}
             </button>
           ))}
