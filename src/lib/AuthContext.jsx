@@ -1,7 +1,13 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { ALLOWED_EMAILS } from '@/lib/allowedUsers';
-import { setCalendarAccessToken } from '@/lib/calendarSync';
+import { captureGoogleTokens, clearGoogleTokens, onGoogleTokenChange } from '@/lib/googleTokenStore';
+
+// B3: only what the app uses — events on the Jobs calendar + reading the
+// calendar list for Settings → "Jobs calendar". (gmail.send and full
+// calendar access were requested before; nothing used them.)
+export const GOOGLE_SCOPES = 'email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+export const RETURN_TO_KEY = 'genflow_auth_return_to';
 
 const AuthContext = createContext();
 
@@ -33,8 +39,10 @@ export const AuthProvider = ({ children }) => {
     setSession(sess);
     setUser(nextUser);
     setIsAuthenticated(!!sess);
-    setGoogleToken(sess?.provider_token ?? null);
-    setCalendarAccessToken(sess?.provider_token ?? null);
+    // B3: keep the Google tokens Supabase hands out only right after the
+    // Google redirect (they vanish from the session at its next refresh).
+    const google = captureGoogleTokens(sess);
+    setGoogleToken(google?.accessToken ?? null);
     if (sess) {
       setAuthError(null);
     } else {
@@ -88,12 +96,17 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, [applySession, checkAppState]);
 
-  const signInWithGoogle = async () => {
+  // returnTo: where AuthCallback lands afterwards (Reconnect Google from any screen).
+  const signInWithGoogle = async ({ returnTo } = {}) => {
     setAuthError(null);
+    try {
+      if (returnTo) sessionStorage.setItem(RETURN_TO_KEY, returnTo);
+      else sessionStorage.removeItem(RETURN_TO_KEY);
+    } catch { /* ignore */ }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        scopes: 'email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send',
+        scopes: GOOGLE_SCOPES,
         redirectTo: window.location.origin + '/auth/callback',
         queryParams: { access_type: 'offline', prompt: 'consent' },
       },
@@ -105,6 +118,7 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async (shouldRedirect = true) => {
     await supabase.auth.signOut();
+    clearGoogleTokens();
     setUser(null);
     setSession(null);
     setIsAuthenticated(false);
@@ -120,31 +134,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const id = setInterval(async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        const refreshToken = currentSession?.provider_refresh_token;
-        if (!refreshToken) return;
-        const res = await fetch('/api/refresh-google-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-        if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
-        const { access_token, expires_in } = await res.json();
-        if (access_token) {
-          setGoogleToken(access_token);
-          setCalendarAccessToken(access_token);
-          setGoogleTokenExpiry(Date.now() + expires_in * 1000);
-        }
-      } catch (e) {
-        console.warn('[Auth] Token refresh failed:', e.message);
-      }
-    }, 45 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [isAuthenticated]);
+  // Google access tokens are refreshed on demand by googleTokenStore (via the
+  // staff-only /api/refresh-google-token); mirror the current one here.
+  useEffect(() => onGoogleTokenChange(rec => {
+    setGoogleToken(rec?.accessToken ?? null);
+    setGoogleTokenExpiry(rec?.expiresAt ?? null);
+  }), []);
 
   return (
     <AuthContext.Provider

@@ -11,8 +11,9 @@ import { ChevronLeft, ChevronRight, Plus, CalendarCheck } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
 import { getRecentCalendarChanges } from "@/lib/googleCalendar";
+import { getAccessToken } from "@/lib/googleTokenStore";
+import { resolveJobsCalendar } from "@/lib/calendarSync";
 import { formatTime } from "@/lib/formatTime";
 import { sortJobs, etDateKey, localDateKey } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -62,13 +63,28 @@ export default function Schedule() {
   useEffect(() => { jobsRef.current = jobs; }, [jobs]);
 
   useEffect(() => {
-    if (calendarSyncedRef.current || !googleToken) return;
+    if (calendarSyncedRef.current || jobs.length === 0) return;
     calendarSyncedRef.current = true;
 
     const lastSync = localStorage.getItem("genflow_last_calendar_sync");
 
-    getRecentCalendarChanges(googleToken, lastSync)
-      .then(async (changes) => {
+    // B3: pull moves made in Google — Jobs calendar + primary, and ONLY events
+    // carrying a GenFlow job marker (getRecentCalendarChanges filters).
+    (async () => {
+      const { token } = await getAccessToken();
+      if (!token) return null;
+      const target = await resolveJobsCalendar(token);
+      const ids = [...new Set([target.id, "primary"])];
+      const lists = await Promise.all(ids.map(id => getRecentCalendarChanges(token, lastSync, id)));
+      return lists.flat();
+    })()
+      .then(async (all) => {
+        if (!all) return; // no Google access on this device
+        // Only real moves of jobs we know (not our own writes echoing back).
+        const changes = all.filter(c => {
+          const j = jobsRef.current.find(x => x.id === c.jobId);
+          return j && c.newStartTime && new Date(c.newStartTime).getTime() !== new Date(j.scheduled_date).getTime();
+        });
         localStorage.setItem("genflow_last_calendar_sync", new Date().toISOString());
         if (changes.length === 0) return;
 
@@ -111,12 +127,10 @@ export default function Schedule() {
         }
       })
       .catch((e) => {
-        if (e?.message?.startsWith("401")) {
-          toast.warning("Please sign out and sign back in to refresh your Google connection");
-        }
-        // all other calendar errors are silent
+        // Pulling is best-effort; pushing problems show the calendar banner.
+        console.warn("[Schedule] calendar pull failed:", e?.message);
       });
-  }, [googleToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [googleToken, jobs.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConflictUpdate = async () => {
     const { change } = pendingConflicts[0];
