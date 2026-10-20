@@ -22,6 +22,7 @@ import JobItemsTab from "@/components/jobs/JobItemsTab";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { jobHeaderStatus } from "@/lib/jobStatus";
 import { TAX_RATE, computeJobFinancials, partChargeTotal } from "@/lib/utils/jobFinancials";
 import { formatTime, toDatetimeLocalValue } from "@/lib/formatTime";
 import { sortJobs } from "@/lib/utils/jobSort";
@@ -1045,13 +1046,8 @@ export default function JobDetail() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 {isActive && <div className={`w-1.5 h-1.5 rounded-full ${headerDot} animate-pulse shrink-0`} />}
-                <span className="text-white text-xs font-bold uppercase tracking-wider">
-                  {job.status === "on_site" ? "On Site" :
-                   job.status === "dispatched" ? "Dispatched" :
-                   job.status === "completed" ? "Completed" :
-                   job.status === "invoiced" ? "Invoiced" :
-                   job.status === "canceled" ? "Canceled" :
-                   job.status?.replace(/_/g, " ")}
+                <span className="text-white text-xs font-bold uppercase tracking-wider" data-testid="job-header-status">
+                  {jobHeaderStatus(job)}
                 </span>
               </div>
               {/* Long titles: clamp to 2 lines on phones; tap to show the full
