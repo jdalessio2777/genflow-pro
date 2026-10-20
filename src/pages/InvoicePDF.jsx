@@ -92,7 +92,7 @@ export default function InvoicePDF() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
+      <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background z-40">
         <Button variant="ghost" size="icon" className="rounded-xl h-11 w-11" aria-label="Back" data-testid="back-button" onClick={goBack}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold">{invoice.invoice_number}</p>

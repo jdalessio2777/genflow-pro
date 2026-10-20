@@ -23,7 +23,7 @@ export default function BottomActionBar({ children }) {
       ref={ref}
       data-testid="bottom-action-bar"
       data-fixed-bottom=""
-      className="fixed left-0 right-0 z-40 px-4 pt-2 pb-2 bg-background/95 backdrop-blur-xl border-t border-border/60"
+      className="fixed left-0 right-0 z-40 px-4 pt-2 pb-2 bg-background border-t border-border/60"
       style={{ bottom: "var(--nav-h)" }}
     >
       <div className="max-w-lg mx-auto space-y-2">{children}</div>

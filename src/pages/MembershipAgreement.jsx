@@ -216,7 +216,7 @@ export default function MembershipAgreement() {
   if (customer.membership_plan && customer.membership_signed && step !== "done" && !renewing) {
     return (
       <div>
-        <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
+        <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background z-40">
           <button onClick={() => goBack()} aria-label="Back" data-testid="back-button" className="touch-target flex items-center justify-center w-9 h-9 rounded-xl hover:bg-muted">
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -251,7 +251,7 @@ export default function MembershipAgreement() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background/90 backdrop-blur-xl z-40">
+      <div className="flex items-center gap-3 p-4 border-b sticky top-[var(--sat)] bg-background z-40">
         <button
           onClick={() => { if (step === "terms") setStep("plan"); else if (step === "sign") setStep("terms"); else if (renewing && !fromJobId) setRenewing(false); else goBack(); }}
           aria-label="Back" data-testid="back-button"
