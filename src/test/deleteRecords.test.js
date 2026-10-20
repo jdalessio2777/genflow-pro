@@ -10,6 +10,8 @@ const data = {
   jobs: [{ id: "j1", customer_id: "c1" }],
   quotes: [{ id: "q1", customer_id: "c1" }],
 };
+const removeJobFromCalendar = vi.fn(async () => ({ status: "removed" }));
+vi.mock("@/lib/calendarSync", () => ({ removeJobFromCalendar: (...a) => removeJobFromCalendar(...a) }));
 vi.mock("@/lib/db", () => ({
   db: {
     Job: tbl("job", data.jobs), Quote: tbl("quote", data.quotes), ServiceRequest: tbl("sr"),
@@ -20,7 +22,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/supabaseClient", () => ({ supabase: { from: vi.fn() } }));
 const { deleteCustomerCascade, deleteJobCascade } = await import("@/lib/deleteRecords");
 
-beforeEach(() => { deletes.length = 0; });
+beforeEach(() => { deletes.length = 0; removeJobFromCalendar.mockClear(); });
 
 describe("delete cascade (D-13)", () => {
   it("customer with a quote: refused, nothing deleted", async () => {
@@ -30,5 +32,14 @@ describe("delete cascade (D-13)", () => {
   it("job without blockers: lines, invoice, then job", async () => {
     await deleteJobCascade("j1");
     expect(deletes).toEqual(["jl:l1", "inv:i1", "job:j1"]);
+  });
+  it("B3: deleting a job removes its calendar event", async () => {
+    await deleteJobCascade("j1");
+    expect(removeJobFromCalendar).toHaveBeenCalledWith({ job: expect.objectContaining({ id: "j1" }) });
+  });
+  it("B3: deleting a customer removes each of their jobs' calendar events", async () => {
+    data.quotes.length = 0;
+    await deleteCustomerCascade("c1");
+    expect(removeJobFromCalendar).toHaveBeenCalledWith({ job: expect.objectContaining({ id: "j1" }) });
   });
 });
