@@ -444,9 +444,9 @@ function JobsCalendarCard() {
           <Label className="text-xs">Jobs calendar</Label>
           <Select value={value} onValueChange={(id) => { setJobsCalendarChoice(id); setChoice(id); toast.success("Jobs calendar saved"); }}>
             <SelectTrigger className="rounded-xl mt-1" data-testid="jobs-calendar-select"><SelectValue placeholder="Choose a calendar" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[calc(100vw-2rem)]">
               {list.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.name}{c.primary ? " (your main calendar)" : ""}</SelectItem>
+                <SelectItem key={c.id} value={c.id}><span className="block truncate">{c.primary ? "Your main calendar" : c.name}</span></SelectItem>
               ))}
             </SelectContent>
           </Select>

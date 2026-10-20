@@ -123,9 +123,9 @@ function reportNoToken(t, jobLabel) {
   const serverConfig = t.code === "server_config";
   setStatus({
     state: "reconnect",
-    message: serverConfig
-      ? "Calendar not updated — Google sign-in needs to be renewed (server settings)."
-      : "Calendar not updated — reconnect Google",
+    message: "Calendar not updated — reconnect Google",
+    // Bad GOOGLE_CLIENT_SECRET on the server: a reconnect still works for ~1 hour each time.
+    hint: serverConfig ? "Google refused the app's server key, so access can't renew by itself (see setup notes)." : null,
     detail: t.reason, job: jobLabel,
   });
 }
@@ -242,7 +242,10 @@ async function doRemove(job) {
     }
     known.delete(job.id);
     unqueue(job.id);
-    if (job.calendar_event_id) db.Job.update(job.id, { calendar_event_id: null }).catch(() => {}); // job may already be deleted
+    if (job.calendar_event_id) {
+      // Clear the link on a cancelled job (a deleted job has no row left to update).
+      db.Job.filter({ id: job.id }).then(rows => rows.length && db.Job.update(job.id, { calendar_event_id: null })).catch(() => {});
+    }
     if (status.state !== "ok" && pendingCalendarOps().length === 0) setStatus({ state: "ok" });
     if (r.value > 0) toast.success("Removed from Google Calendar", { duration: 2000 });
     return { status: r.value > 0 ? "removed" : "skipped", reason: r.value > 0 ? undefined : "no event" };

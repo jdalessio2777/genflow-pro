@@ -36,6 +36,7 @@ export default function CalendarSyncBanner() {
           <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
             The job is saved.{n > 1 ? ` ${n} jobs are waiting for the calendar.` : status.job ? ` ${status.job} is waiting for the calendar.` : ""}
           </p>
+          {status.hint && <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-0.5">{status.hint}</p>}
           <div className="flex gap-2 mt-2">
             {reconnect ? (
               <button

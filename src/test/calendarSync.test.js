@@ -69,7 +69,7 @@ async function load({ token = { accessToken: 'ya29.good', expiresAt: Date.now() 
   store = await import('@/lib/googleTokenStore')
 }
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); dbJobFilter.mockResolvedValue([]) })
 
 describe('syncJobToCalendar', () => {
   it('creates ONE event on "GenShield Schedule" with title, color 9, 2 h, no attendees, and stores the id', async () => {
@@ -150,11 +150,12 @@ describe('syncJobToCalendar', () => {
   it('cancel → the job\'s event is removed (DELETE), and the job\'s link cleared', async () => {
     await load(); const g = fakeGoogle(); global.fetch = g.fn
     await cs.syncJobToCalendar({ job, customer })
+    dbJobFilter.mockResolvedValue([job])
     const r = await cs.syncJobToCalendar({ job: { ...job, status: 'canceled', calendar_event_id: 'new1' }, customer })
     expect(r.status).toBe('removed')
     expect(g.writes().filter(c => c.method === 'DELETE')).toHaveLength(1)
     expect(g.store[SHARED]).toHaveLength(0)
-    expect(dbJobUpdate).toHaveBeenCalledWith('job-1', { calendar_event_id: null })
+    await vi.waitFor(() => expect(dbJobUpdate).toHaveBeenCalledWith('job-1', { calendar_event_id: null }))
   })
 
   it('delete job → removeJobFromCalendar deletes its event', async () => {
