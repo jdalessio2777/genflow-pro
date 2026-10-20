@@ -126,6 +126,9 @@ async function snap(page, item, name) {
  * opts.noEmail   (send/complete) true when no email can go out: requires page._sendsBlocked or a "No email" notice
  * opts.stripeAppIntercepted (charge) true when stripedashboard:// is intercepted in this context
  * opts.mode      'preview' | 'prod-readonly'
+ * opts.dialog    true when this tap opens a native confirm()/alert() that must be ACCEPTED: the
+ *                page needs attachDialogGuard(page); the dialog is accepted only if its text names
+ *                opts.record or matches opts.dialogMatch (RegExp). Every other dialog is dismissed.
  */
 export async function guardedTap(page, locator, opts = {}) {
   const { kind, record, item = 'misc', label = kind, mode = 'preview' } = opts;
@@ -165,9 +168,13 @@ export async function guardedTap(page, locator, opts = {}) {
       if (sm !== 'test') throw new GuardError(`Stripe mode is ${sm}, not test`);
       if (/Stripe App/i.test(btnText) && !opts.stripeAppIntercepted) throw new GuardError('"Charge via Stripe App" without an interception');
     }
+    if (!page._dialogGuard) throw new GuardError('attachDialogGuard(page) was not called: native dialogs would be auto-accepted or ignored');
+    if (opts.dialog) entry.dialog = 'armed';
     entry.before = await snap(page, item, `${label}-before`);
+    page._dialogArm = opts.dialog ? { record, match: opts.dialogMatch || null, until: Date.now() + (opts.afterMs ?? 1200) + 5000 } : null;
     await locator.first().click();
     await page.waitForTimeout(opts.afterMs ?? 1200);
+    page._dialogArm = null;
     entry.after = await snap(page, item, `${label}-after`);
     entry.result = 'tapped';
     logLine(entry);
@@ -178,6 +185,27 @@ export async function guardedTap(page, locator, opts = {}) {
     logLine(entry);
     throw e;
   }
+}
+
+// Native confirm()/alert()/prompt() (Run 7, F5). The app still uses window.confirm
+// for deletes and for "remove the card surcharge?". A harness that auto-accepts
+// them let an UNGUARDED tap delete a record (Run 6). Call attachDialogGuard(page)
+// once per page INSTEAD of any page.on('dialog') handler: every dialog is
+// DISMISSED (and logged) unless the guarded tap that opened it passed
+// { dialog: true } and the dialog text names that tap's QA-AUDIT record or
+// matches its dialogMatch. guardedTap refuses to run on a page without it.
+export function attachDialogGuard(page) {
+  if (page._dialogGuard) return page;
+  page._dialogGuard = true;
+  page.on('dialog', async (d) => {
+    const arm = page._dialogArm; page._dialogArm = null;
+    const message = d.message();
+    const ok = !!arm && Date.now() < arm.until && (message.includes(arm.record) || (arm.match instanceof RegExp && arm.match.test(message)));
+    page._lastDialog = message;
+    logLine({ url: page.url(), dialog: d.type(), message: message.slice(0, 200), record: arm?.record ?? null, result: ok ? 'dialog accepted (guarded tap)' : 'DIALOG DISMISSED' });
+    try { if (ok) await d.accept(); else await d.dismiss(); } catch { /* page closed */ }
+  });
+  return page;
 }
 
 // Convenience: assert a page is safe for read-only navigation as well (used by harness open()).

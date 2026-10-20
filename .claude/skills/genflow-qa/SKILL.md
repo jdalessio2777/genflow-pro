@@ -27,6 +27,16 @@ How to apply them in a new run:
   `record` = the QA-AUDIT name exactly as visible on screen (page text or a
   form field's value). `mode: 'prod-readonly'` is only for the production
   smoke test in the genflow-ship skill.
+- Native dialogs (Run 7): the app still uses window.confirm() for deletes
+  and "remove the card surcharge?". NEVER auto-accept dialogs
+  (no `page.on('dialog', d => d.accept())`). Call
+  `attachDialogGuard(page)` (same module) right after creating each page:
+  it dismisses and logs every dialog, unless the guarded tap that opened it
+  passed `{ dialog: true }` and the dialog text names that tap's QA-AUDIT
+  record (or matches `dialogMatch`, e.g. /credit card surcharge/).
+  guardedTap refuses to run on a page without it. A trash icon tapped
+  outside guardedTap therefore can't delete anything while the "Confirm
+  before deleting" preference is on (the default) — never turn it off.
 
 ═══ CONTEXT (you are a fresh session) ═══
 GenFlow Pro is the field service app for my generator company 

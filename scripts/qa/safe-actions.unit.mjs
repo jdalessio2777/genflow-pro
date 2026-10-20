@@ -3,12 +3,12 @@
 import test from 'node:test'; import assert from 'node:assert/strict'; import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs';
 process.env.SAFE_ACTIONS_LOG = path.join(os.tmpdir(), 'safe-actions-test.log');
 process.env.SAFE_ACTIONS_SHOTS = path.join(os.tmpdir(), 'safe-actions-test-shots');
-const { guardedTap, checkHost, checkRecord, GuardError } = await import('./safe-actions.mjs');
+const { guardedTap, checkHost, checkRecord, GuardError, attachDialogGuard } = await import('./safe-actions.mjs');
 const PREVIEW = 'https://genflow-abc123xyz-jdalessio2777s-projects.vercel.app/jobs/1';
 function fakePage(url, { text = 'QA-AUDIT-T Job', stripe = 'test', sendsBlocked = true, fields = [] } = {}) {
   const clicks = [];
   const loc = { first: () => loc, click: async () => { clicks.push(1); }, innerText: async () => 'Save' };
-  return { clicks, loc, _sendsBlocked: sendsBlocked, url: () => url,
+  return { clicks, loc, _sendsBlocked: sendsBlocked, _dialogGuard: true, url: () => url,
     getByText: (t) => ({ count: async () => (text.includes(t) ? 1 : 0) }),
     locator: () => ({ innerText: async () => text }),
     evaluate: async (fn, arg) => (typeof arg === 'string' ? fields.filter(v => v.startsWith(arg)).length : stripe), screenshot: async () => {}, waitForTimeout: async () => {} };
@@ -110,4 +110,41 @@ test('preview mode (default) still refuses production', async () => {
 test('tracked copy: default log/shots live under the untracked .qa-scratch folder', async () => {
   const m = await import('./safe-actions.mjs');
   assert.match(m.RUN_DIR, /\.qa-scratch/);
+});
+
+// F5 (Run 7): native dialogs are dismissed unless a guarded tap armed them for its record.
+function dialogPage() {
+  const handlers = []; const clicks = []; let pending = null;
+  const page = { clicks, _sendsBlocked: true, url: () => PREVIEW, on: (ev, fn) => { if (ev === 'dialog') handlers.push(fn); },
+    getByText: (t) => ({ count: async () => ('QA-AUDIT-T Job'.includes(t) ? 1 : 0) }), locator: () => ({ innerText: async () => 'QA-AUDIT-T Job' }),
+    evaluate: async () => 0, screenshot: async () => {}, waitForTimeout: async () => { if (pending) await pending; } };
+  page.fire = (message) => { const d = { message: () => message, type: () => 'confirm', accepted: null, accept: async () => { d.accepted = true; }, dismiss: async () => { d.accepted = false; } };
+    pending = Promise.all(handlers.map(h => h(d))); return d; };
+  return page;
+}
+test('a dialog with no guarded tap is dismissed (an unguarded trash tap cannot delete)', async () => {
+  const p = attachDialogGuard(dialogPage());
+  const d = p.fire('Delete "QA-AUDIT-T Job"?'); await new Promise(r => setTimeout(r, 0));
+  assert.equal(d.accepted, false);
+});
+test('guardedTap refuses on a page without attachDialogGuard', async () => {
+  const p = fakePage(PREVIEW); p._dialogGuard = false;
+  await assert.rejects(guardedTap(p, p.loc, { kind: 'delete', record: 'QA-AUDIT-T Job' }), /attachDialogGuard/);
+  assert.equal(p.clicks.length, 0);
+});
+test('a guarded tap with dialog:true accepts a dialog naming its QA record, dismisses one naming another record', async () => {
+  for (const [msg, want] of [['Delete "QA-AUDIT-T Job"? This cannot be undone.', true], ['Delete "Generac Battery 26R"?', false]]) {
+    const p = attachDialogGuard(dialogPage()); let d;
+    const loc = { first: () => loc, innerText: async () => '', click: async () => { p.clicks.push(1); d = p.fire(msg); } };
+    await guardedTap(p, loc, { kind: 'delete', record: 'QA-AUDIT-T Job', dialog: true });
+    assert.equal(d.accepted, want, msg);
+  }
+});
+test('dialogMatch accepts the cash "remove surcharge?" question, only for an armed tap', async () => {
+  const p = attachDialogGuard(dialogPage()); let d;
+  const loc = { first: () => loc, innerText: async () => 'Cash', click: async () => { d = p.fire('This invoice has a credit card surcharge ($7.30). Remove it? Cash is not a credit card payment.'); } };
+  await guardedTap(p, loc, { kind: 'save', record: 'QA-AUDIT-T Job', dialog: true, dialogMatch: /credit card surcharge/ });
+  assert.equal(d.accepted, true);
+  const late = p.fire('This invoice has a credit card surcharge ($7.30). Remove it?'); await new Promise(r => setTimeout(r, 0));
+  assert.equal(late.accepted, false);
 });

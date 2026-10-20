@@ -81,6 +81,7 @@ Playwright WebKit, iPhone 15 standalone profile, signed in as QA, on
   the email routes really are blocked.
 - Every write tap goes through
   `guardedTap(page, locator, { kind, record, item: 'ship', mode: 'prod-readonly' })`.
+  Call `attachDialogGuard(page)` on every page first (never auto-accept native dialogs).
   prod-readonly allows only the production host and only QA-AUDIT records,
   refuses `send`, `charge` and `payment` outright, and refuses any write
   unless the email routes are blocked. If it throws: stop, log, never work
