@@ -313,7 +313,8 @@ export default function Jobs() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <StatusBadge status={job.status} />
+                          {/* An approved-but-unscheduled job shows only "Not scheduled", not also "Scheduled". */}
+                          {!(job.status === "scheduled" && !job.scheduled_date) && <StatusBadge status={job.status} />}
                           <StatusBadge status={job.job_type} />
                           {job.assigned_to_name && (
                             <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
