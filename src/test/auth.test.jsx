@@ -24,19 +24,9 @@ vi.mock('@/lib/supabaseClient', () => ({
 
 import { AuthProvider, useAuth } from '@/lib/AuthContext'
 import StaffCheckScreen from '@/components/StaffCheckScreen'
+import { memoryStorage } from './memoryStorage'
 
-// In-memory localStorage (Node 25's built-in global one has no methods without
-// --localstorage-file, and shadows jsdom's).
-const memoryStorage = (() => {
-  let m = new Map()
-  return {
-    getItem: (k) => (m.has(k) ? m.get(k) : null),
-    setItem: (k, v) => { m.set(k, String(v)) },
-    removeItem: (k) => { m.delete(k) },
-    clear: () => { m = new Map() },
-  }
-})()
-Object.defineProperty(window, 'localStorage', { value: memoryStorage, configurable: true })
+Object.defineProperty(window, 'localStorage', { value: memoryStorage(), configurable: true })
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -65,6 +55,8 @@ function ConsumerSpy({ onValues }) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.stubGlobal('localStorage', memoryStorage())
+  vi.stubGlobal('sessionStorage', memoryStorage())
   mockGetSession.mockResolvedValue({ data: { session: null }, error: null })
   mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
   mockRpc.mockResolvedValue({ data: true, error: null })
@@ -198,6 +190,38 @@ describe('AuthContext — googleToken', () => {
     })
 
     expect(values.googleToken).toBeNull()
+  })
+
+  it('B3: keeps the captured Google token after Supabase refreshes its session (provider_token gone)', async () => {
+    const first = makeSession('jeremy.dalessio@genshieldservice.com', 'ya29.captured')
+    mockGetSession.mockResolvedValue({ data: { session: first }, error: null })
+    const getCb = captureAuthCallback()
+    const values = {}
+    await act(async () => {
+      render(<AuthProvider><ConsumerSpy onValues={v => Object.assign(values, v)} /></AuthProvider>)
+    })
+    expect(values.googleToken).toBe('ya29.captured')
+    const refreshed = makeSession('jeremy.dalessio@genshieldservice.com')
+    delete refreshed.provider_token
+    delete refreshed.provider_refresh_token
+    await act(async () => { getCb()('TOKEN_REFRESHED', refreshed) })
+    expect(values.googleToken).toBe('ya29.captured')
+    const stored = JSON.parse(localStorage.getItem('genflow_google_tokens_v1'))
+    expect(stored.refreshToken).toBe('refresh-tok')
+  })
+
+  it('B3: requests only the calendar scopes it uses (no gmail.send, no full calendar)', async () => {
+    const values = {}
+    mockSignInWithOAuth.mockResolvedValue({ error: null })
+    await act(async () => {
+      render(<AuthProvider><ConsumerSpy onValues={v => Object.assign(values, v)} /></AuthProvider>)
+    })
+    await act(async () => { await values.signInWithGoogle({ returnTo: '/jobs/abc' }) })
+    const { scopes, queryParams } = mockSignInWithOAuth.mock.calls[0][0].options
+    expect(scopes.split(' ')).toEqual(['email', 'profile', 'https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.calendarlist.readonly'])
+    expect(scopes).not.toContain('gmail')
+    expect(queryParams).toMatchObject({ access_type: 'offline', prompt: 'consent' })
+    expect(sessionStorage.getItem('genflow_auth_return_to')).toBe('/jobs/abc')
   })
 
   it('sets googleToken to null when there is no session at all', async () => {

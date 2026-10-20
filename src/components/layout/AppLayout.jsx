@@ -6,6 +6,7 @@ import PageTransition from "./PageTransition";
 import { usePreferences } from "../../hooks/usePreferences";
 import { UnsavedChangesProvider } from "../../hooks/useUnsavedChangesGuard";
 import { useKeyboardAware } from "../../hooks/useKeyboardAware";
+import CalendarSyncBanner from "../CalendarSyncBanner";
 
 // Pages with their own fixed bottom action bar — MobileNav (also fixed-bottom,
 // same z-index) would otherwise render on top of it and cover the buttons
@@ -110,6 +111,7 @@ export default function AppLayout() {
           </PageTransition>
         </UnsavedChangesProvider>
       </main>
+      <CalendarSyncBanner />
       {!hideNav && <MobileNav />}
     </div>
   );

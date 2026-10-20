@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useSettings } from "@/lib/useSettings";
@@ -17,6 +17,10 @@ import PageHeader from "@/components/layout/PageHeader";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useAuth } from "@/lib/AuthContext";
+import { getAccessToken, googleConnection } from "@/lib/googleTokenStore";
+import { getWritableCalendars, defaultJobsCalendar, getJobsCalendarChoice, setJobsCalendarChoice } from "@/lib/calendarSync";
+import { JOBS_CALENDAR_NAME } from "@/lib/googleCalendar";
 
 // ─── BUSINESS INFO TAB ────────────────────────────────────────────────────────
 function BusinessTab({ settings, setSetting, isSaving }) {
@@ -388,6 +392,75 @@ function VehiclesTab() {
 }
 
 // ─── TEAM TAB ─────────────────────────────────────────────────────────────────
+// B3: which Google calendar this user's job events go to. Saved on this
+// phone for the signed-in Google account (no schema change).
+function JobsCalendarCard() {
+  const { signInWithGoogle } = useAuth();
+  const [state, setState] = useState({ loading: true });
+  const [choice, setChoice] = useState(getJobsCalendarChoice);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const t = await getAccessToken();
+      if (!t.token) { if (alive) setState({ loading: false, noToken: t }); return; }
+      try {
+        const list = await getWritableCalendars(t.token, { fresh: true });
+        if (alive) setState({ loading: false, list });
+      } catch (e) {
+        if (alive) setState({ loading: false, error: e.message });
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const conn = googleConnection();
+  const list = state.list || [];
+  const fallback = list.length ? defaultJobsCalendar(list) : null;
+  const value = choice !== "auto" && list.some(c => c.id === choice) ? choice : fallback?.id;
+
+  return (
+    <Card className="p-4 space-y-3" data-testid="jobs-calendar-card">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Google Calendar</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Every scheduled job gets one event here (no invites are sent). Saved on this phone{conn.email ? ` for ${conn.email}` : ""}.
+        </p>
+      </div>
+      {state.loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading your calendars…</div>
+      ) : state.noToken ? (
+        <div className="space-y-2">
+          <p className="text-sm">Google isn't connected on this phone{state.noToken.code === "server_config" ? " (server settings need fixing)" : ""}.</p>
+          <Button type="button" size="sm" className="rounded-xl" data-testid="jobs-calendar-connect"
+            onClick={() => signInWithGoogle({ returnTo: window.location.pathname + window.location.search })}>
+            Connect Google
+          </Button>
+        </div>
+      ) : state.error ? (
+        <p className="text-sm text-destructive">Couldn't load your calendars: {state.error}</p>
+      ) : (
+        <div>
+          <Label className="text-xs">Jobs calendar</Label>
+          <Select value={value} onValueChange={(id) => { setJobsCalendarChoice(id); setChoice(id); toast.success("Jobs calendar saved"); }}>
+            <SelectTrigger className="rounded-xl mt-1" data-testid="jobs-calendar-select"><SelectValue placeholder="Choose a calendar" /></SelectTrigger>
+            <SelectContent className="max-w-[calc(100vw-2rem)]">
+              {list.map(c => (
+                <SelectItem key={c.id} value={c.id}><span className="block truncate">{c.primary ? "Your main calendar" : c.name}</span></SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {choice === "auto"
+              ? (fallback && !fallback.primary ? `Using "${fallback.name}" automatically.` : `"${JOBS_CALENDAR_NAME}" not found — using your main calendar.`)
+              : "Only calendars you can add events to are listed."}
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function TeamTab({ settings, setSetting, isSaving }) {
   const [emails, setEmails] = useState({
     jeremy: settings.team_email_jeremy || "",
@@ -416,6 +489,7 @@ function TeamTab({ settings, setSetting, isSaving }) {
 
   return (
     <div className="space-y-4">
+      <JobsCalendarCard />
       <Card className="p-4 space-y-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-0.5">Team Notification Emails</p>
