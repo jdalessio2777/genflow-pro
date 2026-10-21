@@ -65,8 +65,9 @@ export function sanitizeFor(charset, value) {
   return out.replace(/\r/g, '');
 }
 
+// '' when missing (callers hide the row / line — never a "-" placeholder).
 export function fmtDateLong(iso, tz = 'America/New_York') {
-  if (!iso) return '-';
+  if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: tz });
@@ -190,6 +191,7 @@ export class Layout {
     const valueWidth = this.contentWidth - labelWidth - 20;
     const prepared = rows.filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
       .map(([k, v]) => [k, this.wrap(v, size, valueWidth, this.bold)]);
+    if (!prepared.length) return; // no empty box
     const height = prepared.reduce((s, [, ls]) => s + ls.length * lh, 0) + 16;
     this.ensure(height);
     this.page.drawRectangle({ x: PAGE.margin, y: this.y - height, width: this.contentWidth, height, color: BRAND.light });

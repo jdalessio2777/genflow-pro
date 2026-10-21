@@ -60,10 +60,11 @@ export function invoiceForEmail({ invoice, parts = [], labor = [], notes, surcha
 }
 
 export function buildSubject({ kind, invoice, checklistCount }) {
-  const num = invoice?.invoice_number || '';
-  if (kind === 'receipt') return `Receipt — Invoice ${num} — GenShield`;
+  const num = String(invoice?.invoice_number ?? '').trim();
+  const withNum = (label) => (num ? `${label} ${num}` : label);
+  if (kind === 'receipt') return num ? `Receipt — Invoice ${num} — GenShield` : 'Receipt — GenShield';
   const parts = [];
-  if (invoice) parts.push(isZeroDollarInvoice(invoice) ? `Service Summary ${num}` : `Invoice ${num}`);
+  if (invoice) parts.push(isZeroDollarInvoice(invoice) ? withNum('Service Summary') : withNum('Invoice'));
   if (checklistCount > 0) parts.push('Service Report');
   if (!parts.length) parts.push('Service Summary');
   return `${parts.join(' & ')} — GenShield`;
@@ -95,7 +96,10 @@ export async function buildJobSummaryEmail({ kind = 'completion', job, customer,
     }
   }
 
-  const html = jobSummaryEmailHTML({ invoice: inv, customer, kind, attachmentLabels, surchargeConfig });
+  // The job row (send-job-summary.js selects jobs.*) supplies the
+  // customer-facing title + description; the template never reads its
+  // internal notes.
+  const html = jobSummaryEmailHTML({ invoice: inv, customer, job, kind, attachmentLabels, surchargeConfig });
   const subject = buildSubject({ kind, invoice: inv, checklistCount: attachments.length - (agreement && kind !== 'receipt' ? 1 : 0) });
   const totalBytes = Buffer.byteLength(html, 'utf8') + attachments.reduce((s, a) => s + a.content.length, 0);
   return { subject, html, attachments, attachmentLabels, totalBytes, invoice: inv };

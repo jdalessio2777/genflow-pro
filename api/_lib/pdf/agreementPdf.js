@@ -29,9 +29,11 @@ export async function buildAgreementPdf({ agreement }) {
   const generator = snap.generator || {};
   const signedAt = agreement?.signed_at || agreement?.start_date;
 
-  const L = await createDoc({ title: `Maintenance Agreement - ${customer.name || ''}`.trim(), dateIso: signedAt });
+  const L = await createDoc({ title: customer.name ? `Maintenance Agreement - ${customer.name}` : 'Maintenance Agreement', dateIso: signedAt });
   L.addPage();
-  L.brandHeader({ label: 'Maintenance Agreement', sublabel: `Signed ${fmtDateLong(signedAt)}` });
+  const signedStr = fmtDateLong(signedAt);
+  const customerName = String(customer.name ?? '').trim();
+  L.brandHeader({ label: 'Maintenance Agreement', sublabel: signedStr ? `Signed ${signedStr}` : '' });
   L.onNewPage = (lay) => {
     lay.page.drawRectangle({ x: 0, y: PAGE.height - 6, width: PAGE.width, height: 6, color: BRAND.charcoal });
     lay.page.drawText(lay.s('Generator Maintenance Agreement (continued)'), { x: PAGE.margin, y: PAGE.height - 30, size: 9, font: lay.bold, color: BRAND.muted });
@@ -43,9 +45,10 @@ export async function buildAgreementPdf({ agreement }) {
 
   L.infoBox([
     ['Customer', customer.name],
-    ['Address', customer.address || '-'],
-    ['Generator', generator.model || '-'],
-    ['Serial No.', generator.serial || '-'],
+    // Missing values hide the row (infoBox skips empties) — never "-".
+    ['Address', customer.address],
+    ['Generator', generator.model],
+    ['Serial No.', generator.serial],
     ['Unit Type', snap.unit_type || UNIT_TYPE_LABEL],
     ['Plan', plan.name],
     ['Amount', plan.billingLabel || undefined],
@@ -74,7 +77,7 @@ export async function buildAgreementPdf({ agreement }) {
   L.y -= 6;
   L.rule();
   L.y -= 14;
-  L.paragraph(`By signing, ${customer.name || 'the customer'} agreed to the terms and conditions above.`, { size: 9, color: BRAND.muted, after: 8 });
+  L.paragraph(`By signing, ${customerName || 'the customer'} agreed to the terms and conditions above.`, { size: 9, color: BRAND.muted, after: 8 });
   const img = decodeDataUrl(agreement?.signature);
   if (img) {
     try {
@@ -91,8 +94,8 @@ export async function buildAgreementPdf({ agreement }) {
   } else {
     L.paragraph('[Signature on file]', { size: 10, color: BRAND.muted });
   }
-  L.paragraph(`Customer signature - ${customer.name || ''}`, { size: 9, f: L.bold, after: 1 });
-  L.paragraph(`Signed electronically on ${fmtDateLong(signedAt)}`, { size: 9, color: BRAND.muted });
+  L.paragraph(customerName ? `Customer signature - ${customerName}` : 'Customer signature', { size: 9, f: L.bold, after: 1 });
+  L.paragraph(signedStr ? `Signed electronically on ${signedStr}` : 'Signed electronically', { size: 9, color: BRAND.muted });
 
   L.finalizeFooters();
   return L.save();
