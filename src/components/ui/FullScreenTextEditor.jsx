@@ -78,7 +78,12 @@ export default function FullScreenTextEditor({ open, title, value, placeholder, 
     if (!el) return;
     const end = el.value.length;
     try { el.focus({ preventScroll: true }); el.setSelectionRange(end, end); } catch { /* ignore */ }
-    el.scrollTop = el.scrollHeight;
+    // Again once the editor has its final size (visible area measured).
+    const toEnd = () => { el.scrollTop = el.scrollHeight; };
+    toEnd();
+    const raf = requestAnimationFrame(toEnd);
+    const t = setTimeout(toEnd, 120);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
   }, [open]);
 
   // Keep a draft of what is typed here too.
@@ -114,7 +119,7 @@ export default function FullScreenTextEditor({ open, title, value, placeholder, 
         onChange={(e) => setText(e.target.value)}
         placeholder={placeholder}
         data-testid="fullscreen-editor-text"
-        className="flex-1 w-full max-w-lg mx-auto block bg-transparent px-4 pt-3 text-[17px] leading-7 outline-none resize-none placeholder:text-muted-foreground"
+        className="flex-1 w-full max-w-lg mx-auto block bg-transparent px-4 pt-3 text-base leading-7 outline-none resize-none placeholder:text-muted-foreground"
         style={{ overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", paddingBottom: "max(16px, var(--sab))" }}
       />
       <AlertDialog open={askDiscard} onOpenChange={setAskDiscard}>

@@ -617,7 +617,7 @@ export default function DocumentFill() {
               wide
               allChecked={allChecked}
               onClick={() => setAllChecks(checkboxFields.map(f => f.id), !allChecked)}
-              label={allChecked ? "Uncheck all" : `Check all ${checkboxFields.length} items`}
+              label={allChecked ? "Uncheck all" : `Check all ${checkboxFields.length} item${checkboxFields.length === 1 ? "" : "s"}`}
             />
           )}
         </div>
