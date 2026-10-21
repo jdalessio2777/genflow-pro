@@ -1,4 +1,6 @@
 import { useParams } from "react-router-dom";
+import ApplyMemberPricingDialog from "@/components/jobs/ApplyMemberPricingDialog";
+import { memberDiscountRateFor } from "@/lib/utils/membership";
 import { useBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
@@ -38,6 +40,10 @@ export default function MembershipAgreement() {
   // arriving from a job to sign) opens the plan -> terms -> sign flow.
   const [renewing, setRenewing] = useState(!!fromJobId);
   const [agreed, setAgreed] = useState(false);
+  // B5: right after signing from a job, offer member pricing on the job's
+  // existing items (Apply / Not now). "Not now" leaves an "Apply member
+  // pricing" action on the job.
+  const [askMemberPricing, setAskMemberPricing] = useState(false);
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["customer", id],
@@ -175,7 +181,8 @@ export default function MembershipAgreement() {
     toast.success("Membership activated!");
     if (fromJobId) {
       queryClient.invalidateQueries({ queryKey: ["job-customer"] });
-      toast.success("Discount active — applies to new items added from here");
+      toast.success("Membership active — member discount is on");
+      setAskMemberPricing(true);
     }
   };
 
@@ -416,6 +423,15 @@ export default function MembershipAgreement() {
             <Button className="w-full rounded-xl h-12" onClick={() => goBack()}>
               {fromJobId ? "Back to Job" : "Back to Customer"}
             </Button>
+            {fromJobId && (
+              <ApplyMemberPricingDialog
+                open={askMemberPricing}
+                onOpenChange={setAskMemberPricing}
+                jobId={fromJobId}
+                memberDiscountRate={memberDiscountRateFor({ membership_plan: selectedPlan, membership_signed: true })}
+                afterSigning
+              />
+            )}
           </div>
         )}
 

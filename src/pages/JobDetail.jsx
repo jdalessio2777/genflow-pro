@@ -53,6 +53,8 @@ import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/li
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 import JobSignatureButton from "@/components/signature/JobSignatureButton";
 import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
+import ApplyMemberPricingDialog from "@/components/jobs/ApplyMemberPricingDialog";
+import { planMemberRepricing, canRepriceJob } from "@/lib/memberRepricing";
 import { estimateMinutes, formatEstimate } from "@/lib/jobDuration";
 
 // One attachment row in the Complete Job dialog: checkbox-style toggle,
@@ -190,6 +192,7 @@ export default function JobDetail() {
   const [customerExpanded, setCustomerExpanded] = useState(false);
   const [titleExpanded, setTitleExpanded] = useState(false);
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
+  const [memberPricingOpen, setMemberPricingOpen] = useState(false); // B5
   // Completing with an empty Service Summary: ask once (Add / Skip); never blocks.
   const [summaryAskOpen, setSummaryAskOpen] = useState(false);
   const summarySkipped = useRef(false);
@@ -1005,6 +1008,10 @@ export default function JobDetail() {
   // Expired plans get no discount (D-01): one rule, src/lib/utils/membership.js.
   const memberDiscountRate = memberDiscountRateFor(customer);
   const isMember = memberDiscountRate < 1.0;
+  // B5: a member's lines added before they signed are still at full price.
+  const memberRepricing = isMember && canRepriceJob(job)
+    ? planMemberRepricing({ parts, labor, catalogParts, rates: laborRates, memberDiscountRate })
+    : null;
   const hasPendingAgreement = labor.some(l => l.requires_agreement);
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
   // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
@@ -1320,6 +1327,23 @@ export default function JobDetail() {
                 signatureSlot={jobIsOpenOnSite && !isNoChargeJob ? signatureButton : null}
                 isSaving={updateJob.isPending}
               />
+
+              {/* B5: member pricing not yet on lines added before signing */}
+              {memberRepricing?.updates.length > 0 && (
+                <Card className="p-3.5 border-emerald-200 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/20" data-testid="member-pricing-card">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">MEMBER PRICING NOT APPLIED</p>
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-0.5">
+                        {memberRepricing.updates.length} item{memberRepricing.updates.length === 1 ? "" : "s"} still at full price · save {formatCurrency(memberRepricing.savings)}
+                      </p>
+                    </div>
+                    <Button className="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 shrink-0" data-testid="apply-member-pricing-open" onClick={() => setMemberPricingOpen(true)}>
+                      Apply member pricing
+                    </Button>
+                  </div>
+                </Card>
+              )}
 
               {/* Service Agreement status card */}
               {hasPendingAgreement && (
@@ -2222,6 +2246,7 @@ export default function JobDetail() {
         </DialogContent>
       </Dialog>
 
+      <ApplyMemberPricingDialog open={memberPricingOpen} onOpenChange={setMemberPricingOpen} jobId={id} memberDiscountRate={memberDiscountRate} />
       <ScheduleJobSheet
         open={scheduleSheetOpen}
         onOpenChange={setScheduleSheetOpen}

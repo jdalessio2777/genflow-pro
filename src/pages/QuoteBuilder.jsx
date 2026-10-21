@@ -151,7 +151,7 @@ export default function QuoteBuilder() {
       const recipientEmail = selectedCustomer?.email || prospect.email;
       const emailLineItems = pricedLines.map(l => ({
         description: l.description,
-        qty: l.type === "part" ? `×${l.quantity}` : "—",
+        qty: l.type === "part" ? `×${l.quantity}` : "",
         amount: l.total_price,
       }));
 
