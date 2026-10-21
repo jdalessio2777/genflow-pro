@@ -47,7 +47,7 @@ import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/li
 import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
 import { useBack, goBack } from "@/hooks/useBack";
 import { useUrlState } from "@/hooks/useUrlState";
-import { confirmationEmailHTML } from "@/lib/emailTemplates";
+import { confirmationEmailHTML, fmtPaymentMethod } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
@@ -80,8 +80,11 @@ function AttachmentToggle({ label, on, onToggle }) {
   );
 }
 
-function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, savedGeneratorNotes, notesDraftKey, notesReady, isSaving, onCollectPayment, signatureSlot }) {
-  const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
+function LiveTotalBar({ parts, labor, surcharge = 0, paidLabel = null, generatorNotes, onGeneratorNotesChange, savedGeneratorNotes, notesDraftKey, notesReady, isSaving, onCollectPayment, signatureSlot }) {
+  const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total: jobTotal } = computeJobFinancials(parts, labor);
+  // Part E: the invoice's credit card surcharge is part of what the customer
+  // pays, so the job's total shows it too (same figure as every customer copy).
+  const total = Math.round((jobTotal + (surcharge > 0 ? surcharge : 0)) * 100) / 100;
 
   return (
     <Card className="p-4 bg-gradient-to-br from-primary/8 to-primary/4 border-primary/15 shadow-sm">
@@ -120,8 +123,14 @@ function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, sa
             <span className="font-medium">{formatCurrency(taxAmount)}</span>
           </div>
         )}
+        {surcharge > 0 && (
+          <div className="flex items-center justify-between text-sm" data-testid="job-surcharge-line">
+            <span className="text-muted-foreground">Credit card surcharge</span>
+            <span className="font-medium">{formatCurrency(surcharge)}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between pt-2 mt-1 border-t border-primary/10">
-          <span className="text-sm font-semibold">Total</span>
+          <span className="text-sm font-semibold">Total{paidLabel ? <span className="ml-2 text-xs font-bold text-green-700 dark:text-green-400" data-testid="job-paid-label">{paidLabel}</span> : null}</span>
           <span className="text-2xl font-bold text-primary tracking-tight">{formatCurrency(total)}</span>
         </div>
       </div>
@@ -1318,6 +1327,8 @@ export default function JobDetail() {
               <LiveTotalBar
                 parts={parts}
                 labor={labor}
+                surcharge={Number(existingInvoice?.surcharge_amount) || 0}
+                paidLabel={existingInvoice?.status === "paid" && existingInvoice?.payment_method !== "no_charge" ? `PAID · ${fmtPaymentMethod(existingInvoice.payment_method)}` : null}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
                 savedGeneratorNotes={job.generator_notes || ""}

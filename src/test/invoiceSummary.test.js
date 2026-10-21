@@ -167,7 +167,7 @@ describe('jobSummaryEmailHTML', () => {
   it('combined email states PAID + method, UNPAID + amount, or partial + balance (Item 1c)', () => {
     const paid = jobSummaryEmailHTML({ invoice: { ...goldenCases.paid_stripe_surcharge, payment_method: 'stripe_app' }, customer: goldenCustomer })
     expect(paid).toContain('PAID — ')
-    expect(paid).toContain('(Card)')
+    expect(paid).toContain('(Card (Stripe App))')
     expect(paid).toContain('Credit card surcharge')
     const unpaid = jobSummaryEmailHTML({ invoice: goldenCases.unpaid, customer: goldenCustomer })
     expect(unpaid).toContain('UNPAID — AMOUNT DUE: $306.60')

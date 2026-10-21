@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock, Smartphone, X, Plus, Printer } from "lucide-react";
+import { Send, CheckCircle2, Loader2, Trash2, CreditCard, Lock, Smartphone, Printer } from "lucide-react";
 import RewardBadge from "@/components/ui/RewardBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { customerFacingInvoice, invoicePrintDocumentHtml } from "@/lib/invoicePrint";
 import { goBack } from "@/hooks/useBack";
 import { getAppRouter, previousEntry } from "@/lib/navigation";
+import { fmtPaymentMethod } from "@/lib/emailTemplates";
 
 export default function InvoiceDetail() {
   const { id } = useParams();
@@ -40,12 +41,16 @@ export default function InvoiceDetail() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [showStripeModal, setShowStripeModal] = useState(false);
-  const [stripeAppOpened, setStripeAppOpened] = useState(false);
-  const [stripeAppTxnId, setStripeAppTxnId] = useState("");
+  // Part E: "Charge on Stripe" = copy the amount + "Payment completed?" (no
+  // app opening, no server call). copyState: "copied" | "failed" | null.
+  const [stripeAsk, setStripeAsk] = useState(false);
+  const [stripeAmount, setStripeAmount] = useState(0);
+  const [copyState, setCopyState] = useState(null);
+  // After a payment on a job that is already completed (its completion email
+  // went out): "Send receipt to customer?" (default Yes). Open jobs never ask.
+  const [receiptAsk, setReceiptAsk] = useState(false);
   const [showCheckNumberDialog, setShowCheckNumberDialog] = useState(false);
   const [resending, setResending] = useState(false);
-  // Item 1d: the pay-later receipt can be skipped at the moment of payment.
-  const [emailReceipt, setEmailReceipt] = useState(true);
   // Partial payments (only once invoices.amount_paid exists): blank = the
   // whole balance.
   const [payAmount, setPayAmount] = useState("");
@@ -127,7 +132,7 @@ export default function InvoiceDetail() {
     if (!invoice?.job_id) return;
     // Known no-email case (e.g. legacy job whose completion email never went
     // out): don't even ask the server. Unknown (job not loaded) -> server decides.
-    if (receiptWillEmail === false || !emailReceipt) return;
+    if (receiptWillEmail === false) return;
     try {
       const r = await sendJobSummaryEmail({ jobId: invoice.job_id, kind: "receipt" });
       if (r?.id && !r.skipped) toast.success(`Receipt emailed to ${r.to}`);
@@ -156,6 +161,17 @@ export default function InvoiceDetail() {
   // onSuccess (receipt + team email) runs only after a confirmed save.
   const recordPayment = (patch, { onSuccess } = {}) => recordGuard.run(async function attempt() {
     try {
+      // Never record twice (second phone, stale screen, retry after a lost
+      // response): an invoice that is already paid on the server stays as is.
+      if (patch.status === "paid" || patch.status === "partial") {
+        const fresh = (await db.Invoice.filter({ id }))[0];
+        if (fresh?.status === "paid") {
+          setPaidHere(true);
+          queryClient.invalidateQueries({ queryKey: ["invoice", id] });
+          toast.info("This invoice is already paid — nothing recorded");
+          return false;
+        }
+      }
       await updateMutation.mutateAsync(patch);
       if (patch.status === "paid") setPaidHere(true);
     } catch (e) {
@@ -165,7 +181,24 @@ export default function InvoiceDetail() {
     }
     dismissSaveError("", { id: "record-payment-error" });
     onSuccess?.();
-    if (completeAfter && invoice?.job_id && patch.status === "paid") {
+    afterPayment(patch.status === "paid");
+    return true;
+  });
+
+  // Part E email rules + where to go next, for EVERY payment method:
+  // - open job (completion email not sent yet): no email, no prompt — the
+  //   receipt rides on the completion email (PAID, method, surcharge);
+  // - completed job (its completion email went out): ask "Send receipt to
+  //   customer?" (default Yes); the server sends at most one receipt;
+  // - then back to the job's summary (or reopen Complete when collecting
+  //   from the Complete dialog).
+  const afterPayment = (paidInFull) => {
+    if (receiptWillEmail !== false && invoice?.job_id && !completeAfter) { setReceiptAsk(true); return; }
+    if (paidInFull) backToJob();
+  };
+  const backToJob = () => {
+    if (!invoice?.job_id) return;
+    if (completeAfter) {
       // Pop back to the job (no second copy of it in history) and reopen
       // Complete there; replace only if the job isn't the previous screen.
       const prev = previousEntry(getAppRouter()?.state.location ?? location);
@@ -175,9 +208,17 @@ export default function InvoiceDetail() {
       } else {
         navigate(`/jobs/${invoice.job_id}`, { replace: true, state: { openComplete: true } });
       }
+      return;
     }
-    return true;
-  });
+    const prev = previousEntry(getAppRouter()?.state.location ?? location);
+    if (prev?.entry && prev.entry.path.split("?")[0] === `/jobs/${invoice.job_id}`) navigate(-prev.steps);
+    else navigate(`/jobs/${invoice.job_id}`, { replace: true });
+  };
+  const answerReceipt = async (send) => {
+    setReceiptAsk(false);
+    if (send) await sendReceiptIfNeeded();
+    if (invoice?.status === "paid" || paidHere) backToJob();
+  };
 
   const markSent = () => updateMutation.mutate({ status: "sent" }, {
     onSuccess: () => toast.success("Invoice marked as sent"),
@@ -196,7 +237,7 @@ export default function InvoiceDetail() {
       const paidSoFar = (amountPaidCentsOf(invoice) + entered) / 100;
       recordPayment(
         { status: "partial", amount_paid: paidSoFar, payment_method: method, payment_reference: reference || null },
-        { onSuccess: () => { haptics.success(); setPayAmount(""); toast.success(`${formatCurrency(entered / 100)} recorded — ${formatCurrency((balanceCents - entered) / 100)} still due`); sendReceiptIfNeeded(); } }
+        { onSuccess: () => { haptics.success(); setPayAmount(""); toast.success(`${formatCurrency(entered / 100)} recorded — ${formatCurrency((balanceCents - entered) / 100)} still due`); } }
       );
       return;
     }
@@ -211,7 +252,6 @@ export default function InvoiceDetail() {
         onSuccess: () => {
           haptics.success();
           toast.success("Invoice marked as paid");
-          sendReceiptIfNeeded();
           notifyTeam({
             subject: `Invoice Paid — ${invoice.customer_name} · $${(invoice.total || 0).toFixed(2)}`,
             body: `
@@ -250,7 +290,6 @@ export default function InvoiceDetail() {
         onSuccess: () => {
           haptics.success();
           toast.success("Payment successful");
-          sendReceiptIfNeeded();
           notifyTeam({
             subject: `Invoice Paid (Stripe) — ${invoice.customer_name} · $${((invoice.total || 0) + surchargeAmount).toFixed(2)}`,
             body: `
@@ -297,50 +336,57 @@ export default function InvoiceDetail() {
     }
   });
 
-  const handleChargeViaStripeApp = async () => {
-    const amountText = formatCurrency(getAmountDue());
+  // "Charge on Stripe" (Part E): copy the exact amount due (surcharge
+  // included) inside the tap — iOS allows clipboard writes only there — then
+  // ask "Payment completed?". Nothing is sent to Stripe or the server.
+  const chargeOnStripe = () => {
+    const amount = getAmountDue();
+    setStripeAmount(amount);
+    copyAmount(amount);
+    setStripeAsk(true);
+  };
+  const copyAmount = (amount) => {
+    const text = amount.toFixed(2);
     try {
-      await navigator.clipboard.writeText(amountText);
-    } catch {
-      // Clipboard write can fail (permissions/context) — still proceed to open the app.
-    }
-    window.location.href = "stripedashboard://";
-    toast.success(`Copied ${amountText} to clipboard — opening Stripe Dashboard app`);
-    setStripeAppOpened(true);
+      navigator.clipboard.writeText(text).then(
+        () => { setCopyState("copied"); toast.success(`${formatCurrency(amount)} copied`); },
+        () => setCopyState("failed"),
+      );
+    } catch { setCopyState("failed"); }
   };
 
+  // Yes on "Payment completed?": recorded ONCE as Card (Stripe App) with the
+  // total incl. surcharge (recordPayment is single-flight and re-checks the
+  // server copy first).
   const markStripeAppPaid = () => {
-    const owedTotal = getAmountDue();
-    const txnId = stripeAppTxnId.trim();
+    const surcharge = Number(invoice.surcharge_amount) > 0 ? surchargeFor(invoice, surchargeCfg) : 0;
+    const total = Math.round((owedCentsOf(invoice) / 100 + surcharge) * 100) / 100;
+    setStripeAsk(false);
     recordPayment(
       {
         status: "paid",
         payment_method: "stripe_app",
         paid_date: new Date().toISOString(),
-        stripe_payment_intent_id: txnId,
-        // Paid amount recorded = what was charged in the Stripe app (the
-        // balance + the recomputed surcharge).
-        surcharge_amount: Number(invoice.surcharge_amount) > 0 ? surchargeFor(invoice, surchargeCfg) : 0,
-        total: Math.round((owedCentsOf(invoice) / 100 + (Number(invoice.surcharge_amount) > 0 ? surchargeFor(invoice, surchargeCfg) : 0)) * 100) / 100,
+        surcharge_amount: surcharge,
+        total,
         ...(supportsPartialPayments(invoice) ? { amount_paid: owedCentsOf(invoice) / 100 } : {}),
       },
       {
         onSuccess: () => {
           haptics.success();
-          toast.success("Invoice marked as paid");
-          sendReceiptIfNeeded();
+          toast.success(`Paid — ${formatCurrency(getAmountDue())} by card (Stripe App)`);
           notifyTeam({
-            subject: `Invoice Paid (Stripe App) — ${invoice.customer_name} · $${owedTotal.toFixed(2)}`,
+            subject: `Invoice Paid (Stripe App) — ${invoice.customer_name} · $${total.toFixed(2)}`,
             body: `
               <p style="font-size:14px;margin:0 0 4px 0;">${buildEventBadge("Payment Received", "green")}</p>
               ${buildTable([
                 buildRow("Customer", invoice.customer_name),
                 buildRow("Invoice", invoice.invoice_number),
-                buildRow("Amount", `$${owedTotal.toFixed(2)}`),
-                buildRow("Method", "Stripe App (Tap to Pay)"),
-                buildRow("Transaction ID", txnId),
+                surcharge > 0 ? buildRow("Card surcharge", `$${surcharge.toFixed(2)}`) : "",
+                buildRow("Total Charged", `$${total.toFixed(2)}`),
+                buildRow("Method", "Card (Stripe App)"),
                 buildRow("Date", new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
-              ])}
+              ].filter(Boolean))}
             `,
             triggeredBy: getUserDisplayName(user),
           });
@@ -417,7 +463,7 @@ export default function InvoiceDetail() {
           <div className="text-sm space-y-1">
             <p className="flex items-center gap-1.5 flex-wrap"><span className="text-muted-foreground">Customer:</span> <Link to={`/customers/${invoice.customer_id}`} className="text-primary">{invoice.customer_name}</Link><RewardBadge show={invoiceCustomer?.pending_reward} /></p>
             <p><span className="text-muted-foreground">Date:</span> {formatDate(invoice.created_date)}</p>
-            {invoice.paid_date && <p><span className="text-muted-foreground">Paid:</span> {formatDate(invoice.paid_date)} ({invoice.payment_method === "no_charge" ? "No charge" : invoice.payment_method}{invoice.payment_reference ? ` #${invoice.payment_reference}` : ""})</p>}
+            {invoice.paid_date && <p><span className="text-muted-foreground">Paid:</span> {formatDate(invoice.paid_date)} ({fmtPaymentMethod(invoice.payment_method)}{invoice.payment_reference ? ` #${invoice.payment_reference}` : ""})</p>}
           </div>
         </Card>
 
@@ -447,15 +493,7 @@ export default function InvoiceDetail() {
             {(invoice.surcharge_amount > 0) && (
               <div className="flex items-center justify-between text-sm" data-testid="surcharge-line">
                 <span className="text-muted-foreground">{surchargeLabel(surchargeCfg)}</span>
-                <span className="flex items-center gap-1">
-                  {formatCurrency(invoice.surcharge_amount)}
-                  {invoice.status !== "paid" && (
-                    <Button variant="ghost" size="icon" className="h-11 w-11 -my-3 -mr-3" aria-label="Remove credit card surcharge"
-                      disabled={surchargeGuard.busy} onClick={() => setSurcharge(false)}>
-                      <X className="w-4 h-4 text-destructive" />
-                    </Button>
-                  )}
-                </span>
+                <span>{formatCurrency(invoice.surcharge_amount)}</span>
               </div>
             )}
             <div className="flex justify-between text-base font-bold pt-1 border-t"><span>Total</span><span>{formatCurrency((invoice.parts_total || 0) + (invoice.labor_total || 0) + (invoice.tax_amount || 0) + (invoice.surcharge_amount || 0))}</span></div>
@@ -466,28 +504,34 @@ export default function InvoiceDetail() {
               </>
             )}
           </div>
-          {canCollect && !(invoice.surcharge_amount > 0) && (
-            <AlertDialog open={surchargeAsk} onOpenChange={setSurchargeAsk}>
-              <AlertDialogTrigger asChild>
-                <button type="button" data-testid="add-surcharge"
-                  className="mt-3 w-full min-h-[44px] flex items-center justify-between rounded-xl border border-dashed border-border px-3 text-sm font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
-                  disabled={surchargeGuard.busy}>
-                  <span className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-muted-foreground" /> Credit card surcharge</span>
-                  <span className="flex items-center gap-1 text-muted-foreground">{formatCurrency(surchargeFor(invoice, surchargeCfg))} <Plus className="w-4 h-4" /></span>
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Is this a credit card?</AlertDialogTitle>
-                  <AlertDialogDescription>Debit cards can't be surcharged.</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>No</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => setSurcharge(true)}>Yes — add {formatCurrency(surchargeFor(invoice, surchargeCfg))}</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          {canCollect && (
+            // E1: one switch. ON (after "Is this a credit card?") adds the
+            // surcharge line and the totals above follow; OFF removes it.
+            <div data-testid="surcharge-toggle" className="mt-3 w-full min-h-[44px] flex items-center justify-between gap-3 rounded-xl border border-border px-3">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <CreditCard className="w-4 h-4 text-muted-foreground" /> Credit card surcharge
+                <span className="text-muted-foreground font-normal">{formatCurrency(surchargeFor({ ...invoice, surcharge_amount: 1 }, surchargeCfg))}</span>
+              </span>
+              <Switch
+                checked={Number(invoice.surcharge_amount) > 0}
+                disabled={surchargeGuard.busy}
+                aria-label="Credit card surcharge"
+                onCheckedChange={(on) => (on ? setSurchargeAsk(true) : setSurcharge(false))}
+              />
+            </div>
           )}
+          <AlertDialog open={surchargeAsk} onOpenChange={setSurchargeAsk}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Is this a credit card?</AlertDialogTitle>
+                <AlertDialogDescription>Debit cards can't be surcharged.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>No — debit card</AlertDialogCancel>
+                <AlertDialogAction data-testid="surcharge-credit-yes" onClick={() => setSurcharge(true)}>Yes — add {formatCurrency(surchargeFor({ ...invoice, surcharge_amount: 1 }, surchargeCfg))}</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </Card>
 
         {/* Actions */}
@@ -535,18 +579,6 @@ export default function InvoiceDetail() {
           </Button>
         )}
 
-        {canCollect && receiptWillEmail && (
-          // Item 1d: completed job → collecting sends a short "Payment
-          // received" receipt. One switch for every payment method below.
-          <Card className="p-3 flex items-center justify-between gap-3" data-testid="receipt-toggle">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">Email "Payment received" receipt</p>
-              <p className="text-xs text-muted-foreground truncate">{emailReceipt ? `To ${invoiceCustomer?.email}` : "Off — no email for this payment"}</p>
-            </div>
-            <Switch checked={emailReceipt} onCheckedChange={setEmailReceipt} aria-label="Email payment received receipt" />
-          </Card>
-        )}
-
         {canCollect && (
           <Card className="p-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40">
             <div className="flex items-center gap-3 mb-3">
@@ -570,62 +602,66 @@ export default function InvoiceDetail() {
         )}
 
         {canCollect && (
-          <Card className="p-4 border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/40">
+          <Card className="p-4 border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/40" data-testid="stripe-app-card">
             <div className="flex items-center gap-3 mb-3">
               <div className="rounded-xl bg-indigo-100 dark:bg-indigo-900/60 p-2 shrink-0">
                 <Smartphone className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Charge via Stripe App</p>
+                <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Charge on Stripe</p>
                 <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-0.5">
-                  Use Tap to Pay in the Stripe Dashboard app, then record the transaction here
+                  Copies {formatCurrency(getAmountDue())} — charge it in the Stripe app, then come back and confirm
                 </p>
               </div>
             </div>
             <Button
+              data-testid="charge-on-stripe"
               className="w-full rounded-xl h-12 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
-              onClick={handleChargeViaStripeApp}
+              disabled={recordGuard.busy}
+              onClick={chargeOnStripe}
             >
-              <Smartphone className="w-4 h-4" /> Charge via Stripe App
+              <Smartphone className="w-4 h-4" /> Charge on Stripe · {formatCurrency(getAmountDue())}
             </Button>
-
-            {stripeAppOpened && (
-              <div className="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-800 space-y-2">
-                <div>
-                  <Label className="text-xs font-semibold text-indigo-900 dark:text-indigo-100">Stripe Transaction ID</Label>
-                  <Input
-                    value={stripeAppTxnId}
-                    onChange={e => setStripeAppTxnId(e.target.value)}
-                    placeholder="ch_... or pi_..."
-                    className="rounded-xl font-mono text-sm mt-1"
-                  />
-                </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      className="w-full rounded-xl h-11 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-                      disabled={!stripeAppTxnId.trim() || recordGuard.busy}
-                    >
-                      <CheckCircle2 className="w-4 h-4" /> Record Stripe Payment
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Confirm Stripe App Payment</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Confirm you charged {formatCurrency(getAmountDue())} via Stripe app and are recording transaction ID: {stripeAppTxnId.trim()}?
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={markStripeAppPaid} className="bg-indigo-600 hover:bg-indigo-700">Confirm &amp; Mark Paid</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            )}
           </Card>
         )}
+
+        {/* "Payment completed?" — the app's own dialog; No records nothing. */}
+        <AlertDialog open={stripeAsk} onOpenChange={(o) => { if (!recordGuard.busy) setStripeAsk(o); }}>
+          <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="stripe-confirm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Payment completed?</AlertDialogTitle>
+              <AlertDialogDescription>Did the Stripe app charge this amount?</AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="text-center space-y-2">
+              <p className="text-4xl font-bold tabular-nums" data-testid="stripe-confirm-amount">{formatCurrency(stripeAmount)}</p>
+              {Number(invoice.surcharge_amount) > 0 && <p className="text-xs text-muted-foreground">includes {formatCurrency(surchargeFor(invoice, surchargeCfg))} credit card surcharge</p>}
+              <Button type="button" variant="outline" className="h-11 rounded-xl" data-testid="copy-amount" onClick={() => copyAmount(stripeAmount)}>
+                {copyState === "copied" ? "Copied ✓ — copy again" : "Copy amount"}
+              </Button>
+              {copyState === "failed" && <p className="text-xs text-amber-700">Couldn't copy — type the amount above into Stripe.</p>}
+            </div>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel className="h-11 rounded-xl" data-testid="stripe-confirm-no" disabled={recordGuard.busy}>No</AlertDialogCancel>
+              <Button className="h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700" data-testid="stripe-confirm-yes" disabled={recordGuard.busy} onClick={markStripeAppPaid}>
+                {recordGuard.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Yes — paid
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Completed job only: the receipt is a choice made after the payment. */}
+        <AlertDialog open={receiptAsk} onOpenChange={(o) => { if (!o) answerReceipt(false); }}>
+          <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="receipt-ask">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Send receipt to customer?</AlertDialogTitle>
+              <AlertDialogDescription>A short "Payment received" email to {invoiceCustomer?.email || "the customer"}, with the amount paid{Number(invoice.surcharge_amount) > 0 ? " and the card surcharge" : ""}.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel className="h-11 rounded-xl" onClick={() => answerReceipt(false)}>Don't send</AlertDialogCancel>
+              <AlertDialogAction className="h-11 rounded-xl" data-testid="receipt-send" autoFocus onClick={() => answerReceipt(true)}>Send receipt</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {canCollect && (
           <Card className="p-4 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20">
@@ -634,9 +670,9 @@ export default function InvoiceDetail() {
             </p>
             <p data-testid="receipt-email-hint" className="text-xs text-green-700 dark:text-green-300 mt-0.5 mb-3">
               {receiptWillEmail === false
-                ? "The customer will not be emailed — the payment is only recorded."
+                ? "No email now — the receipt goes out with the completion email."
                 : receiptWillEmail
-                  ? (emailReceipt ? `A short "Payment received" receipt will be emailed to ${invoiceCustomer?.email}.` : "Receipt email switched off — the payment is only recorded.")
+                  ? "You'll be asked whether to email a receipt."
                   : "\u00a0"}
             </p>
             {partialEnabled && (

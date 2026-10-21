@@ -84,8 +84,9 @@ export function jobDetailsHTML(job) {
   return `<div data-job-details="1" style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;">${title ? `<p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">JOB</p><p style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:0;">${escapeHtml(title)}</p>` : ''}${desc ? `<p style="font-size:10px;font-weight:bold;color:#888;margin:${title ? '10px' : '0'} 0 5px 0;">DESCRIPTION OF WORK</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(desc)}</p>` : ''}</div>`
 }
 
-function fmtPaymentMethod(method) {
-  const labels = { cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo', stripe: 'Card', stripe_app: 'Card', other: 'Other', no_charge: 'No charge' }
+// One label per payment method for every customer copy and the invoice screen.
+export function fmtPaymentMethod(method) {
+  const labels = { cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo', stripe: 'Card', stripe_app: 'Card (Stripe App)', other: 'Other', no_charge: 'No charge' }
   if (!method) return ''
   return labels[method] || (method.charAt(0).toUpperCase() + method.slice(1))
 }
