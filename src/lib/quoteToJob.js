@@ -1,4 +1,4 @@
-import { inferServiceType } from "./jobTypes.js";
+import { inferServiceType, isServiceType } from "./jobTypes.js";
 
 // Job row created when staff mark a quote Approved (QuoteDetail.jsx).
 // - quote.scope_notes ("Scope of Work", customer-facing — already in the quote
@@ -6,14 +6,15 @@ import { inferServiceType } from "./jobTypes.js";
 //   appointment confirmation email).
 // - quote.notes ("Notes (internal)") -> internal job fields only
 //   (jobs.notes / jobs.quote_notes), never customer_description.
-// job_type: the service type the quote's lines make obvious, else null (the
-// "Schedule this job" sheet asks for it). Never "quote" (Run 7).
+// job_type: the Service Type picked on the quote (quotes.job_type, Run 8 A5),
+// else the one the quote's lines make obvious, else null (the "Schedule this
+// job" sheet asks for it). Never "quote" (Run 7).
 export function jobFromApprovedQuote(quote, { customerId, customerName, lineItems = [] }) {
   return {
     customer_id: customerId,
     customer_name: customerName,
     title: `Quote Follow-up — ${customerName}`,
-    job_type: inferServiceType(lineItems.map(l => l.description)),
+    job_type: isServiceType(quote?.job_type) ? quote.job_type : inferServiceType(lineItems.map(l => l.description)),
     status: "scheduled",
     customer_description: quote?.scope_notes?.trim() || null,
     notes: quote?.notes || null,

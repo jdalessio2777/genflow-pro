@@ -9,7 +9,8 @@ import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName, getUserColor } from "@/lib/userColors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { markDraftsSaved } from "@/lib/textDrafts";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -131,6 +132,7 @@ export default function JobForm() {
     },
     onSuccess: async ({ savedJob, jobCustomer }, { data, sendConfirmation }) => {
       dismissSaveError("Job NOT saved");
+      markDraftsSaved(draftPrefix);
       // One path with the "Schedule this job" sheet (src/lib/jobCreate.js):
       // draft invoice + team notice + optional confirmation on create, then
       // calendar sync. The email/calendar use the picked estimate even when
@@ -169,6 +171,10 @@ export default function JobForm() {
   };
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  // Local drafts of the long text fields (Run 8, A4): one set per job, or per
+  // "new job" screen (and the customer it was opened for).
+  const draftPrefix = isEdit ? `job:${id}:` : `job:new:${preCustomer || "any"}:`;
+  const savedText = (field) => (isEdit ? savedJobRow?.[field] ?? "" : "");
 
   const handleCustomerChange = (customerId) => {
     // The picker reports "" while its list is still loading; never let that
@@ -273,31 +279,52 @@ export default function JobForm() {
           <EstimatedLengthPicker value={form.estimated_minutes} onChange={m => update("estimated_minutes", m)} />
           <div>
             <Label className="text-xs">Job Description (customer-facing)</Label>
-            <Textarea
-              value={form.customer_description || ""}
-              onChange={e => update("customer_description", e.target.value)}
-              className="rounded-xl mt-1"
-              rows={3}
-              placeholder="What we'll be doing, in plain language for the customer (e.g. oil & filter change, battery load test)"
-            />
+            <div className="mt-1">
+              <LongTextField
+                value={form.customer_description || ""}
+                onChange={v => update("customer_description", v)}
+                savedValue={savedText("customer_description")}
+                draftKey={`${draftPrefix}customer_description`}
+                ready={formFilled}
+                title="Job Description"
+                rows={5}
+                placeholder="What we'll be doing, in plain language for the customer (e.g. oil & filter change, battery load test)"
+              />
+            </div>
             <p className="text-xs text-muted-foreground mt-1">Optional — included in the appointment confirmation email</p>
           </div>
           <div>
             <Label className="text-xs">Internal Notes (not shown to customer)</Label>
-            <Textarea value={form.notes} onChange={e => update("notes", e.target.value)} className="rounded-xl mt-1" rows={3} />
+            <div className="mt-1">
+              <LongTextField
+                value={form.notes || ""}
+                onChange={v => update("notes", v)}
+                savedValue={savedText("notes")}
+                draftKey={`${draftPrefix}notes`}
+                ready={formFilled}
+                title="Internal Notes"
+                rows={5}
+              />
+            </div>
           </div>
           <div>
             <Label className="text-xs flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
               Generator Notes (tech only)
             </Label>
-            <Textarea
-              value={form.generator_notes || ""}
-              onChange={e => update("generator_notes", e.target.value)}
-              className="rounded-xl mt-1 border-blue-200 bg-blue-50/30"
-              rows={2}
-              placeholder="e.g. Overcrank fault cleared · Battery at 11.8V · Oil dark · Coolant level low"
-            />
+            <div className="mt-1">
+              <LongTextField
+                value={form.generator_notes || ""}
+                onChange={v => update("generator_notes", v)}
+                savedValue={savedText("generator_notes")}
+                draftKey={`${draftPrefix}generator_notes`}
+                ready={formFilled}
+                title="Generator Notes"
+                rows={5}
+                className="border-blue-200 bg-blue-50/30"
+                placeholder="e.g. Overcrank fault cleared · Battery at 11.8V · Oil dark · Coolant level low"
+              />
+            </div>
             <p className="text-xs text-muted-foreground mt-1">Internal only — not shown to customer</p>
           </div>
           <div className="flex items-center justify-between">

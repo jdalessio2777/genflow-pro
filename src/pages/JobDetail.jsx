@@ -7,7 +7,8 @@ import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { markDraftsSaved } from "@/lib/textDrafts";
 import BottomActionBar from "@/components/layout/BottomActionBar";
 import { afterSheetsClose } from "@/lib/sheetHistory";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -77,7 +78,7 @@ function AttachmentToggle({ label, on, onToggle }) {
   );
 }
 
-function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment, signatureSlot }) {
+function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, savedGeneratorNotes, notesDraftKey, notesReady, isSaving, onCollectPayment, signatureSlot }) {
   const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
 
   return (
@@ -127,11 +128,16 @@ function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, is
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
           Generator Notes (tech only)
         </p>
-        <Textarea
+        <LongTextField
           value={generatorNotes || ""}
-          onChange={e => onGeneratorNotesChange?.(e.target.value)}
-          className="text-sm rounded-xl resize-none border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/20 dark:text-gray-100 min-h-[56px]"
-          rows={2}
+          onChange={v => onGeneratorNotesChange?.(v)}
+          savedValue={savedGeneratorNotes}
+          draftKey={notesDraftKey}
+          ready={notesReady}
+          guard={false}
+          title="Generator Notes"
+          rows={5}
+          className="border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/20 dark:text-gray-100"
           placeholder="Fault codes, battery voltage, oil condition..."
         />
       </div>
@@ -171,6 +177,7 @@ export default function JobDetail() {
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false); // B1
   const [nextDate, setNextDate] = useState("");
   const notesInitialized = useRef(false);
+  const [notesReady, setNotesReady] = useState(false); // drafts restore only after the saved notes are in the boxes
   const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
   const [workSubTab, setWorkSubTab] = useState("parts");
   const [flatFolder, setFlatFolder] = useState(null);
@@ -241,6 +248,7 @@ export default function JobDetail() {
       setInvoiceNotes(job.invoice_notes || "");
       setGeneratorNotes(job.generator_notes || "");
       notesInitialized.current = true;
+      setNotesReady(true);
     }
     if (job?.on_site_time) setOptimisticOnSiteTime(null);
   }, [job]);
@@ -555,6 +563,7 @@ export default function JobDetail() {
       snap.choices = Object.fromEntries(stockParts.map(p => [p.id, choiceFor(p)]));
       if (!(await handleStatusChange("canceled", { cancel_reason: cancelReason }, { retry: () => statusGuard.run(attempt) }))) return;
       snap.canceled = true;
+      markDraftsSaved(`job:${id}:cancel_reason`);
       setCancelOpen(false);
       removeJobFromCalendar({ job }); // never throws or blocks
     }
@@ -1281,12 +1290,19 @@ export default function JobDetail() {
               {/* ── Service Summary (customer-facing; jobs.invoice_notes) ── */}
               <Card className="px-4 pt-3.5 pb-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
-                <Textarea
-                  ref={serviceSummaryRef}
+                {/* Autosaves (1.2 s) — the local draft covers a crash before that. */}
+                <LongTextField
+                  textareaRef={serviceSummaryRef}
                   value={invoiceNotes}
-                  onChange={e => handleNotesChange(e.target.value)}
-                  className="text-sm rounded-xl resize-none border-border bg-muted/20 min-h-[64px]"
-                  rows={3}
+                  onChange={handleNotesChange}
+                  savedValue={job.invoice_notes || ""}
+                  draftKey={`job:${id}:invoice_notes`}
+                  ready={notesReady}
+                  guard={false}
+                  title="Service Summary"
+                  rows={10}
+                  data-testid="service-summary"
+                  className="border-border bg-muted/20"
                   placeholder="Work performed — shown to the customer on the invoice..."
                 />
               </Card>
@@ -1297,6 +1313,9 @@ export default function JobDetail() {
                 labor={labor}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
+                savedGeneratorNotes={job.generator_notes || ""}
+                notesDraftKey={`job:${id}:generator_notes`}
+                notesReady={notesReady}
                 onCollectPayment={jobIsOpenOnSite && !isNoChargeJob && !invoicePaidInFull ? () => handleCollectPayment() : undefined}
                 signatureSlot={jobIsOpenOnSite && !isNoChargeJob ? signatureButton : null}
                 isSaving={updateJob.isPending}
@@ -1449,7 +1468,17 @@ export default function JobDetail() {
                       </DialogTrigger>
                       <DialogContent className="max-w-sm">
                         <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
-                        <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+                        <LongTextField
+                          value={cancelReason}
+                          onChange={setCancelReason}
+                          savedValue=""
+                          draftKey={cancelOpen ? `job:${id}:cancel_reason` : null}
+                          ready={cancelOpen}
+                          guard={false}
+                          title="Reason for cancellation"
+                          rows={4}
+                          placeholder="Reason for cancellation..."
+                        />
                         {stockParts.length > 0 && (
                           <div className="space-y-2" data-testid="cancel-parts">
                             <p className="text-sm font-semibold">Were any of these used?</p>
@@ -1858,11 +1887,16 @@ export default function JobDetail() {
                     <div className="flex-1">
                       <p className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider mb-1.5">Generator Notes (tech only)</p>
                       {!isClosed ? (
-                        <Textarea
+                        <LongTextField
                           value={generatorNotes}
-                          onChange={e => handleGeneratorNotesUpdate(e.target.value)}
-                          className="text-sm rounded-xl resize-none border-blue-200 dark:border-blue-700 bg-white/60 dark:bg-gray-800/60 dark:text-gray-100 min-h-[70px]"
-                          rows={3}
+                          onChange={handleGeneratorNotesUpdate}
+                          savedValue={job.generator_notes || ""}
+                          draftKey={`job:${id}:generator_notes`}
+                          ready={notesReady}
+                          guard={false}
+                          title="Generator Notes"
+                          rows={5}
+                          className="border-blue-200 dark:border-blue-700 bg-white/60 dark:bg-gray-800/60 dark:text-gray-100"
                           placeholder="Fault codes, battery voltage, oil condition, anything for next tech..."
                         />
                       ) : (

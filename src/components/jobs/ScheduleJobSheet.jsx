@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { markDraftsSaved } from "@/lib/textDrafts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Send, BellOff, Clock } from "lucide-react";
 import EstimatedLengthPicker from "@/components/jobs/EstimatedLengthPicker";
@@ -57,10 +58,11 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
   const [serviceType, setServiceType] = useState("");
   const typeTouched = useRef(false);
   const filledFor = useRef(null);
+  const [filledId, setFilledId] = useState(null); // the description box restores drafts only after the prefill
 
   // Prefill once per job each time the sheet opens.
   useEffect(() => {
-    if (!open || !job?.id) { if (!open) filledFor.current = null; return; }
+    if (!open || !job?.id) { if (!open) { filledFor.current = null; setFilledId(null); } return; }
     if (filledFor.current === job.id) return;
     filledFor.current = job.id;
     setDate("");
@@ -68,6 +70,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     setTech(job.assigned_to_name || (TECHS.includes(me) ? me : ""));
     setEstimate(Number(job.estimated_minutes) > 0 ? Number(job.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES);
     setDescription(job.customer_description || "");
+    setFilledId(job.id);
     typeTouched.current = false;
     setServiceType(serviceTypePrefill(job.job_type, []));
   }, [open, job, me]);
@@ -125,6 +128,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
       return;
     }
     dismissSaveError("", { id: "schedule-job-error" });
+    markDraftsSaved(`job:${job.id}:customer_description`);
     await afterJobScheduled({
       job: jobWithEstimate(saved, estimate),
       customer: customer || { name: saved.customer_name },
@@ -213,8 +217,20 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
 
         <div>
           <Label className="text-xs" htmlFor="sched-desc">Job Description (customer-facing)</Label>
-          <Textarea id="sched-desc" value={description} onChange={e => setDescription(e.target.value)} rows={3} className="rounded-xl mt-1 text-sm"
-            placeholder="What we'll be doing, in plain language" />
+          <div className="mt-1">
+            <LongTextField
+              id="sched-desc"
+              value={description}
+              onChange={setDescription}
+              savedValue={job?.customer_description || ""}
+              draftKey={job?.id ? `job:${job.id}:customer_description` : null}
+              ready={open && !!job?.id && filledId === job.id}
+              guard={false}
+              title="Job Description"
+              rows={5}
+              placeholder="What we'll be doing, in plain language"
+            />
+          </div>
           <p className="text-[10px] text-muted-foreground mt-1">From the quote's Scope of Work · included in the confirmation email</p>
         </div>
 

@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { markDraftsSaved } from "@/lib/textDrafts";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,7 +41,7 @@ export default function DocumentTemplateForm() {
     field_definitions: [],
   });
 
-  const { isLoading } = useQuery({
+  const { isLoading, data: savedTemplate } = useQuery({
     queryKey: ["doc-template", id],
     queryFn: async () => {
       const r = await db.DocumentTemplate.filter({ id });
@@ -62,6 +63,7 @@ export default function DocumentTemplateForm() {
       ? db.DocumentTemplate.update(id, cleanPayload(data))
       : db.DocumentTemplate.create(cleanPayload(data)),
     onSuccess: () => {
+      markDraftsSaved(`template:${id || "new"}:`);
       queryClient.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success(isEdit ? "Template updated" : "Template created");
       goBack(navigate, location);
@@ -108,7 +110,7 @@ export default function DocumentTemplateForm() {
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
         <Card className="p-4 space-y-3">
           <div><Label className="text-xs">Template Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="rounded-xl mt-1" placeholder="e.g. Maintenance Checklist" /></div>
-          <div><Label className="text-xs">Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="rounded-xl mt-1" rows={2} /></div>
+          <div><Label className="text-xs">Description</Label><div className="mt-1"><LongTextField value={form.description || ""} onChange={v => setForm(f => ({...f, description: v}))} savedValue={isEdit ? savedTemplate?.description || "" : ""} draftKey={`template:${id || "new"}:description`} ready={!isEdit || !!savedTemplate} title="Description" rows={5} /></div></div>
           <div><Label className="text-xs">Category</Label>
             <Select value={form.category} onValueChange={v => setForm(f => ({...f, category: v}))}>
               <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>

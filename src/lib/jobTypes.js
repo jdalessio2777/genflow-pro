@@ -14,7 +14,7 @@ export const JOB_TYPES = [
 // What a tech picks when scheduling (never "Quote").
 export const SERVICE_TYPES = JOB_TYPES.filter(t => t.value !== "quote");
 
-const isServiceType = (v) => SERVICE_TYPES.some(t => t.value === v);
+export const isServiceType = (v) => SERVICE_TYPES.some(t => t.value === v);
 
 // Service type from a quote's / job's line descriptions, only when it's
 // obvious; otherwise null and the tech picks. Order matters: an emergency
