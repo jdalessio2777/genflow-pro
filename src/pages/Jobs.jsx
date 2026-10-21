@@ -21,6 +21,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { sortJobs, isJobOverdue } from "@/lib/utils/jobSort";
+import { splitActive, UPCOMING_AFTER_DAYS } from "@/lib/jobWindows";
 
 function formatJobDate(dateStr, use24h = false) {
   if (!dateStr) return null;
@@ -34,7 +35,10 @@ function formatJobDate(dateStr, use24h = false) {
   if (d.toDateString() === tomorrow.toDateString()) {
     return "Tomorrow, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
   }
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) +
+  // Upcoming jobs can be next year: show the year when it isn't this year.
+  const dateOpts = { weekday: "short", month: "short", day: "numeric" };
+  if (d.getFullYear() !== today.getFullYear()) dateOpts.year = "numeric";
+  return d.toLocaleDateString("en-US", dateOpts) +
     ", " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
 }
 
@@ -69,23 +73,35 @@ export default function Jobs() {
     onError: (e) => toast.error("Failed to delete: " + e.message, { duration: Infinity, closeButton: true }),
   });
 
+  const matchesSearch = (j) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      j.title?.toLowerCase().includes(q) ||
+      j.customer_name?.toLowerCase().includes(q) ||
+      j.job_type?.toLowerCase().includes(q)
+    );
+  };
+
+  // Open jobs more than UPCOMING_AFTER_DAYS out live in Upcoming, not Active
+  // (see src/lib/jobWindows.js). Recomputed every render from today's date.
+  const { active: activeJobs, upcoming: upcomingJobs } = splitActive(jobs);
+
   const filtered = jobs.filter(j => {
-    if (filter === "active") return ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status);
     if (filter === "completed") {
       const isCompleted = j.status === "completed" || j.status === "invoiced";
       if (!isCompleted) return false;
-      if (!search) return true;
-      return (
-        j.title?.toLowerCase().includes(search.toLowerCase()) ||
-        j.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-        j.job_type?.toLowerCase().includes(search.toLowerCase())
-      );
+      return matchesSearch(j);
     }
     if (filter === "canceled") return j.status === "canceled";
     return true;
   });
 
-  const sortedFiltered = sortJobs(filtered);
+  const sortedFiltered = filter === "active"
+    ? activeJobs
+    : filter === "upcoming"
+      ? upcomingJobs.filter(matchesSearch)
+      : sortJobs(filtered);
 
   const techFiltered = techFilter === "mine"
     ? sortedFiltered.filter(j => !j.assigned_to_name || j.assigned_to_name === getUserDisplayName(user)?.split(" ")[0])
@@ -109,23 +125,35 @@ export default function Jobs() {
 
       <div className="px-4 pt-3 pb-4 space-y-3 max-w-lg mx-auto">
         <Tabs value={filter} onValueChange={v => { setFilter(v); setSearch(""); }}>
-          <TabsList className="w-full grid grid-cols-3 bg-muted/60 rounded-xl p-0.5">
-            <TabsTrigger value="active" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Active</TabsTrigger>
-            <TabsTrigger value="completed" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+          {/* Four tabs on a 320px phone: flex-auto lets a longer label
+              ("History (12)") take more room than "Active", and px-1 keeps
+              all four on one line. */}
+          <TabsList className="w-full flex bg-muted/60 rounded-xl p-0.5">
+            <TabsTrigger value="active" className="flex-auto px-1 text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Active</TabsTrigger>
+            {/* No count in this label: "Upcoming (88)" next to "History (188)"
+                is too wide for 320px; the count is in the line below instead. */}
+            <TabsTrigger value="upcoming" className="flex-auto px-1 text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Upcoming</TabsTrigger>
+            <TabsTrigger value="completed" className="flex-auto px-1 text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               History{completedCount > 0 ? ` (${completedCount})` : ""}
             </TabsTrigger>
-            <TabsTrigger value="canceled" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Canceled</TabsTrigger>
+            <TabsTrigger value="canceled" className="flex-auto px-1 text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Canceled</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {filter === "completed" && (
+        {(filter === "completed" || filter === "upcoming") && (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search history..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 rounded-xl" />
+            <Input placeholder={filter === "upcoming" ? "Search upcoming..." : "Search history..."} value={search} onChange={e => setSearch(e.target.value)} className="pl-9 rounded-xl" />
           </div>
         )}
 
-        {filter === "active" && (
+        {filter === "upcoming" && (
+          <p className="text-xs text-muted-foreground">
+            {upcomingJobs.length} job{upcomingJobs.length === 1 ? "" : "s"} more than {UPCOMING_AFTER_DAYS} days out. Each moves to Active on its own {UPCOMING_AFTER_DAYS} days before.
+          </p>
+        )}
+
+        {(filter === "active" || filter === "upcoming") && (
           <div className="flex items-center gap-2">
             {["all", "mine"].map(f => (
               <button
@@ -167,6 +195,12 @@ export default function Jobs() {
               icon={ClipboardList}
               title="No completed jobs yet"
               subtitle="Completed jobs will appear here"
+            />
+          ) : filter === "upcoming" ? (
+            <EmptyState
+              icon={Calendar}
+              title={search ? "No matching upcoming jobs" : "No upcoming jobs"}
+              subtitle={`Jobs booked more than ${UPCOMING_AFTER_DAYS} days out appear here`}
             />
           ) : filter === "canceled" ? (
             <EmptyState
