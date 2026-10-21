@@ -368,7 +368,7 @@ export default function InvoiceDetail() {
   const printInvoice = () => {
     const win = window.open("", "_blank");
     if (!win) { toast.error("Couldn't open the print view"); return; }
-    win.document.write(invoicePrintDocumentHtml({ invoice: customerInvoice, customer: invoiceCustomer, surchargeConfig: surchargeCfg }));
+    win.document.write(invoicePrintDocumentHtml({ invoice: customerInvoice, customer: invoiceCustomer, job: invoiceJob, surchargeConfig: surchargeCfg }));
     win.document.close();
     // The page itself runs no script (CSP); wire Close from here.
     win.document.getElementById("close-invoice")?.addEventListener("click", () => win.close());

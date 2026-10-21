@@ -20,14 +20,17 @@ export function customerFacingInvoice({ invoice, job }) {
 // Printable invoice (InvoiceDetail "Print / Save PDF"): the same markup as the
 // customer email, in a standalone page. Like the Service History printout, a
 // CSP meta tag forbids all script in the page (it is same-origin with the app).
-export function invoicePrintDocumentHtml({ invoice, customer, surchargeConfig = SURCHARGE_DEFAULTS }) {
+// `job` (the invoice's job, if any) adds its title + customer-facing
+// description; a standalone invoice has none and shows neither row.
+export function invoicePrintDocumentHtml({ invoice, customer, job = null, surchargeConfig = SURCHARGE_DEFAULTS }) {
+  const num = String(invoice.invoice_number ?? '').trim()
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:">
-<title>Invoice ${escapeHtml(invoice.invoice_number || '')} — GenShield</title>
+<title>${num ? `Invoice ${escapeHtml(num)}` : 'Invoice'} — GenShield</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; color: #1a1a1a; background: white; padding: 24px; max-width: 680px; margin: 0 auto; }
@@ -40,7 +43,7 @@ export function invoicePrintDocumentHtml({ invoice, customer, surchargeConfig = 
   ✕ Close &amp; Return to GenFlow Pro
     </button>
   </div>
-  ${invoiceSummaryHTML({ invoice, customer, surchargeConfig })}
+  ${invoiceSummaryHTML({ invoice, customer, job, surchargeConfig })}
 </body>
 </html>`
 }

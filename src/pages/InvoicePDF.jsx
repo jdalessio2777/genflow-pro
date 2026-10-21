@@ -42,7 +42,7 @@ export default function InvoicePDF() {
 
   // A job invoice carries the job's live Service Summary, as in every other
   // customer email (api/_lib/jobSummary.js).
-  const { data: invoiceJob } = useQuery({
+  const { data: invoiceJob, isLoading: invoiceJobLoading } = useQuery({
     queryKey: ["invoice-job", invoice?.job_id],
     queryFn: async () => { const r = await db.Job.filter({ id: invoice.job_id }); return r[0] || null; },
     enabled: !!invoice?.job_id,
@@ -59,13 +59,13 @@ export default function InvoicePDF() {
     setSending(true);
     try {
       const bodyParts = [];
-      if (includeInvoice) bodyParts.push(invoiceSummaryHTML({ invoice: customerFacingInvoice({ invoice, job: invoiceJob }), customer, surchargeConfig: surchargeConfig(settings) }));
+      if (includeInvoice) bodyParts.push(invoiceSummaryHTML({ invoice: customerFacingInvoice({ invoice, job: invoiceJob }), customer, job: invoiceJob, surchargeConfig: surchargeConfig(settings) }));
       completedDocs.forEach(doc => { if (includedDocs[doc.id]) bodyParts.push(checklistSummaryHTML(doc)); });
 
       const fullHTML = combineEmailSections(bodyParts);
 
       const subjectParts = [];
-      if (includeInvoice) subjectParts.push(`Invoice ${invoice.invoice_number}`);
+      if (includeInvoice) subjectParts.push(String(invoice.invoice_number ?? "").trim() ? `Invoice ${invoice.invoice_number}` : "Invoice");
       if (Object.values(includedDocs).some(Boolean)) subjectParts.push("Service Report");
       const subject = subjectParts.join(" & ") + " — GenShield";
 
@@ -89,6 +89,8 @@ export default function InvoicePDF() {
   if (!invoice) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
 
   const nothingSelected = !includeInvoice && !Object.values(includedDocs).some(Boolean);
+  // Wait for the job (title / description / Service Summary) before sending.
+  const jobLoading = !!invoice.job_id && invoiceJobLoading;
 
   return (
     <div>
@@ -151,7 +153,7 @@ export default function InvoicePDF() {
         )}
 
         {!sent ? (
-          <Button className="w-full rounded-xl h-12 gap-2" onClick={handleSend} disabled={sending || nothingSelected || !customer?.email}>
+          <Button className="w-full rounded-xl h-12 gap-2" onClick={handleSend} disabled={sending || nothingSelected || !customer?.email || jobLoading}>
             {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : <><Send className="w-4 h-4" /> Send Email</>}
           </Button>
         ) : (

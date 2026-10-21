@@ -4,10 +4,16 @@ export function renewalEmailSubject() {
   return "Your GenShield Generator Service is Due";
 }
 
+// Missing name -> "Hi there,"; missing plan -> "Your Maintenance Agreement";
+// missing/unreadable expiry -> the "Expires" line is hidden (never
+// "Invalid Date" / "undefined").
 export function renewalEmailHTML({ customerName, plan, expiryDate }) {
-  const formattedDate = new Date(expiryDate).toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric'
-  });
+  const expiry = expiryDate ? new Date(expiryDate) : null;
+  const formattedDate = expiry && !isNaN(expiry.getTime())
+    ? expiry.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  const name = String(customerName ?? '').trim() || 'there';
+  const planName = String(plan ?? '').trim();
 
   return `<!DOCTYPE html>
 <html>
@@ -44,7 +50,7 @@ export function renewalEmailHTML({ customerName, plan, expiryDate }) {
 
             <!-- GREETING -->
             <p style="margin:0 0 16px;font-size:16px;color:#1a1a1c;">
-              Hi ${escapeHtml(customerName)},
+              Hi ${escapeHtml(name)},
             </p>
 
             <!-- PARAGRAPH 1 -->
@@ -57,11 +63,11 @@ export function renewalEmailHTML({ customerName, plan, expiryDate }) {
               <tr>
                 <td style="background:#f9f9f9;border:1px solid #e0e0e0;border-left:3px solid #D32C2C;border-radius:6px;padding:14px 16px;">
                   <p style="margin:0 0 3px;font-size:13px;color:#888888;">
-                    ${escapeHtml(plan)} Maintenance Agreement
+                    ${planName ? `${escapeHtml(planName)} Maintenance Agreement` : 'Your Maintenance Agreement'}
                   </p>
-                  <p style="margin:0;font-size:15px;font-weight:700;color:#1a1a1c;">
+                  ${formattedDate ? `<p style="margin:0;font-size:15px;font-weight:700;color:#1a1a1c;">
                     Expires ${formattedDate}
-                  </p>
+                  </p>` : ''}
                 </td>
               </tr>
             </table>

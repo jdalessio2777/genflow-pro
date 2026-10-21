@@ -5,25 +5,83 @@ import { SURCHARGE_DEFAULTS, surchargeLabel } from './utils/surcharge.js'
 // History and api/); re-exported here for existing imports.
 import { escapeHtml, multilineHtml, safeImageSrc } from './utils/escapeHtml.js'
 import { formatEstimate, estimateMinutes } from './jobDuration.js'
+import { SERVICE_TYPES } from './jobTypes.js'
 export { escapeHtml, multilineHtml, safeImageSrc }
 
+// Customer copy never prints a "—" placeholder, "undefined", "null", "NaN" or
+// "$NaN": a row whose value is missing is hidden (label and value), see
+// docs/customer-copy-audit.md.
+
+// Totals only: a missing component of a stored total counts as 0, exactly as
+// invoiceTotalCents() does, so the printed Total always matches the sum.
 function fmt(n) {
-  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const v = Number(n || 0)
+  return '$' + (Number.isFinite(v) ? v : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+// One line item's money: blank when the amount is unknown — never an
+// invented "$0.00" (and never "$NaN") that hides a real missing price.
+function fmtLine(n) {
+  if (n === null || n === undefined || String(n).trim() === '') return ''
+  const v = Number(n)
+  return Number.isFinite(v) ? fmt(v) : ''
+}
+
+// Rate column: the stored unit price, else total / quantity when both are
+// known (legacy flat-rate rows), else blank.
+function lineRate(item) {
+  const r = fmtLine(item?.unit_price)
+  if (r) return r
+  if (item?.total == null || item?.quantity == null) return ''
+  const total = Number(item.total), qty = Number(item.quantity)
+  return Number.isFinite(total) && Number.isFinite(qty) && qty > 0 ? fmt(total / qty) : ''
+}
+
+// Quantity cell: escaped, and blank instead of a dash / "null" placeholder.
+function fmtQty(q) {
+  const s = String(q ?? '').trim()
+  if (!s || /^[-—–]+$/.test(s) || /^(undefined|null|NaN)$/i.test(s)) return ''
+  return escapeHtml(s)
+}
+
+function validDate(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? null : d
+}
+
+// '' when missing/invalid — callers hide the row (never "—" / "Invalid Date").
 function fmtDate(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const d = validDate(iso)
+  return d ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : ''
 }
 
 function fmtTime(iso, use24h = false) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleTimeString('en-US', { hour: use24h ? '2-digit' : 'numeric', minute: '2-digit', hour12: !use24h })
+  const d = validDate(iso)
+  return d ? d.toLocaleTimeString('en-US', { hour: use24h ? '2-digit' : 'numeric', minute: '2-digit', hour12: !use24h }) : ''
 }
 
-function fmtJobType(raw) {
-  if (!raw) return '—'
+// Customer-facing "Service Type": only a real service type — never the legacy
+// "quote" value, an unknown or an empty one. '' means: hide the row.
+export function fmtJobType(raw) {
+  if (!SERVICE_TYPES.some(x => x.value === raw)) return ''
   return escapeHtml(String(raw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))
+}
+
+// "Hi {name}," — never "Hi ,".
+function greetingName(customer) {
+  return String(customer?.name ?? '').trim() || 'there'
+}
+
+// B3: the job as the customer sees it — its title and the customer-facing
+// description (jobs.customer_description). Never internal text (jobs.notes /
+// generator_notes / quote notes / customer notes). '' when the job has
+// neither, or there is no job (standalone invoice).
+export function jobDetailsHTML(job) {
+  const title = String(job?.title ?? '').trim()
+  const desc = String(job?.customer_description ?? '').trim()
+  if (!title && !desc) return ''
+  return `<div data-job-details="1" style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;">${title ? `<p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">JOB</p><p style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:0;">${escapeHtml(title)}</p>` : ''}${desc ? `<p style="font-size:10px;font-weight:bold;color:#888;margin:${title ? '10px' : '0'} 0 5px 0;">DESCRIPTION OF WORK</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(desc)}</p>` : ''}</div>`
 }
 
 function fmtPaymentMethod(method) {
@@ -106,7 +164,10 @@ function footer() {
 // already carry any member price; `tax` is NJ sales tax; `total` is the real
 // amount due (H-3). memberSavings is informational only (not subtracted).
 export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, tax = 0, memberSavings = 0, total = 0, approveUrl, scopeNotes }) {
-  const quoteNum = (job.id || '').slice(0, 8).toUpperCase()
+  customer = customer || {}
+  job = job || {}
+  const quoteNum = escapeHtml(String(job.id || '').slice(0, 8).toUpperCase())
+  const serviceType = fmtJobType(job.job_type)
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
@@ -115,8 +176,8 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
   const lineRows = lineItems.map((item, i) => `
     <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="padding:10px 16px;font-family:Arial,sans-serif;font-size:13px;color:#374151;border-bottom:1px solid #f0f0f0;">${escapeHtml(item.description)}</td>
-      <td style="padding:10px 16px;font-family:Arial,sans-serif;font-size:13px;color:#6b7280;text-align:center;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${escapeHtml(item.qty)}</td>
-      <td style="padding:10px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(item.amount)}</td>
+      <td style="padding:10px 16px;font-family:Arial,sans-serif;font-size:13px;color:#6b7280;text-align:center;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmtQty(item.qty)}</td>
+      <td style="padding:10px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmtLine(item.amount)}</td>
     </tr>`).join('')
 
   const taxRow = tax > 0 ? `
@@ -140,7 +201,7 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
       <tr><td>${header()}</td></tr>
 
       <tr><td style="padding:32px 40px 0;">
-        <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${escapeHtml(customer.name)},</p>
+        <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${escapeHtml(greetingName(customer))},</p>
         <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
           Thank you for choosing GenShield — we truly appreciate the opportunity to keep your home protected.
           ${approveUrl
@@ -152,22 +213,22 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
         <!-- Quote details card -->
         <div style="border-left:4px solid #CC2200;background:#f8f8f8;border-radius:0 8px 8px 0;padding:20px 24px;margin-bottom:24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
+            ${quoteNum ? `<tr>
               <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;">Quote #</td>
               <td style="padding:4px 0;font-size:13px;color:#111827;font-weight:600;">${quoteNum}</td>
-            </tr>
+            </tr>` : ''}
             <tr>
-              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Date Issued</td>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;">Date Issued</td>
               <td style="padding:4px 0;font-size:13px;color:#374151;">${today}</td>
             </tr>
             <tr>
               <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Expires</td>
               <td style="padding:4px 0;font-size:13px;color:#CC2200;font-weight:600;">${expires}</td>
             </tr>
-            <tr>
+            ${serviceType ? `<tr>
               <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Service Type</td>
-              <td style="padding:4px 0;font-size:13px;color:#374151;">${fmtJobType(job.job_type)}</td>
-            </tr>
+              <td style="padding:4px 0;font-size:13px;color:#374151;">${serviceType}</td>
+            </tr>` : ''}
             ${generatorInfo ? `<tr>
               <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Generator</td>
               <td style="padding:4px 0;font-size:13px;color:#374151;">${generatorInfo}</td>
@@ -242,9 +303,30 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
 }
 
 export function confirmationEmailHTML({ customer, job, techFirstName, use24h = false }) {
-  const arrivalTime = job.scheduled_date ? fmtTime(job.scheduled_date, use24h) : '—'
+  customer = customer || {}
+  job = job || {}
+  const visitDate = fmtDate(job.scheduled_date)
+  const arrivalTime = fmtTime(job.scheduled_date, use24h)
+  const serviceType = fmtJobType(job.job_type)
   const generatorInfo = escapeHtml([customer.generator_model, customer.generator_serial].filter(Boolean).join(' · '))
-  const techName = techFirstName || 'our technician'
+  const techName = String(techFirstName ?? '').trim() || 'our technician'
+  const estimateLine = `<span style="color:#6b7280;font-size:12px;" data-estimate="1">Estimated time on site: ${escapeHtml(formatEstimate(estimateMinutes(job)))}.</span>`
+  // Service Type row only for a real service type; the generator line moves
+  // to its own row when there is no service type to sit under.
+  const serviceRow = serviceType
+    ? `<tr style="border-bottom:1px solid #f0f0f0;">
+              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">🔧 Service Type</td>
+              <td style="padding:12px 20px;font-size:13px;color:#374151;">
+                ${serviceType}
+                ${generatorInfo ? `<br><span style="color:#6b7280;font-size:12px;">${generatorInfo}</span>` : ''}
+              </td>
+            </tr>`
+    : generatorInfo
+      ? `<tr style="border-bottom:1px solid #f0f0f0;">
+              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">🔧 Generator</td>
+              <td style="padding:12px 20px;font-size:13px;color:#374151;">${generatorInfo}</td>
+            </tr>`
+      : ''
   const customerDescription = job.customer_description?.trim()
     ? `<!-- About Your Service -->
         <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
@@ -277,7 +359,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
       </tr>
 
       <tr><td style="padding:32px 40px 0;">
-        <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${escapeHtml(customer.name)},</p>
+        <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${escapeHtml(greetingName(customer))},</p>
         <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
           Great news — your service appointment is confirmed and on our schedule.
           Our certified technician will arrive at the time below.
@@ -294,20 +376,14 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
           </thead>
           <tbody>
             <tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;vertical-align:top;">📆 Date &amp; Time</td>
+              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;vertical-align:top;">${visitDate ? '📆 Date &amp; Time' : '⏱ Time on Site'}</td>
               <td style="padding:12px 20px;font-size:13px;color:#374151;">
-                <strong>${fmtDate(job.scheduled_date)}</strong><br>
-                <span style="color:#6b7280;font-size:12px;">Arrival time: ${arrivalTime}</span><br>
-                <span style="color:#6b7280;font-size:12px;" data-estimate="1">Estimated time on site: ${escapeHtml(formatEstimate(estimateMinutes(job)))}.</span>
+                ${visitDate ? `<strong>${visitDate}</strong><br>` : ''}
+                ${arrivalTime ? `<span style="color:#6b7280;font-size:12px;">Arrival time: ${arrivalTime}</span><br>` : ''}
+                ${estimateLine}
               </td>
             </tr>
-            <tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">🔧 Service Type</td>
-              <td style="padding:12px 20px;font-size:13px;color:#374151;">
-                ${fmtJobType(job.job_type)}
-                ${generatorInfo ? `<br><span style="color:#6b7280;font-size:12px;">${generatorInfo}</span>` : ''}
-              </td>
-            </tr>
+            ${serviceRow}
             ${customer.address ? `<tr style="border-bottom:1px solid #f0f0f0;">
               <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">📍 Service Address</td>
               <td style="padding:12px 20px;font-size:13px;color:#374151;">${escapeHtml(customer.address)}</td>
@@ -356,7 +432,12 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
 }
 
 export function completionEmailHTML({ customer, job, parts = [], labor = [], documents = [], includeChecklist = true }) {
+  customer = customer || {}
+  job = job || {}
   const generatorInfo = escapeHtml([customer.generator_model, customer.generator_serial].filter(Boolean).join(' · '))
+  const jobTitle = String(job.title ?? '').trim()
+  const jobDesc = String(job.customer_description ?? '').trim()
+  const completedOn = fmtDate(job.completed_date || new Date().toISOString())
   const partsTotal = parts.reduce((s, p) => s + partChargeTotal(p), 0)
   const laborTotal = labor.reduce((s, l) => s + (l.total_price || 0), 0)
   const total = partsTotal + laborTotal
@@ -364,14 +445,17 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
   const laborRows = labor.map((l, i) => `
     <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
       <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;color:#374151;border-bottom:1px solid #f0f0f0;">${escapeHtml(l.description)}</td>
-      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(l.total_price)}</td>
+      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmtLine(l.total_price)}</td>
     </tr>`).join('')
 
-  const partsRows = parts.filter(p => partChargeTotal(p) > 0).map((p, i) => `
+  const partsRows = parts.filter(p => partChargeTotal(p) > 0).map((p, i) => {
+    const qty = fmtQty(p.quantity)
+    return `
     <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
-      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;color:#374151;border-bottom:1px solid #f0f0f0;">${escapeHtml(p.name)} ×${escapeHtml(p.quantity)}</td>
-      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmt(p.total_price)}</td>
-    </tr>`).join('')
+      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;color:#374151;border-bottom:1px solid #f0f0f0;">${escapeHtml(p.name)}${qty ? ` ×${qty}` : ''}</td>
+      <td style="padding:9px 16px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap;">${fmtLine(p.total_price)}</td>
+    </tr>`
+  }).join('')
 
   const completedDocs = documents.filter(d => d.status === 'completed')
   const checklistSection = (includeChecklist && completedDocs.length > 0) ? `
@@ -402,7 +486,7 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
       </tr>
 
       <tr><td style="padding:32px 40px 0;">
-        <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${escapeHtml(customer.name)},</p>
+        <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${escapeHtml(greetingName(customer))},</p>
         <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
           Your service has been completed. Our technician has finished the work on your generator and everything is running as it should be.
           Below is a summary of what was done today.
@@ -411,14 +495,18 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
 
         <div style="border-left:4px solid #4CAF7A;background:#f8f8f8;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;">Service</td>
-              <td style="padding:4px 0;font-size:13px;color:#374151;font-weight:600;">${escapeHtml(job.title || '')}</td>
-            </tr>
-            <tr>
-              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Date</td>
-              <td style="padding:4px 0;font-size:13px;color:#374151;">${fmtDate(job.completed_date || new Date().toISOString())}</td>
-            </tr>
+            ${jobTitle ? `<tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;">Job</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;font-weight:600;">${escapeHtml(jobTitle)}</td>
+            </tr>` : ''}
+            ${jobDesc ? `<tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;vertical-align:top;">Description of Work</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;">${multilineHtml(jobDesc)}</td>
+            </tr>` : ''}
+            ${completedOn ? `<tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;">Date</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;">${completedOn}</td>
+            </tr>` : ''}
             ${generatorInfo ? `<tr>
               <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Generator</td>
               <td style="padding:4px 0;font-size:13px;color:#374151;">${generatorInfo}</td>
@@ -488,20 +576,20 @@ export function serviceNotesHTML(notes) {
   return `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE SUMMARY</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(notes)}</p></div>`
 }
 
-export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHARGE_DEFAULTS }) {
+export function invoiceSummaryHTML({ invoice, customer, job = null, surchargeConfig = SURCHARGE_DEFAULTS }) {
   // $0.00 invoices (exact, integer cents — see isZeroDollarInvoice) get their
   // own rendering with no paid/unpaid/payment-due language. Every invoice
   // > $0 (and every negative-total invoice) falls through to the original
   // rendering below, which is intentionally left byte-for-byte unchanged
   // (guarded by src/test/invoiceSummary.test.js golden fixtures).
-  if (isZeroDollarInvoice(invoice)) return zeroDollarInvoiceSummaryHTML({ invoice, customer });
+  if (isZeroDollarInvoice(invoice)) return zeroDollarInvoiceSummaryHTML({ invoice, customer, job });
 
   const lineItemsHTML = (invoice.line_items || []).map((item, i) => `
     <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
       <td style="padding:9px 12px;font-size:13px;">${escapeHtml(item.description)}</td>
-      <td style="padding:9px 12px;font-size:13px;text-align:center;">${escapeHtml(item.quantity)}</td>
-      <td style="padding:9px 12px;font-size:13px;text-align:right;">${fmt(item.unit_price)}</td>
-      <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600;">${fmt(item.total)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:center;">${fmtQty(item.quantity)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:right;">${lineRate(item)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600;">${fmtLine(item.total)}</td>
     </tr>`).join("");
 
   const signatureHTML = invoice.customer_signature
@@ -518,7 +606,7 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
   const paidSoFar = isPartial ? Math.round(Number(invoice.amount_paid) * 100) / 100 : 0
   const amountDue = Math.max(0, totalCents / 100 - paidSoFar)
   const paymentLine = invoice.paid_date
-    ? `PAID — ${fmtDate(invoice.paid_date)}${invoice.payment_method ? ` (${escapeHtml(fmtPaymentMethod(invoice.payment_method))}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""})` : ""}`
+    ? `PAID${fmtDate(invoice.paid_date) ? ` — ${fmtDate(invoice.paid_date)}` : ""}${invoice.payment_method ? ` (${escapeHtml(fmtPaymentMethod(invoice.payment_method))}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""})` : ""}`
     : totalCents < 0 ? "PAYMENT DUE" // credit invoice: original wording
     : isPartial ? `PARTIALLY PAID — ${fmt(amountDue)} DUE` : `UNPAID — ${fmt(amountDue)} DUE`;
 
@@ -532,8 +620,8 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
           </td>
           <td style="vertical-align:top;text-align:right;">
             <p style="font-size:16px;font-weight:bold;color:#CC2200;margin:0;">INVOICE</p>
-            <p style="font-size:12px;margin:3px 0 0 0;">${escapeHtml(invoice.invoice_number)}</p>
-            <p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>
+            ${String(invoice.invoice_number ?? "").trim() ? `<p style="font-size:12px;margin:3px 0 0 0;">${escapeHtml(invoice.invoice_number)}</p>` : ""}
+            ${fmtDate(invoice.created_date) ? `<p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>` : ""}
           </td>
         </tr>
       </table>
@@ -543,15 +631,15 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
         <td style="width:50%;vertical-align:top;padding:0 8px 0 0;">
           <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
             <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
-            <p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${escapeHtml(customer?.name || invoice.customer_name)}</p>
+            ${String(customer?.name || invoice.customer_name || "").trim() ? `<p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${escapeHtml(customer?.name || invoice.customer_name)}</p>` : ""}
             ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${escapeHtml(customer.address)}</p>` : ""}
             ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${escapeHtml(customer.phone)}</p>` : ""}
           </div>
         </td>
         <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">
           <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
-            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">GENERATOR</p>
-            <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${escapeHtml(customer?.generator_model || "—")}</p>
+            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">${customer?.generator_model || customer?.generator_serial ? "GENERATOR" : "PAYMENT"}</p>
+            ${customer?.generator_model ? `<p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${escapeHtml(customer.generator_model)}</p>` : ""}
             ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0 0 6px 0;">S/N: ${escapeHtml(customer.generator_serial)}</p>` : ""}
             <p style="font-size:12px;font-weight:bold;margin:0;color:${invoice.paid_date ? "#16a34a" : "#d97706"};">
               ${paymentLine}
@@ -559,7 +647,7 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
           </div>
         </td>
       </tr>
-    </table>
+    </table>${jobDetailsHTML(job)}
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
       <thead>
         <tr style="background:#0D1014;color:white;">
@@ -616,7 +704,7 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
     ${invoice.paid_date ? `
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:16px;">
       <p style="font-size:11px;font-weight:bold;color:#166534;margin:0 0 4px 0;">✓ PAID — THANK YOU!</p>
-      <p style="font-size:12px;color:#15803d;margin:0;">${fmtDate(invoice.paid_date)}${invoice.payment_method ? ` · ${escapeHtml(fmtPaymentMethod(invoice.payment_method))}` : ""}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""}</p>
+      <p style="font-size:12px;color:#15803d;margin:0;">${[fmtDate(invoice.paid_date), invoice.payment_method ? escapeHtml(fmtPaymentMethod(invoice.payment_method)) : ""].filter(Boolean).join(" · ")}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""}</p>
     </div>
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
       <tr>
@@ -645,22 +733,42 @@ export function invoiceSummaryHTML({ invoice, customer, surchargeConfig = SURCHA
   </div>`;
 }
 
+// A checklist answer as customer text: '' (row hidden) when empty or not
+// printable; same rules as the checklist PDF (api/_lib/pdf/checklistPdf.js).
+function checklistValueText(field, raw) {
+  if (raw === undefined || raw === null) return "";
+  if (field.type === "photo") return String(raw).trim() ? "Photo on file" : "";
+  if (Array.isArray(raw)) return raw.filter(v => v !== null && v !== undefined && String(v).trim() !== "").join(", ");
+  if (typeof raw === "object") return "";
+  const s = String(raw).trim();
+  return /^(undefined|null|NaN)$/i.test(s) ? "" : s;
+}
+
 export function checklistSummaryHTML(doc) {
-  const fields = doc.field_definitions || [];
-  const values = doc.field_values || {};
+  const fields = doc?.field_definitions || [];
+  const values = doc?.field_values || {};
   let rows = "";
+  let pendingHeader = "";
   fields.forEach(field => {
     if (field.type === "section_header") {
-      rows += `<tr><td colspan="2" style="background:#0D1014;color:white;font-weight:bold;font-size:11px;padding:7px 10px;letter-spacing:0.5px;">${escapeHtml(field.label)}</td></tr>`;
-    } else if (field.type === "checkbox") {
-      const checked = values[field.id];
-      rows += `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#333;">${escapeHtml(field.label)}</td><td style="padding:6px 10px;text-align:center;font-size:13px;color:${checked ? "#16a34a" : "#9ca3af"};">${checked ? "✓" : "○"}</td></tr>`;
-    } else if (values[field.id]) {
-      rows += `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#555;">${escapeHtml(field.label)}</td><td style="padding:6px 10px;font-size:12px;font-weight:600;">${multilineHtml(values[field.id])}</td></tr>`;
+      // Printed only when a row under it prints (and never as an empty bar).
+      pendingHeader = String(field.label ?? "").trim()
+        ? `<tr><td colspan="2" style="background:#0D1014;color:white;font-weight:bold;font-size:11px;padding:7px 10px;letter-spacing:0.5px;">${escapeHtml(field.label)}</td></tr>`
+        : "";
+      return;
     }
+    let row = "";
+    if (field.type === "checkbox") {
+      const checked = values[field.id];
+      row = `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#333;">${escapeHtml(field.label)}</td><td style="padding:6px 10px;text-align:center;font-size:13px;color:${checked ? "#16a34a" : "#9ca3af"};">${checked ? "✓" : "○"}</td></tr>`;
+    } else {
+      const text = checklistValueText(field, values[field.id]);
+      if (text) row = `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:6px 10px;font-size:12px;color:#555;">${escapeHtml(field.label)}</td><td style="padding:6px 10px;font-size:12px;font-weight:600;">${multilineHtml(text)}</td></tr>`;
+    }
+    if (row) { rows += pendingHeader + row; pendingHeader = ""; }
   });
   return `<div style="margin-top:28px;border-top:3px solid #CC2200;padding-top:20px;">
-    <h2 style="color:#0D1014;font-size:15px;margin:0 0 12px 0;font-family:Arial,sans-serif;">${escapeHtml(doc.template_name)}</h2>
+    <h2 style="color:#0D1014;font-size:15px;margin:0 0 12px 0;font-family:Arial,sans-serif;">${escapeHtml(String(doc?.template_name ?? "").trim() || "Service Checklist")}</h2>
     <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">${rows}</table>
   </div>`;
 }
@@ -674,13 +782,13 @@ export function combineEmailSections(bodyParts) {
 // $0.00 invoice: same invoice layout (header, bill-to, generator, line items,
 // totals, notes, signature) but no PAID / PAYMENT DUE line or box anywhere.
 // Line items flagged no_charge (charge_for_part:false parts) show "No charge".
-function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
+function zeroDollarInvoiceSummaryHTML({ invoice, customer, job = null }) {
   const lineItemsHTML = (invoice.line_items || []).map((item, i) => `
     <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
       <td style="padding:9px 12px;font-size:13px;">${escapeHtml(item.description)}</td>
-      <td style="padding:9px 12px;font-size:13px;text-align:center;">${escapeHtml(item.quantity)}</td>
-      <td style="padding:9px 12px;font-size:13px;text-align:right;">${item.no_charge ? "—" : fmt(item.unit_price)}</td>
-      <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600;">${item.no_charge ? "No charge" : fmt(item.total)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:center;">${fmtQty(item.quantity)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:right;">${item.no_charge ? "" : lineRate(item)}</td>
+      <td style="padding:9px 12px;font-size:13px;text-align:right;font-weight:600;">${item.no_charge ? "No charge" : fmtLine(item.total)}</td>
     </tr>`).join("");
 
   const emptyRow = `<tr><td colspan="4" style="padding:9px 12px;font-size:13px;color:#6b7280;">Service visit — no billable items</td></tr>`;
@@ -702,8 +810,8 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
           </td>
           <td style="vertical-align:top;text-align:right;">
             <p style="font-size:16px;font-weight:bold;color:#CC2200;margin:0;">INVOICE</p>
-            <p style="font-size:12px;margin:3px 0 0 0;">${escapeHtml(invoice.invoice_number)}</p>
-            <p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>
+            ${String(invoice.invoice_number ?? "").trim() ? `<p style="font-size:12px;margin:3px 0 0 0;">${escapeHtml(invoice.invoice_number)}</p>` : ""}
+            ${fmtDate(invoice.created_date) ? `<p style="font-size:11px;color:#A8B4C4;margin:2px 0 0 0;">${fmtDate(invoice.created_date)}</p>` : ""}
           </td>
         </tr>
       </table>
@@ -713,20 +821,20 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
         <td style="width:50%;vertical-align:top;padding:0 8px 0 0;">
           <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
             <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
-            <p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${escapeHtml(customer?.name || invoice.customer_name)}</p>
+            ${String(customer?.name || invoice.customer_name || "").trim() ? `<p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${escapeHtml(customer?.name || invoice.customer_name)}</p>` : ""}
             ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${escapeHtml(customer.address)}</p>` : ""}
             ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${escapeHtml(customer.phone)}</p>` : ""}
           </div>
         </td>
         <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">
-          <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
+          ${customer?.generator_model || customer?.generator_serial ? `<div style="background:#f8f9fa;border-radius:8px;padding:14px;">
             <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">GENERATOR</p>
-            <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${escapeHtml(customer?.generator_model || "—")}</p>
+            ${customer?.generator_model ? `<p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${escapeHtml(customer.generator_model)}</p>` : ""}
             ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0;">S/N: ${escapeHtml(customer.generator_serial)}</p>` : ""}
-          </div>
+          </div>` : ""}
         </td>
       </tr>
-    </table>
+    </table>${jobDetailsHTML(job)}
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
       <thead>
         <tr style="background:#0D1014;color:white;">
@@ -783,7 +891,7 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer }) {
 // has the invoice): amount, method, what's still due, the Service Summary
 // (if one was typed) and the signature if one was collected (incl. one
 // collected after completion).
-export function paymentReceiptHTML({ invoice, customer }) {
+export function paymentReceiptHTML({ invoice, customer, job = null }) {
   const first = String(customer?.name || "").trim().split(/\s+/)[0] || "there"
   const totalCents = invoiceTotalCents(invoice)
   const paidInFull = invoice.status === "paid" || (!!invoice.paid_date && invoice.status !== "partial")
@@ -793,7 +901,10 @@ export function paymentReceiptHTML({ invoice, customer }) {
       <td style="padding:6px 0;font-size:13px;color:#555;border-bottom:1px solid #eee;${strong ? "font-weight:bold;color:#0D1014;" : ""}">${label}</td>
       <td style="padding:6px 0;font-size:13px;text-align:right;border-bottom:1px solid #eee;${strong ? "font-weight:bold;color:#0D1014;" : ""}">${value}</td>
     </tr>`
-  const method = invoice.payment_method ? `${escapeHtml(fmtPaymentMethod(invoice.payment_method))}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""}` : "—"
+  // No method recorded -> the row is hidden (never "—").
+  const method = invoice.payment_method ? `${escapeHtml(fmtPaymentMethod(invoice.payment_method))}${invoice.payment_reference ? ` #${escapeHtml(invoice.payment_reference)}` : ""}` : ""
+  const paidOn = paidInFull ? fmtDate(invoice.paid_date) : ""
+  const invoiceNumber = String(invoice.invoice_number ?? "").trim()
   const signatureHTML = invoice.customer_signature
     ? `<div style="margin-top:16px;border-top:1px solid #ddd;padding-top:12px;">
          <p style="font-size:11px;color:#888;margin:0 0 8px 0;">CUSTOMER SIGNATURE</p>
@@ -805,13 +916,13 @@ export function paymentReceiptHTML({ invoice, customer }) {
     <p style="font-size:13px;color:#444;margin:0 0 18px 0;">We received your payment — thank you!</p>
     <div style="background:#0D1014;color:white;padding:16px 20px;border-radius:8px;margin-bottom:16px;">
       <p style="font-size:16px;font-weight:bold;margin:0;letter-spacing:1px;">GEN<span style="color:#E03010;">SHIELD</span> <span style="font-size:12px;font-weight:normal;color:#A8B4C4;letter-spacing:0;">· Payment received</span></p>
-      <p style="font-size:12px;color:#A8B4C4;margin:4px 0 0 0;">Invoice ${escapeHtml(invoice.invoice_number)}</p>
-    </div>
+      ${invoiceNumber ? `<p style="font-size:12px;color:#A8B4C4;margin:4px 0 0 0;">Invoice ${escapeHtml(invoiceNumber)}</p>` : ""}
+    </div>${jobDetailsHTML(job)}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
       ${row("Invoice total", fmt(totalCents / 100))}
       ${invoice.surcharge_amount > 0 ? row(surchargeLabel(), fmt(invoice.surcharge_amount)) : ""}
-      ${row("Payment method", method)}
-      ${paidInFull && invoice.paid_date ? row("Date", fmtDate(invoice.paid_date)) : ""}
+      ${method ? row("Payment method", method) : ""}
+      ${paidOn ? row("Date", paidOn) : ""}
       ${row(paidInFull ? "Paid" : "Paid so far", fmt(paid), true)}
       ${paidInFull ? row("Balance", "Paid in full ✓", true) : row("Balance due", fmt(balance), true)}
     </table>
@@ -839,9 +950,47 @@ export function jobSummaryIntroHTML({ customer, kind = "completion", attachmentL
 
 // The one customer email sent at job completion / payment: greeting +
 // attachment line + invoice inline. PDFs ride as attachments, not in the body.
-export function jobSummaryEmailHTML({ invoice, customer, kind = "completion", attachmentLabels = [], surchargeConfig = SURCHARGE_DEFAULTS }) {
-  if (kind === "receipt" && invoice) return combineEmailSections([paymentReceiptHTML({ invoice, customer })]);
+// `job` (optional) adds the job title + customer-facing description (B3); a
+// job with no invoice still shows them and its Service Summary.
+export function jobSummaryEmailHTML({ invoice, customer, job = null, kind = "completion", attachmentLabels = [], surchargeConfig = SURCHARGE_DEFAULTS }) {
+  if (kind === "receipt" && invoice) return combineEmailSections([paymentReceiptHTML({ invoice, customer, job })]);
   const intro = jobSummaryIntroHTML({ customer, kind, attachmentLabels });
-  const body = invoice ? invoiceSummaryHTML({ invoice, customer, surchargeConfig }) : "";
+  const body = invoice
+    ? invoiceSummaryHTML({ invoice, customer, job, surchargeConfig })
+    : jobDetailsHTML(job) + serviceNotesHTML(job?.invoice_notes);
   return combineEmailSections([intro + body]);
+}
+
+// "Your Protection Plan is Active" welcome email (MembershipAgreement.jsx,
+// sent when the agreement is signed outside a job). Start / expiry rows are
+// hidden when the date is unknown; never "Hi ,".
+export function membershipWelcomeEmailHTML({ customer, planName, includes = [], start, expiry, discountPct }) {
+  const longDate = (v) => { const d = validDate(v); return d ? d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "" }
+  const startStr = longDate(start)
+  const expiryStr = longDate(expiry)
+  const plan = String(planName ?? "").trim()
+  const items = (includes || []).filter(i => String(i ?? "").trim())
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+            <div style="background:#0D1014;padding:22px 24px;border-radius:8px 8px 0 0;">
+              <h1 style="color:white;margin:0;font-size:18px;">GEN<span style="color:#E03010;">SHIELD</span></h1>
+              <p style="color:#A8B4C4;margin:3px 0 0 0;font-size:12px;">Protection Plan Active</p>
+            </div>
+            <div style="background:#f8f9fa;padding:22px 24px;border-radius:0 0 8px 8px;">
+              <p style="font-size:14px;color:#1a1a1a;">Hi ${escapeHtml(greetingName(customer))},</p>
+              <p style="font-size:13px;color:#444;margin-top:8px;">Thank you for signing up for the <strong>${escapeHtml(plan || "GenShield Protection Plan")}</strong>. Your agreement is now active.</p>
+              <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin:14px 0;">
+                ${plan ? `<p style="margin:0 0 6px 0;font-size:13px;"><strong>Plan:</strong> ${escapeHtml(plan)}</p>` : ""}
+                ${startStr ? `<p style="margin:0 0 6px 0;font-size:13px;"><strong>Start Date:</strong> ${startStr}</p>` : ""}
+                ${expiryStr ? `<p style="margin:0 0 6px 0;font-size:13px;"><strong>Expiration:</strong> ${expiryStr}</p>` : ""}
+                <p style="margin:0 0 8px 0;font-size:13px;"><strong>Generator:</strong> ${escapeHtml(customer?.generator_model || "Your generator")}${customer?.generator_serial ? ` (S/N: ${escapeHtml(customer.generator_serial)})` : ""}</p>
+                ${items.length ? `<p style="margin:0 0 4px 0;font-size:13px;font-weight:bold;">What's included:</p>
+                <ul style="margin:0;padding-left:18px;font-size:13px;color:#444;">${items.map(i => `<li style="margin-bottom:3px;">${escapeHtml(i)}</li>`).join("")}</ul>` : ""}
+              </div>
+              ${discountPct ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:11px;margin-bottom:14px;">
+                <p style="margin:0;font-size:13px;color:#166534;">✓ Your ${escapeHtml(discountPct)} member discount will be automatically applied to all qualifying services.</p>
+              </div>` : ""}
+              <p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are free on service calls during normal business hours, during the agreement term (not on emergency or after-hours calls).</p>
+              <p style="font-size:12px;color:#666;margin-top:16px;">Thank you for choosing GenShield.</p>
+            </div>
+          </div>`
 }
