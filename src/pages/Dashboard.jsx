@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
 import { formatTime, formatDateTime } from "@/lib/formatTime";
 import { sortJobs, isJobOverdue, etDateKey } from "@/lib/utils/jobSort";
+import { splitActive } from "@/lib/jobWindows";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
 import { isManaged } from "@/lib/utils/partsManaged";
@@ -186,7 +187,10 @@ export default function Dashboard() {
     etDateKey(j.scheduled_date) === todayKey && ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)
   ));
 
-  const activeJobs = sortJobs(jobs.filter(j => ["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)));
+  // Current workload only: jobs more than UPCOMING_AFTER_DAYS out (e.g. next
+  // year's renewal) are left out of the Active Jobs count and list; they are
+  // on Jobs > Upcoming (src/lib/jobWindows.js).
+  const { active: activeJobs } = splitActive(jobs);
   const completedJobs = jobs.filter(j => j.status === "completed" || j.status === "invoiced");
   const totalRevenue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.total || 0), 0);
   const totalProfit = completedJobs.reduce((s, j) => s + (j.profit || 0), 0);
