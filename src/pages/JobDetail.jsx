@@ -2269,7 +2269,11 @@ export default function JobDetail() {
       </Dialog>
 
       {/* The job's main action, just above the tab bar on every job tab. */}
-      <BottomActionBar>
+      {/* The job's main action lives on its Overview tab only (Run 8, B2): on
+          Work / Docs / Photos / History / Notes / Items it floated over lists
+          and inputs. Overview shows the status, totals and Service Summary the
+          action depends on; the other tabs are for adding things. */}
+      {activeJobTab === "overview" && <BottomActionBar>
         {!isClosed && job.status === "scheduled" && (
           <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-700 hover:bg-cyan-800" disabled={statusGuard.busy}
             onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
@@ -2298,7 +2302,7 @@ export default function JobDetail() {
             <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
           </Button>
         )}
-      </BottomActionBar>
+      </BottomActionBar>}
     </div>
   );
 }
