@@ -639,13 +639,15 @@ export default function DocumentFill() {
       <div data-fixed-bottom="" className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border safe-bottom z-50 no-print">
         {doc.status !== "completed" ? (
           <div className="flex gap-2 max-w-lg mx-auto">
-            <Button type="button" variant="ghost" className="flex-1 rounded-xl h-12"
+            {/* min-w-0 + wrapping: on a 320 px iPhone SE the two labels didn't fit
+                and "Submit & Complete" was cut off at the edge (Run 8). */}
+            <Button type="button" variant="ghost" className="flex-1 min-w-0 rounded-xl h-12 px-2 whitespace-normal leading-tight"
               onClick={handleSave} disabled={saveMutation.isPending}>
-              Save & Continue Later
+              Save for Later
             </Button>
-            <Button type="button" className="flex-1 rounded-xl h-12 bg-green-600 hover:bg-green-700"
+            <Button type="button" className="flex-1 min-w-0 rounded-xl h-12 px-2 whitespace-normal leading-tight bg-green-600 hover:bg-green-700"
               onClick={handleComplete} disabled={saveMutation.isPending}>
-              <CheckCircle2 className="w-4 h-4 mr-1" /> Submit & Complete
+              <CheckCircle2 className="w-4 h-4 mr-1 shrink-0" /> Submit & Complete
             </Button>
           </div>
         ) : (
