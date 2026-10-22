@@ -4,33 +4,32 @@ import { computeJobFinancials } from "@/lib/utils/jobFinancials";
 import { computeCharge } from "@/lib/utils/paymentAmounts";
 import { invoiceSummaryHTML } from "@/lib/emailTemplates";
 
-// Batch 3 Item 3: the surcharge equals Stripe's fee on the amount actually
-// charged (NJ P.L. 2023, c.146 caps it at processing cost). Defaults 2.7% + $0.05.
-// s = (0.027 x T + 0.05) / 0.973, rounded; minus 1 cent if above 0.027 x (T+s) + 0.05.
-// Worked by hand (cents):
-//  $16:      (43.2 + 5)/0.973   = 49.5375 -> 50; cap 0.027x1650+5 = 49.55 -> over -> 49 ($0.49)
-//  $100:     (270 + 5)/0.973    = 282.631 -> 283; cap 282.641 -> over -> 282 ($2.82)
-//  $239.37:  (646.299 + 5)/0.973= 669.372 -> 669; cap 669.362 ok   ($6.69)
-//  $500:     (1350 + 5)/0.973   = 1392.600 -> 1393; cap 1392.611 -> over -> 1392 ($13.92)
-//  $1,000:   (2700 + 5)/0.973   = 2780.062 -> 2780; cap 2780.060 ok ($27.80)
-//  $3,499:   (9447.3 + 5)/0.973 = 9714.594 -> 9715; cap 9714.605 -> over -> 9714 ($97.14)
-// Stripe then keeps round(0.027 x charge + 5c): the business nets T (0c) or T - 1c.
-const SIX = [
-  { T: 1600, s: 49, fee: 50 },
-  { T: 10000, s: 282, fee: 283 },
-  { T: 23937, s: 669, fee: 669 },
-  { T: 50000, s: 1392, fee: 1393 },
-  { T: 100000, s: 2780, fee: 2780 },
-  { T: 349900, s: 9714, fee: 9715 },
+// Batch 3 Item 3, Run 9: the surcharge equals Stripe's ROUNDED fee on the
+// amount actually charged (NJ P.L. 2023, c.146 caps it at processing cost).
+// Defaults 2.7% + $0.05. s = the largest s with s <= round(0.027 x (T+s) + 5c).
+// Worked by hand (cents), with the check that one cent more is over the fee:
+//  $514.47 (Alfred): 0.027x52880 + 5 = 1432.76 -> 1433 = s ok; s+1: 1432.787 -> 1433 < 1434. Total $528.80
+//  $16:      0.027x1650   + 5 = 49.55    -> 50   ok; s+1: 49.577   -> 50   < 51
+//  $100:     0.027x10283  + 5 = 282.641  -> 283  ok; s+1: 282.668  -> 283  < 284
+//  $239.37:  0.027x24606  + 5 = 669.362  -> 669  ok; s+1: 669.389  -> 669  < 670
+//  $500:     0.027x51393  + 5 = 1392.611 -> 1393 ok; s+1: 1392.638 -> 1393 < 1394
+//  $1,000:   0.027x102780 + 5 = 2780.06  -> 2780 ok; s+1: 2780.087 -> 2780 < 2781
+//  $3,499:   0.027x359615 + 5 = 9714.605 -> 9715 ok; s+1: 9714.632 -> 9715 < 9716
+// Stripe keeps exactly the surcharge: the business nets exactly T.
+const CASES = [
+  { T: 51447, s: 1433 },
+  { T: 1600, s: 50 },
+  { T: 10000, s: 283 },
+  { T: 23937, s: 669 },
+  { T: 50000, s: 1393 },
+  { T: 100000, s: 2780 },
+  { T: 349900, s: 9715 },
 ];
-describe("credit card surcharge = exact Stripe fee", () => {
-  SIX.forEach(({ T, s: sc, fee }) => it(`T=$${T / 100}: surcharge ${sc}c, never above the fee, nets T within 1c`, () => {
+describe("credit card surcharge = Stripe's rounded fee", () => {
+  CASES.forEach(({ T, s: sc }) => it(`T=$${T / 100}: surcharge ${sc}c = Stripe's rounded fee, nets exactly T`, () => {
     expect(feeSurchargeCents(T)).toBe(sc);
-    expect(sc).toBeLessThanOrEqual(0.027 * (T + sc) + 5);
-    expect(processingFeeCents(T + sc)).toBe(fee);
-    const net = T + sc - processingFeeCents(T + sc);
-    expect(T - net).toBeGreaterThanOrEqual(0);
-    expect(T - net).toBeLessThanOrEqual(1);
+    expect(processingFeeCents(T + sc)).toBe(sc);
+    expect(processingFeeCents(T + sc + 1)).toBeLessThan(sc + 1); // one cent more would be over the fee
     // invoice path + in-app card (server) use the same function
     const inv = { parts_total: T / 100, labor_total: 0, tax_amount: 0, total: T / 100, status: "sent" };
     expect(surchargeFor(inv)).toBe(sc / 100);
@@ -38,13 +37,34 @@ describe("credit card surcharge = exact Stripe fee", () => {
     expect(computeCharge(inv, "debit").surchargeCents).toBe(0);
   }));
 
-  it("never exceeds the fee for any total from 1c to $5,000", () => {
+  it("Alfred Weller: $514.47 -> $14.33, total $528.80", () => {
+    const inv = { parts_total: 0, labor_total: 514.47, tax_amount: 0, status: "sent" }; // his balance owed
+    expect(surchargeFor(inv)).toBe(14.33);
+    expect(Math.round((514.47 + surchargeFor(inv)) * 100)).toBe(52880);
+  });
+
+  it("for every total from 1c to $5,000: equals the rounded fee, and 1c more would be over it", () => {
     const bad = [];
     for (let T = 1; T <= 500000; T++) {
       const sc = feeSurchargeCents(T);
-      if (sc > 0.027 * (T + sc) + 5 + 1e-9 || T + sc - processingFeeCents(T + sc) < T - 1) bad.push(T);
+      if (sc !== processingFeeCents(T + sc) || sc + 1 <= processingFeeCents(T + sc + 1)) bad.push(T);
     }
     expect(bad).toEqual([]);
+  });
+
+  it("other fee settings (2.9% + 30c) hold the same rule", () => {
+    const cfg = surchargeConfig({ card_surcharge_rate: "2.9", card_surcharge_fixed: "0.30" });
+    const bad = [];
+    for (let T = 1; T <= 200000; T += 7) {
+      const sc = feeSurchargeCents(T, cfg);
+      if (sc !== processingFeeCents(T + sc, cfg)) bad.push(T);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("a fee that lands on exactly half a cent rounds up, as written", () => {
+    // 0.027 x 1500 + 5 = 45.5 exactly (floating point says 45.49999…)
+    expect(processingFeeCents(1500)).toBe(46);
   });
 
   it("works on the final total after discounts and NJ tax", () => {
@@ -61,8 +81,8 @@ describe("credit card surcharge = exact Stripe fee", () => {
 
   it("taxable setting adds NJ tax on the surcharge itself", () => {
     const cfg = surchargeConfig([{ key: "card_surcharge_taxable", value: "true" }]);
-    // $100: 2.82 + tax 0.1868 -> 0.19 = 3.01
-    expect(surchargeFor({ parts_total: 100, labor_total: 0, tax_amount: 0, status: "sent" }, cfg)).toBe(3.01);
+    // $100: 2.83 + tax 0.1875 -> 0.19 = 3.02
+    expect(surchargeFor({ parts_total: 100, labor_total: 0, tax_amount: 0, status: "sent" }, cfg)).toBe(3.02);
   });
 
   it("config: defaults, percent or fraction, bad values fall back", () => {
@@ -79,7 +99,7 @@ describe("credit card surcharge = exact Stripe fee", () => {
   });
 
   it("re-sync recomputes an existing surcharge, never adds one, skips paid", () => {
-    const existing = { parts_total: 100, labor_total: 0, tax_amount: 0, status: "sent", surcharge_amount: 2.82 };
+    const existing = { parts_total: 100, labor_total: 0, tax_amount: 0, status: "sent", surcharge_amount: 2.83 };
     const fresh = { parts_total: 1000, labor_total: 0, tax_amount: 0 };
     expect(withResyncedSurcharge(fresh, existing).surcharge_amount).toBe(27.8);
     expect(withResyncedSurcharge(fresh, { ...existing, surcharge_amount: 0 }).surcharge_amount).toBeUndefined();

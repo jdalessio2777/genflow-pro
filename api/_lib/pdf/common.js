@@ -65,8 +65,9 @@ export function sanitizeFor(charset, value) {
   return out.replace(/\r/g, '');
 }
 
+// '' when missing (callers hide the row / line — never a "-" placeholder).
 export function fmtDateLong(iso, tz = 'America/New_York') {
-  if (!iso) return '-';
+  if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: tz });
@@ -184,12 +185,18 @@ export class Layout {
   }
 
   // Two-column key/value grid in a light box.
-  infoBox(rows, { labelWidth = 110 } = {}) {
+  // A long value (e.g. a 60-line job description, Run 8) is cut at maxLines
+  // with "…": the box is drawn in one piece and must fit on a page.
+  infoBox(rows, { labelWidth = 110, maxLines = 12 } = {}) {
     const size = 9.5;
     const lh = size + 4;
     const valueWidth = this.contentWidth - labelWidth - 20;
     const prepared = rows.filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
-      .map(([k, v]) => [k, this.wrap(v, size, valueWidth, this.bold)]);
+      .map(([k, v]) => {
+        const ls = this.wrap(v, size, valueWidth, this.bold);
+        return [k, ls.length > maxLines ? [...ls.slice(0, maxLines - 1), `${ls[maxLines - 1]} …`] : ls];
+      });
+    if (!prepared.length) return; // no empty box
     const height = prepared.reduce((s, [, ls]) => s + ls.length * lh, 0) + 16;
     this.ensure(height);
     this.page.drawRectangle({ x: PAGE.margin, y: this.y - height, width: this.contentWidth, height, color: BRAND.light });

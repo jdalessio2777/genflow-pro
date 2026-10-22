@@ -7,7 +7,8 @@ import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { markDraftsSaved } from "@/lib/textDrafts";
 import BottomActionBar from "@/components/layout/BottomActionBar";
 import { afterSheetsClose } from "@/lib/sheetHistory";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -46,12 +47,14 @@ import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/li
 import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
 import { useBack, goBack } from "@/hooks/useBack";
 import { useUrlState } from "@/hooks/useUrlState";
-import { confirmationEmailHTML } from "@/lib/emailTemplates";
+import { confirmationEmailHTML, fmtPaymentMethod } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
 import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 import JobSignatureButton from "@/components/signature/JobSignatureButton";
 import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
+import ApplyMemberPricingDialog from "@/components/jobs/ApplyMemberPricingDialog";
+import { planMemberRepricing, canRepriceJob } from "@/lib/memberRepricing";
 import { estimateMinutes, formatEstimate } from "@/lib/jobDuration";
 
 // One attachment row in the Complete Job dialog: checkbox-style toggle,
@@ -77,8 +80,11 @@ function AttachmentToggle({ label, on, onToggle }) {
   );
 }
 
-function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, isSaving, onCollectPayment, signatureSlot }) {
-  const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total } = computeJobFinancials(parts, labor);
+function LiveTotalBar({ parts, labor, surcharge = 0, paidLabel = null, generatorNotes, onGeneratorNotesChange, savedGeneratorNotes, notesDraftKey, notesReady, isSaving, onCollectPayment, signatureSlot }) {
+  const { partsTotal, laborGross, discountLines, subtotal, taxAmount, total: jobTotal } = computeJobFinancials(parts, labor);
+  // Part E: the invoice's credit card surcharge is part of what the customer
+  // pays, so the job's total shows it too (same figure as every customer copy).
+  const total = Math.round((jobTotal + (surcharge > 0 ? surcharge : 0)) * 100) / 100;
 
   return (
     <Card className="p-4 bg-gradient-to-br from-primary/8 to-primary/4 border-primary/15 shadow-sm">
@@ -117,8 +123,14 @@ function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, is
             <span className="font-medium">{formatCurrency(taxAmount)}</span>
           </div>
         )}
+        {surcharge > 0 && (
+          <div className="flex items-center justify-between text-sm" data-testid="job-surcharge-line">
+            <span className="text-muted-foreground">Credit card surcharge</span>
+            <span className="font-medium">{formatCurrency(surcharge)}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between pt-2 mt-1 border-t border-primary/10">
-          <span className="text-sm font-semibold">Total</span>
+          <span className="text-sm font-semibold">Total{paidLabel ? <span className="ml-2 text-xs font-bold text-green-700 dark:text-green-400" data-testid="job-paid-label">{paidLabel}</span> : null}</span>
           <span className="text-2xl font-bold text-primary tracking-tight">{formatCurrency(total)}</span>
         </div>
       </div>
@@ -127,11 +139,16 @@ function LiveTotalBar({ parts, labor, generatorNotes, onGeneratorNotesChange, is
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
           Generator Notes (tech only)
         </p>
-        <Textarea
+        <LongTextField
           value={generatorNotes || ""}
-          onChange={e => onGeneratorNotesChange?.(e.target.value)}
-          className="text-sm rounded-xl resize-none border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/20 dark:text-gray-100 min-h-[56px]"
-          rows={2}
+          onChange={v => onGeneratorNotesChange?.(v)}
+          savedValue={savedGeneratorNotes}
+          draftKey={notesDraftKey}
+          ready={notesReady}
+          guard={false}
+          title="Generator Notes"
+          rows={5}
+          className="border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/20 dark:text-gray-100"
           placeholder="Fault codes, battery voltage, oil condition..."
         />
       </div>
@@ -171,6 +188,7 @@ export default function JobDetail() {
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false); // B1
   const [nextDate, setNextDate] = useState("");
   const notesInitialized = useRef(false);
+  const [notesReady, setNotesReady] = useState(false); // drafts restore only after the saved notes are in the boxes
   const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
   const [workSubTab, setWorkSubTab] = useState("parts");
   const [flatFolder, setFlatFolder] = useState(null);
@@ -183,6 +201,7 @@ export default function JobDetail() {
   const [customerExpanded, setCustomerExpanded] = useState(false);
   const [titleExpanded, setTitleExpanded] = useState(false);
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
+  const [memberPricingOpen, setMemberPricingOpen] = useState(false); // B5
   // Completing with an empty Service Summary: ask once (Add / Skip); never blocks.
   const [summaryAskOpen, setSummaryAskOpen] = useState(false);
   const summarySkipped = useRef(false);
@@ -241,6 +260,7 @@ export default function JobDetail() {
       setInvoiceNotes(job.invoice_notes || "");
       setGeneratorNotes(job.generator_notes || "");
       notesInitialized.current = true;
+      setNotesReady(true);
     }
     if (job?.on_site_time) setOptimisticOnSiteTime(null);
   }, [job]);
@@ -555,6 +575,7 @@ export default function JobDetail() {
       snap.choices = Object.fromEntries(stockParts.map(p => [p.id, choiceFor(p)]));
       if (!(await handleStatusChange("canceled", { cancel_reason: cancelReason }, { retry: () => statusGuard.run(attempt) }))) return;
       snap.canceled = true;
+      markDraftsSaved(`job:${id}:cancel_reason`);
       setCancelOpen(false);
       removeJobFromCalendar({ job }); // never throws or blocks
     }
@@ -996,6 +1017,10 @@ export default function JobDetail() {
   // Expired plans get no discount (D-01): one rule, src/lib/utils/membership.js.
   const memberDiscountRate = memberDiscountRateFor(customer);
   const isMember = memberDiscountRate < 1.0;
+  // B5: a member's lines added before they signed are still at full price.
+  const memberRepricing = isMember && canRepriceJob(job)
+    ? planMemberRepricing({ parts, labor, catalogParts, rates: laborRates, memberDiscountRate })
+    : null;
   const hasPendingAgreement = labor.some(l => l.requires_agreement);
   const pendingAgreementLine = labor.find(l => l.requires_agreement);
   // Exactly $0.00 (integer cents) on live job rows — never prompt to collect.
@@ -1281,12 +1306,19 @@ export default function JobDetail() {
               {/* ── Service Summary (customer-facing; jobs.invoice_notes) ── */}
               <Card className="px-4 pt-3.5 pb-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Service Summary</p>
-                <Textarea
-                  ref={serviceSummaryRef}
+                {/* Autosaves (1.2 s) — the local draft covers a crash before that. */}
+                <LongTextField
+                  textareaRef={serviceSummaryRef}
                   value={invoiceNotes}
-                  onChange={e => handleNotesChange(e.target.value)}
-                  className="text-sm rounded-xl resize-none border-border bg-muted/20 min-h-[64px]"
-                  rows={3}
+                  onChange={handleNotesChange}
+                  savedValue={job.invoice_notes || ""}
+                  draftKey={`job:${id}:invoice_notes`}
+                  ready={notesReady}
+                  guard={false}
+                  title="Service Summary"
+                  rows={10}
+                  data-testid="service-summary"
+                  className="border-border bg-muted/20"
                   placeholder="Work performed — shown to the customer on the invoice..."
                 />
               </Card>
@@ -1295,12 +1327,34 @@ export default function JobDetail() {
               <LiveTotalBar
                 parts={parts}
                 labor={labor}
+                surcharge={Number(existingInvoice?.surcharge_amount) || 0}
+                paidLabel={existingInvoice?.status === "paid" && existingInvoice?.payment_method !== "no_charge" ? `PAID · ${fmtPaymentMethod(existingInvoice.payment_method)}` : null}
                 generatorNotes={generatorNotes}
                 onGeneratorNotesChange={handleGeneratorNotesUpdate}
+                savedGeneratorNotes={job.generator_notes || ""}
+                notesDraftKey={`job:${id}:generator_notes`}
+                notesReady={notesReady}
                 onCollectPayment={jobIsOpenOnSite && !isNoChargeJob && !invoicePaidInFull ? () => handleCollectPayment() : undefined}
                 signatureSlot={jobIsOpenOnSite && !isNoChargeJob ? signatureButton : null}
                 isSaving={updateJob.isPending}
               />
+
+              {/* B5: member pricing not yet on lines added before signing */}
+              {memberRepricing?.updates.length > 0 && (
+                <Card className="p-3.5 border-emerald-200 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/20" data-testid="member-pricing-card">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">MEMBER PRICING NOT APPLIED</p>
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-0.5">
+                        {memberRepricing.updates.length} item{memberRepricing.updates.length === 1 ? "" : "s"} still at full price · save {formatCurrency(memberRepricing.savings)}
+                      </p>
+                    </div>
+                    <Button className="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 shrink-0" data-testid="apply-member-pricing-open" onClick={() => setMemberPricingOpen(true)}>
+                      Apply member pricing
+                    </Button>
+                  </div>
+                </Card>
+              )}
 
               {/* Service Agreement status card */}
               {hasPendingAgreement && (
@@ -1449,7 +1503,17 @@ export default function JobDetail() {
                       </DialogTrigger>
                       <DialogContent className="max-w-sm">
                         <DialogHeader><DialogTitle>Cancel Job</DialogTitle></DialogHeader>
-                        <Textarea placeholder="Reason for cancellation..." value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+                        <LongTextField
+                          value={cancelReason}
+                          onChange={setCancelReason}
+                          savedValue=""
+                          draftKey={cancelOpen ? `job:${id}:cancel_reason` : null}
+                          ready={cancelOpen}
+                          guard={false}
+                          title="Reason for cancellation"
+                          rows={4}
+                          placeholder="Reason for cancellation..."
+                        />
                         {stockParts.length > 0 && (
                           <div className="space-y-2" data-testid="cancel-parts">
                             <p className="text-sm font-semibold">Were any of these used?</p>
@@ -1858,11 +1922,16 @@ export default function JobDetail() {
                     <div className="flex-1">
                       <p className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider mb-1.5">Generator Notes (tech only)</p>
                       {!isClosed ? (
-                        <Textarea
+                        <LongTextField
                           value={generatorNotes}
-                          onChange={e => handleGeneratorNotesUpdate(e.target.value)}
-                          className="text-sm rounded-xl resize-none border-blue-200 dark:border-blue-700 bg-white/60 dark:bg-gray-800/60 dark:text-gray-100 min-h-[70px]"
-                          rows={3}
+                          onChange={handleGeneratorNotesUpdate}
+                          savedValue={job.generator_notes || ""}
+                          draftKey={`job:${id}:generator_notes`}
+                          ready={notesReady}
+                          guard={false}
+                          title="Generator Notes"
+                          rows={5}
+                          className="border-blue-200 dark:border-blue-700 bg-white/60 dark:bg-gray-800/60 dark:text-gray-100"
                           placeholder="Fault codes, battery voltage, oil condition, anything for next tech..."
                         />
                       ) : (
@@ -2188,6 +2257,7 @@ export default function JobDetail() {
         </DialogContent>
       </Dialog>
 
+      <ApplyMemberPricingDialog open={memberPricingOpen} onOpenChange={setMemberPricingOpen} jobId={id} memberDiscountRate={memberDiscountRate} />
       <ScheduleJobSheet
         open={scheduleSheetOpen}
         onOpenChange={setScheduleSheetOpen}
@@ -2235,7 +2305,11 @@ export default function JobDetail() {
       </Dialog>
 
       {/* The job's main action, just above the tab bar on every job tab. */}
-      <BottomActionBar>
+      {/* The job's main action lives on its Overview tab only (Run 8, B2): on
+          Work / Docs / Photos / History / Notes / Items it floated over lists
+          and inputs. Overview shows the status, totals and Service Summary the
+          action depends on; the other tabs are for adding things. */}
+      {activeJobTab === "overview" && <BottomActionBar>
         {!isClosed && job.status === "scheduled" && (
           <Button className="w-full rounded-xl gap-1.5 h-11 bg-cyan-700 hover:bg-cyan-800" disabled={statusGuard.busy}
             onClick={() => statusGuard.run(() => handleStatusChange("dispatched", { dispatched_time: new Date().toISOString() }))}>
@@ -2264,7 +2338,7 @@ export default function JobDetail() {
             <DollarSign className="w-4 h-4" /> Collect Payment Now{invoicePartlyPaid ? ` — ${formatCurrency(balanceDue)} due` : ""}
           </Button>
         )}
-      </BottomActionBar>
+      </BottomActionBar>}
     </div>
   );
 }

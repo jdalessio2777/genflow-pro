@@ -1,4 +1,6 @@
 import { useParams } from "react-router-dom";
+import ApplyMemberPricingDialog from "@/components/jobs/ApplyMemberPricingDialog";
+import { memberDiscountRateFor } from "@/lib/utils/membership";
 import { useBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
@@ -8,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
-import { escapeHtml } from "@/lib/utils/escapeHtml";
+import { membershipWelcomeEmailHTML } from "@/lib/emailTemplates";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, CheckCircle2, Loader2, Shield } from "lucide-react";
@@ -38,6 +40,10 @@ export default function MembershipAgreement() {
   // arriving from a job to sign) opens the plan -> terms -> sign flow.
   const [renewing, setRenewing] = useState(!!fromJobId);
   const [agreed, setAgreed] = useState(false);
+  // B5: right after signing from a job, offer member pricing on the job's
+  // existing items (Apply / Not now). "Not now" leaves an "Apply member
+  // pricing" action on the job.
+  const [askMemberPricing, setAskMemberPricing] = useState(false);
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["customer", id],
@@ -139,35 +145,14 @@ export default function MembershipAgreement() {
     if (customer?.email && !jobLinked) {
       const plan = PLANS[selectedPlan];
       const planName = selectedPlan === "semi_annual" ? "Sentinel Plan (Semi-Annual $575/yr plus NJ sales tax)" : "Guardian Plan (Annual $325/yr plus NJ sales tax)";
-      const expiryStr = expiry.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-      const startStr = start.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       try {
         await integrationsCore.SendEmailWithRetry({
           to: customer.email,
           subject: `Your Protection Plan is Active — ${planName}`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-            <div style="background:#0D1014;padding:22px 24px;border-radius:8px 8px 0 0;">
-              <h1 style="color:white;margin:0;font-size:18px;">GEN<span style="color:#E03010;">SHIELD</span></h1>
-              <p style="color:#A8B4C4;margin:3px 0 0 0;font-size:12px;">Protection Plan Active</p>
-            </div>
-            <div style="background:#f8f9fa;padding:22px 24px;border-radius:0 0 8px 8px;">
-              <p style="font-size:14px;color:#1a1a1a;">Hi ${escapeHtml(customer.name)},</p>
-              <p style="font-size:13px;color:#444;margin-top:8px;">Thank you for signing up for the <strong>${escapeHtml(planName)}</strong>. Your agreement is now active.</p>
-              <div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin:14px 0;">
-                <p style="margin:0 0 6px 0;font-size:13px;"><strong>Plan:</strong> ${escapeHtml(planName)}</p>
-                <p style="margin:0 0 6px 0;font-size:13px;"><strong>Start Date:</strong> ${startStr}</p>
-                <p style="margin:0 0 6px 0;font-size:13px;"><strong>Expiration:</strong> ${expiryStr}</p>
-                <p style="margin:0 0 8px 0;font-size:13px;"><strong>Generator:</strong> ${escapeHtml(customer.generator_model || "Your generator")}${customer.generator_serial ? ` (S/N: ${escapeHtml(customer.generator_serial)})` : ""}</p>
-                <p style="margin:0 0 4px 0;font-size:13px;font-weight:bold;">What's included:</p>
-                <ul style="margin:0;padding-left:18px;font-size:13px;color:#444;">${plan.includes.map(i => `<li style="margin-bottom:3px;">${i}</li>`).join("")}</ul>
-              </div>
-              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:11px;margin-bottom:14px;">
-                <p style="margin:0;font-size:13px;color:#166534;">✓ Your ${selectedPlan === "semi_annual" ? "15%" : "10%"} member discount will be automatically applied to all qualifying services.</p>
-              </div>
-              <p style="font-size:13px;color:#444;">Your first 30 minutes of diagnostic labor are free on service calls during normal business hours, during the agreement term (not on emergency or after-hours calls).</p>
-              <p style="font-size:12px;color:#666;margin-top:16px;">Thank you for choosing GenShield.</p>
-            </div>
-          </div>`,
+          html: membershipWelcomeEmailHTML({
+            customer, planName, includes: plan?.includes || [], start, expiry,
+            discountPct: selectedPlan === "semi_annual" ? "15%" : "10%",
+          }),
         });
         await db.Customer.update(customer.id, { membership_send_failed: false });
       } catch (e) {
@@ -196,7 +181,8 @@ export default function MembershipAgreement() {
     toast.success("Membership activated!");
     if (fromJobId) {
       queryClient.invalidateQueries({ queryKey: ["job-customer"] });
-      toast.success("Discount active — applies to new items added from here");
+      toast.success("Membership active — member discount is on");
+      setAskMemberPricing(true);
     }
   };
 
@@ -437,6 +423,15 @@ export default function MembershipAgreement() {
             <Button className="w-full rounded-xl h-12" onClick={() => goBack()}>
               {fromJobId ? "Back to Job" : "Back to Customer"}
             </Button>
+            {fromJobId && (
+              <ApplyMemberPricingDialog
+                open={askMemberPricing}
+                onOpenChange={setAskMemberPricing}
+                jobId={fromJobId}
+                memberDiscountRate={memberDiscountRateFor({ membership_plan: selectedPlan, membership_signed: true })}
+                afterSigning
+              />
+            )}
           </div>
         )}
 

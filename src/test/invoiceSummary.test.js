@@ -15,8 +15,17 @@ describe('invoiceSummaryHTML — every invoice that is not exactly $0.00 is byte
       expect(invoiceSummaryHTML({ invoice, customer: goldenCustomer })).toBe(golden[name])
     })
   }
-  it('no_customer_unpaid', () => {
-    expect(invoiceSummaryHTML({ invoice: goldenCases.unpaid, customer: null })).toBe(golden.no_customer_unpaid)
+  // A6 (customer-copy audit): with no customer record the golden printed a
+  // "—" generator placeholder. The only change allowed vs the golden: that
+  // box is labelled PAYMENT and the dash line is gone. Everything else stays
+  // byte-identical.
+  it('no_customer_unpaid (golden minus the "—" generator placeholder)', () => {
+    const generatorDash = 'GENERATOR</p>\n            <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">—</p>'
+    expect(golden.no_customer_unpaid).toContain(generatorDash)
+    const expected = golden.no_customer_unpaid.replace(generatorDash, 'PAYMENT</p>\n            ')
+    const html = invoiceSummaryHTML({ invoice: goldenCases.unpaid, customer: null })
+    expect(html).toBe(expected)
+    expect(html).not.toContain('>—<')
   })
   it('golden fixture still covers paid and unpaid cases', () => {
     expect(golden.unpaid).toContain('UNPAID — $306.60 DUE')
@@ -158,7 +167,7 @@ describe('jobSummaryEmailHTML', () => {
   it('combined email states PAID + method, UNPAID + amount, or partial + balance (Item 1c)', () => {
     const paid = jobSummaryEmailHTML({ invoice: { ...goldenCases.paid_stripe_surcharge, payment_method: 'stripe_app' }, customer: goldenCustomer })
     expect(paid).toContain('PAID — ')
-    expect(paid).toContain('(Card)')
+    expect(paid).toContain('(Card (Stripe App))')
     expect(paid).toContain('Credit card surcharge')
     const unpaid = jobSummaryEmailHTML({ invoice: goldenCases.unpaid, customer: goldenCustomer })
     expect(unpaid).toContain('UNPAID — AMOUNT DUE: $306.60')

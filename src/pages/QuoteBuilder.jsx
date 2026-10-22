@@ -8,7 +8,12 @@ import { quoteEmailHTML } from "@/lib/emailTemplates";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SERVICE_TYPES, inferServiceType } from "@/lib/jobTypes";
+import { withQuoteJobType } from "@/lib/quoteJobTypeColumn";
+import { markDraftsSaved } from "@/lib/textDrafts";
 import PageHeader from "@/components/layout/PageHeader";
 import { Search, UserPlus, X, Plus, Trash2, Send, Loader2, Package, Clock, Zap, Wrench, ChevronLeft } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
@@ -42,6 +47,8 @@ export default function QuoteBuilder() {
   const [customLine, setCustomLine] = useState({ description: "", amount: "" });
   const [notes, setNotes] = useState("");
   const [scopeNotes, setScopeNotes] = useState("");
+  // Service Type (optional, A5): follows the lines until the tech picks one.
+  const [pickedType, setPickedType] = useState(null); // null = not touched, "" = none
   const [sending, setSending] = useState(false);
 
   const { data: customers = [] } = useQuery(customersListQuery("name"));
@@ -70,6 +77,7 @@ export default function QuoteBuilder() {
   // Same function as job/invoice totals: NJ tax included in Total Due (H-3).
   const { subtotal, taxAmount, total } = computeQuoteTotals(pricedLines);
   const savings = memberSavings(lineItems, memberDiscountRate);
+  const serviceType = pickedType ?? (inferServiceType(lineItems.map(l => l.base_description)) || "");
 
   const addPart = (p) => addLine({
     // Catalog sale price lives in parts.default_price (there is no parts.price column).
@@ -109,7 +117,7 @@ export default function QuoteBuilder() {
   const sendMutation = useMutation({
     mutationFn: async () => {
       // 1. Create the quote row
-      const quote = await db.Quote.create({
+      const quote = await db.Quote.create(await withQuoteJobType({
         customer_id: customerId || null,
         customer_name: recipientName || null,
         prospect_name: customerId ? null : prospect.name,
@@ -119,7 +127,7 @@ export default function QuoteBuilder() {
         status: "draft",
         notes: notes || null,
         scope_notes: scopeNotes.trim() || null,
-      });
+      }, serviceType || null));
 
       // 2. Attach line items
       await Promise.all(pricedLines.map(l => db.QuoteLineItem.create({
@@ -143,7 +151,7 @@ export default function QuoteBuilder() {
       const recipientEmail = selectedCustomer?.email || prospect.email;
       const emailLineItems = pricedLines.map(l => ({
         description: l.description,
-        qty: l.type === "part" ? `×${l.quantity}` : "—",
+        qty: l.type === "part" ? `×${l.quantity}` : "",
         amount: l.total_price,
       }));
 
@@ -152,7 +160,8 @@ export default function QuoteBuilder() {
         subject: `Your Service Quote — GenShield Generator Service`,
         html: quoteEmailHTML({
           customer: customerForEmail,
-          job: { id: quote.id, job_type: null },
+          // Service Type row only when one is set (A5/A6).
+          job: { id: quote.id, job_type: serviceType || null },
           lineItems: emailLineItems,
           subtotal,
           tax: taxAmount,
@@ -167,6 +176,7 @@ export default function QuoteBuilder() {
       return sentQuote;
     },
     onSuccess: (quote) => {
+      markDraftsSaved("quote:new:");
       toast.success(`Quote sent to ${recipientName}`);
       navigate(`/quotes/${quote.id}`, { replace: true });
     },
@@ -382,22 +392,47 @@ export default function QuoteBuilder() {
           )}
         </Card>
 
+        {/* ── Service Type (optional, customer-facing only when set) ── */}
+        <Card className="p-4 space-y-2">
+          <Label htmlFor="quote-service-type" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Service Type <span className="normal-case font-normal">(optional)</span></Label>
+          <Select value={serviceType || "none"} onValueChange={v => setPickedType(v === "none" ? "" : v)}>
+            <SelectTrigger id="quote-service-type" data-testid="quote-service-type" className="rounded-xl h-11 text-base"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Not set</SelectItem>
+              {SERVICE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">{pickedType == null && serviceType ? "Filled in from the lines · " : ""}Shown in the quote email only when set, and carried into the job</p>
+        </Card>
+
         {/* ── Scope of Work (customer-facing) ── */}
         <Card className="p-4 space-y-2">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Scope of Work</p>
-          <Textarea
+          <LongTextField
             value={scopeNotes}
-            onChange={e => setScopeNotes(e.target.value)}
+            onChange={setScopeNotes}
+            savedValue=""
+            draftKey="quote:new:scope_notes"
+            title="Scope of Work"
+            rows={10}
+            data-testid="quote-scope"
             placeholder="Add notes about the scope of this job (optional) — this is included in the quote email to the customer"
-            className="rounded-xl resize-none"
-            rows={3}
           />
         </Card>
 
         {/* ── Notes ── */}
         <Card className="p-4 space-y-2">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Notes (internal)</p>
-          <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Site conditions, access notes, anything worth remembering — not shown to the customer..." className="rounded-xl resize-none" rows={3} />
+          <LongTextField
+            value={notes}
+            onChange={setNotes}
+            savedValue=""
+            draftKey="quote:new:notes"
+            title="Notes (internal)"
+            rows={5}
+            data-testid="quote-notes"
+            placeholder="Site conditions, access notes, anything worth remembering — not shown to the customer..."
+          />
         </Card>
       </div>
 

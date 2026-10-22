@@ -7,7 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { shouldShowCheckAll } from "@/lib/checklistCheckAll";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2, Loader2, Camera, ImagePlus, Printer } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
@@ -71,6 +72,21 @@ const getUnit = (fieldId) => {
   return null;
 };
 
+function CheckAllButton({ allChecked, onClick, label, testId, wide = false }) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={onClick}
+      className={`no-print shrink-0 inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl border text-sm font-semibold active:opacity-60 ${
+        allChecked ? "border-border bg-card text-muted-foreground" : "border-green-600 bg-green-50 text-green-700"
+      } ${wide ? "w-full mt-3" : ""}`}
+    >
+      <CheckCircle2 className="w-4 h-4" /> {label}
+    </button>
+  );
+}
+
 // ── DocumentFill ──────────────────────────────────────────────────────────────
 
 export default function DocumentFill() {
@@ -122,6 +138,7 @@ export default function DocumentFill() {
 
   const [values, setValues] = useState({});
   const initialized = useRef(false);
+  const [valuesReady, setValuesReady] = useState(false); // notes drafts restore after the saved values are in
   const preFilledFields = useRef(new Set());
   const { uploading: photoUploading, handleFileChange: handlePhotoFileChange } = usePhotoUpload({
     errorMessage: "Photo upload failed",
@@ -132,6 +149,7 @@ export default function DocumentFill() {
     if (doc && !initialized.current) {
       setValues(doc.field_values || {});
       initialized.current = true;
+      setValuesReady(true);
     }
   }, [doc]);
 
@@ -217,8 +235,9 @@ export default function DocumentFill() {
     });
   };
 
-  // "Check all" / "Uncheck all" (Annual Maintenance, while filling it out):
-  // one tap sets every checkbox item, saved like any other change.
+  // "Check all" / "Uncheck all" (Run 8, B1: every checklist type, while it
+  // is being filled out): one tap sets every checkbox item of the checklist or
+  // of one section, saved like any other change.
   const setAllChecks = (fieldIds, checked) => {
     setValues(prev => {
       const next = { ...prev };
@@ -285,6 +304,7 @@ export default function DocumentFill() {
   if (!doc) return <div className="p-4 text-center">Document not found</div>;
 
   const fields = doc.field_definitions || [];
+  const filling = doc.status !== "completed";
   const isPreFilled = (fieldId) => preFilledFields.current.has(fieldId);
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -303,11 +323,17 @@ export default function DocumentFill() {
           <label style={S.label}>
             {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
           </label>
-          <Textarea
+          {/* Autosaves (1.5 s); the local draft covers a crash before that. */}
+          <LongTextField
             value={values[field.id] || ""}
-            onChange={e => updateValue(field.id, e.target.value)}
-            className="text-sm min-h-[100px] resize-none rounded-xl"
-            style={inputStyle(field.id)}
+            onChange={v => updateValue(field.id, v)}
+            savedValue={doc.field_values?.[field.id] || ""}
+            draftKey={`doc:${id}:${field.id}`}
+            ready={valuesReady}
+            guard={false}
+            title={field.label}
+            rows={5}
+            disabled={doc.status === "completed"}
             placeholder={field.placeholder || ""}
           />
         </div>
@@ -486,12 +512,21 @@ export default function DocumentFill() {
         const checkboxFields = sectionFields.filter(f => f.type === "checkbox");
         const inputFields = sectionFields.filter(f => f.type !== "checkbox");
 
+        const sectionAllChecked = checkboxFields.length > 0 && checkboxFields.every(f => values[f.id]);
         output.push(
           <div key={sectionId}>
-            <div style={{ ...S.sectionHeader, ...(isCompletion ? { borderColor: "#16a34a" } : {}) }}>
+            <div style={{ ...S.sectionHeader, ...(isCompletion ? { borderColor: "#16a34a" } : {}), display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <p style={{ ...S.sectionLabel, ...(isCompletion ? { color: "#16a34a" } : {}) }}>
                 {isCompletion ? "Final Steps Before Leaving" : sectionLabel}
               </p>
+              {filling && checkboxFields.length > 1 && (
+                <CheckAllButton
+                  testId={`check-all-${sectionId}`}
+                  allChecked={sectionAllChecked}
+                  onClick={() => setAllChecks(checkboxFields.map(f => f.id), !sectionAllChecked)}
+                  label={sectionAllChecked ? "Uncheck section" : "Check section"}
+                />
+              )}
             </div>
             {checkboxFields.length > 0 && (
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden", marginBottom: 8 }}>
@@ -514,10 +549,11 @@ export default function DocumentFill() {
   const checkedCount = checkboxFields.filter(f => values[f.id]).length;
   const pct = checkboxFields.length > 0 ? (checkedCount / checkboxFields.length) * 100 : 0;
   const allChecked = checkboxFields.length > 0 && checkedCount === checkboxFields.length;
-  // Only on the Annual Maintenance checklist, and only while it is being
-  // filled out (never on the completed copy, its print, PDF or email).
-  const showCheckAll = doc.status !== "completed" && checkboxFields.length > 0
-    && /annual maintenance/i.test(doc.template_name || "");
+  // Every checklist type, only while it is being filled out (never on the
+  // completed copy; the print hides it too, and the PDF/email are built from
+  // the saved values, not this screen). Run 4 showed it only when the name
+  // matched "Annual Maintenance", as small text at the very top (B1).
+  const showCheckAll = shouldShowCheckAll(doc, checkboxFields.length);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -569,19 +605,21 @@ export default function DocumentFill() {
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground">Progress</span>
             <span className="flex items-center gap-3">
-              {showCheckAll && (
-                <button type="button" data-testid="check-all"
-                  className="text-xs font-semibold text-primary min-h-[44px] px-2 -my-3 active:opacity-60"
-                  onClick={() => setAllChecks(checkboxFields.map(f => f.id), !allChecked)}>
-                  {allChecked ? "Uncheck all" : "Check all"}
-                </button>
-              )}
               <span className="text-xs font-semibold text-primary">{checkedCount}/{checkboxFields.length}</span>
             </span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
           </div>
+          {showCheckAll && (
+            <CheckAllButton
+              testId="check-all"
+              wide
+              allChecked={allChecked}
+              onClick={() => setAllChecks(checkboxFields.map(f => f.id), !allChecked)}
+              label={allChecked ? "Uncheck all" : `Check all ${checkboxFields.length} item${checkboxFields.length === 1 ? "" : "s"}`}
+            />
+          )}
         </div>
       )}
 
@@ -601,13 +639,15 @@ export default function DocumentFill() {
       <div data-fixed-bottom="" className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border safe-bottom z-50 no-print">
         {doc.status !== "completed" ? (
           <div className="flex gap-2 max-w-lg mx-auto">
-            <Button type="button" variant="ghost" className="flex-1 rounded-xl h-12"
+            {/* min-w-0 + wrapping: on a 320 px iPhone SE the two labels didn't fit
+                and "Submit & Complete" was cut off at the edge (Run 8). */}
+            <Button type="button" variant="ghost" className="flex-1 min-w-0 rounded-xl h-12 px-2 whitespace-normal leading-tight"
               onClick={handleSave} disabled={saveMutation.isPending}>
-              Save & Continue Later
+              Save for Later
             </Button>
-            <Button type="button" className="flex-1 rounded-xl h-12 bg-green-600 hover:bg-green-700"
+            <Button type="button" className="flex-1 min-w-0 rounded-xl h-12 px-2 whitespace-normal leading-tight bg-green-600 hover:bg-green-700"
               onClick={handleComplete} disabled={saveMutation.isPending}>
-              <CheckCircle2 className="w-4 h-4 mr-1" /> Submit & Complete
+              <CheckCircle2 className="w-4 h-4 mr-1 shrink-0" /> Submit & Complete
             </Button>
           </div>
         ) : (

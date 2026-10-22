@@ -34,10 +34,11 @@ describe('keepFieldVisible (keyboard never covers the field)', () => {
     expect(dy).toBe(490 + 36 - (323 - 12))
     spy.mockRestore()
   })
-  it('a tall text box keeps its bottom (the caret) visible', () => {
+  it('a text box taller than the visible band is left alone (iOS keeps the caret in view; Run 8 A1)', () => {
     const spy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {})
     const dy = keepFieldVisible(field(250, 200, 'textarea'), { vv, topReserve: 180 })
-    expect(250 + 200 - dy).toBeLessThanOrEqual(323 - 12)
+    expect(dy).toBe(0)
+    expect(spy).not.toHaveBeenCalled()
     spy.mockRestore()
   })
   it('does nothing for a visible field or a non-text control', () => {

@@ -13,6 +13,7 @@ import { createOnce, newRequestId } from "@/lib/saveSafety";
 import { afterSheetsClose } from "@/lib/sheetHistory";
 import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
 import { computeQuoteTotals, agreementTypeForRate } from "@/lib/utils/quoteTotals";
+import { SERVICE_TYPES } from "@/lib/jobTypes";
 
 const STATUS_STYLES = {
   draft: "bg-gray-100 text-gray-700",
@@ -217,6 +218,13 @@ export default function QuoteDetail() {
             </div>
           </div>
         </Card>
+
+        {SERVICE_TYPES.some(t => t.value === quote.job_type) && (
+          <Card className="p-4 flex items-center justify-between" data-testid="quote-service-type-row">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Service Type</p>
+            <p className="text-sm font-medium">{SERVICE_TYPES.find(t => t.value === quote.job_type).label}</p>
+          </Card>
+        )}
 
         {quote.scope_notes && (
           <Card className="p-4">

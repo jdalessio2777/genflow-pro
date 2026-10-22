@@ -1,8 +1,9 @@
 // Completed service checklist (job_documents row) -> PDF bytes.
 import { createDoc, BRAND, PAGE, fmtDateLong, safeFilename } from './common.js';
 
+// '' = the row is not printed (never "undefined" / "null" / "NaN" / "{...}").
 function displayValue(field, raw) {
-  if (raw === undefined || raw === null || raw === '') return '';
+  if (raw === undefined || raw === null || String(raw).trim() === '') return '';
   if (field.type === 'photo') return 'Photo on file';
   if (field.type === 'date') {
     const d = new Date(raw);
@@ -10,9 +11,10 @@ function displayValue(field, raw) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) return fmtDateLong(`${raw}T12:00:00Z`, 'UTC');
     return isNaN(d.getTime()) ? String(raw) : fmtDateLong(raw);
   }
-  if (Array.isArray(raw)) return raw.join(', ');
-  if (typeof raw === 'object') return JSON.stringify(raw);
-  return String(raw);
+  if (Array.isArray(raw)) return raw.filter(v => v !== null && v !== undefined && String(v).trim() !== '').join(', ');
+  if (typeof raw === 'object') return '';
+  const s = String(raw).trim();
+  return /^(undefined|null|NaN)$/i.test(s) ? '' : s;
 }
 
 export function checklistFilename(doc) {
@@ -37,7 +39,9 @@ export async function buildChecklistPdf({ doc, customer, job }) {
     ['Customer', customer?.name],
     ['Service Address', customer?.address],
     ['Generator', [customer?.generator_model, customer?.generator_serial ? `S/N ${customer.generator_serial}` : ''].filter(Boolean).join('  |  ')],
-    ['Service', job?.title],
+    ['Job', job?.title],
+    // Customer-facing job description only — never job notes.
+    ['Description of Work', job?.customer_description],
     ['Completed', completedStr],
   ]);
 
@@ -49,7 +53,7 @@ export async function buildChecklistPdf({ doc, customer, job }) {
   const valueX = PAGE.margin + labelW + 12;
   const valueW = L.contentWidth - labelW - 20;
   let stripe = 0;
-  const isVisible = (f) => f.type === 'checkbox' || !(values[f.id] === undefined || values[f.id] === null || values[f.id] === '');
+  const isVisible = (f) => f.type === 'checkbox' || displayValue(f, values[f.id]) !== '';
   // A section header is only printed if at least one field under it prints.
   const sectionHasRows = (idx) => {
     for (let j = idx + 1; j < fields.length && fields[j].type !== 'section_header'; j++) if (isVisible(fields[j])) return true;
@@ -58,7 +62,7 @@ export async function buildChecklistPdf({ doc, customer, job }) {
 
   for (const [idx, field] of fields.entries()) {
     if (field.type === 'section_header') {
-      if (!sectionHasRows(idx)) continue;
+      if (!sectionHasRows(idx) || !String(field.label ?? '').trim()) continue; // never an empty bar
       L.y -= 6;
       L.ensure(20 + 2 + lh * 2 + 8); // keep the header with its first row
       L.sectionBar(field.label || '');
@@ -66,7 +70,7 @@ export async function buildChecklistPdf({ doc, customer, job }) {
       continue;
     }
     const raw = values[field.id];
-    if (field.type !== 'checkbox' && (raw === undefined || raw === null || raw === '')) continue;
+    if (!isVisible(field)) continue;
 
     const labelLines = L.wrap(field.label || '', size, labelW - 8);
     const valueLines = field.type === 'checkbox' ? [''] : L.wrap(displayValue(field, raw), size, valueW, L.bold);

@@ -71,7 +71,7 @@ describe('completion: ONE combined email', () => {
     await call({ job_id: JOB, kind: 'completion' })
     const r = await call({ job_id: JOB, kind: 'receipt' })
     expect(sent).toHaveLength(1)
-    expect(sent[0].html).toMatch(/PAID — [^<]*\(Card\)/)
+    expect(sent[0].html).toMatch(/PAID — [^<]*\(Card \(Stripe App\)\)/)
     expect(sent[0].html).toContain('Credit card surcharge')
     expect(sent[0].html).toContain('$3.01')
     expect(r.body.skipped).toBe('paid_before_completion_email')

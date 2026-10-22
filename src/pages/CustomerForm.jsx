@@ -8,7 +8,8 @@ import { getUserDisplayName } from "@/lib/userColors";
 import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyTeam";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import LongTextField from "@/components/ui/LongTextField";
+import { markDraftsSaved } from "@/lib/textDrafts";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import PageHeader from "@/components/layout/PageHeader";
@@ -93,6 +94,7 @@ export default function CustomerForm() {
       toast.error(err?.message ?? "Failed to save customer");
     },
     onSuccess: (result) => {
+      markDraftsSaved(draftPrefix);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success(isEdit ? "Customer updated" : "Customer created");
       if (!isEdit) {
@@ -125,6 +127,21 @@ export default function CustomerForm() {
   });
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  // Local drafts of the long text fields (Run 8, A4), per customer.
+  const draftPrefix = isEdit ? `customer:${id}:` : "customer:new:";
+  const savedText = (field) => (isEdit ? customerData?.[field] ?? "" : "");
+  const longText = (field, title, extra = {}) => (
+    <LongTextField
+      value={form[field] || ""}
+      onChange={v => update(field, v)}
+      savedValue={savedText(field)}
+      draftKey={`${draftPrefix}${field}`}
+      ready={customerLoaded}
+      title={title}
+      rows={5}
+      {...extra}
+    />
+  );
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -161,7 +178,7 @@ export default function CustomerForm() {
             </div>
             <div>
               <Label className="text-xs">Property Notes</Label>
-              <Textarea value={form.property_notes} onChange={e => update("property_notes", e.target.value)} className="rounded-xl mt-1" rows={2} />
+              <div className="mt-1">{longText("property_notes", "Property Notes")}</div>
             </div>
           </div>
         </Card>
@@ -203,17 +220,11 @@ export default function CustomerForm() {
               <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
               Always-Show Note (appears on every job)
             </Label>
-            <Textarea
-              value={form.repeat_note || ""}
-              onChange={e => update("repeat_note", e.target.value)}
-              className="rounded-xl mt-1 border-amber-200 bg-amber-50/50"
-              rows={2}
-              placeholder="e.g. Dog in backyard · Gate code: 1234 · Generator is behind shed"
-            />
+            <div className="mt-1">{longText("repeat_note", "Always-Show Note", { className: "border-amber-200 bg-amber-50/50", placeholder: "e.g. Dog in backyard · Gate code: 1234 · Generator is behind shed" })}</div>
           </div>
           <div>
             <Label className="text-xs">Notes</Label>
-            <Textarea value={form.notes} onChange={e => update("notes", e.target.value)} className="rounded-xl mt-1" rows={3} />
+            <div className="mt-1">{longText("notes", "Notes")}</div>
           </div>
           <div>
             <Label className="text-xs">Referred By</Label>
