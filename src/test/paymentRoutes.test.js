@@ -147,8 +147,8 @@ describe('update-payment-intent', () => {
     appSettings = [{ key: 'card_surcharge_rate', value: '2.5' }]
     const res = mockRes()
     await updateHandler(mockReq({ headers: STAFF, body }), res)
-    // 2.5% + 5c: (266.575 + 5) / 0.975 = 278.54 -> 279; cap 278.55 -> over -> 278
-    expect(piUpdate.mock.calls[0][1].amount).toBe(10663 + 278)
+    // 2.5% + 5c: largest s with s <= round(0.025 x (10663 + s) + 5): s = 279 (0.025 x 10942 + 5 = 278.55 -> 279)
+    expect(piUpdate.mock.calls[0][1].amount).toBe(10663 + 279)
   })
   it('a bad saved rate (above 4%) falls back to the 2.7% default', async () => {
     appSettings = [{ key: 'card_surcharge_rate', value: '9' }]

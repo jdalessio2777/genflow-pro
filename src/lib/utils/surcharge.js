@@ -4,11 +4,11 @@
 // Plain ESM, no aliases: used by src/ and api/.
 //
 // NJ P.L. 2023, c.146 caps a credit card surcharge at the merchant's actual
-// processing cost. So the surcharge is exactly Stripe's fee on the amount
-// actually charged (T + surcharge), never more:
-//   surcharge = (rate x T + fixed) / (1 - rate)
-// rounded to the cent; if rounding pushed it above rate x (T + s) + fixed,
-// one cent comes off.
+// processing cost. So the surcharge is exactly Stripe's ROUNDED fee on the
+// amount actually charged (T + surcharge), never more: the largest s with
+//   s <= round(rate x (T + s) + fixed)
+// That s always equals the rounded fee, so the business nets exactly T
+// (e.g. $514.47 -> $14.33, total $528.80; Stripe keeps $14.33).
 //
 // Rate, fixed fee and "is the surcharge taxable" come from app_settings keys
 //   card_surcharge_rate     percent, e.g. "2.7"   (default 2.7)
@@ -49,19 +49,23 @@ export function surchargeLabel() {
 
 // Stripe's fee in cents on a charge of `chargeCents` (Stripe rounds to the cent).
 export function processingFeeCents(chargeCents, config = SURCHARGE_DEFAULTS) {
-  return Math.round(config.rate * chargeCents + Math.round(config.fixed * 100));
+  // toFixed: 0.027 x 1500 is 40.49999… in floating point; Stripe sees 40.5.
+  return Math.round(Number((config.rate * chargeCents + Math.round(config.fixed * 100)).toFixed(6)));
 }
 
 // The surcharge itself in cents for a final amount owed of `baseCents` (after
-// discounts and tax): Stripe's fee on (base + surcharge), never more.
+// discounts and tax): Stripe's rounded fee on (base + surcharge), never more.
+// The cap is checked against that rounded fee. Each extra cent of surcharge
+// raises the fee by 0 or 1 cent, so scanning down from just above the
+// estimate stops at the first s the fee covers, and there s equals the fee.
 export function feeSurchargeCents(baseCents, config = SURCHARGE_DEFAULTS) {
   if (!(baseCents > 0)) return 0;
   const r = config.rate;
   const f = Math.round(config.fixed * 100);
   if (!(r > 0) && !(f > 0)) return 0;
-  let s = Math.round((r * baseCents + f) / (1 - r));
-  if (s > r * (baseCents + s) + f + 1e-9) s -= 1;
-  return Math.max(0, s);
+  let s = Math.ceil((r * baseCents + f) / (1 - r)) + 2;
+  while (s > 0 && s > processingFeeCents(baseCents + s, config)) s -= 1;
+  return s;
 }
 
 // Surcharge in cents including its tax when the setting says it is taxable
