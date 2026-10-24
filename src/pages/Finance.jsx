@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
-import { customersListQuery, invoicesListQuery, jobsListQuery } from "@/lib/queries";
+import { customersListQuery, invoicesListQuery } from "@/lib/queries";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { mileageLogPayload } from "@/lib/utils/mileage";
 import { useAuth } from "@/lib/AuthContext";
@@ -13,7 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DollarSign, TrendingUp, TrendingDown, Receipt, Car, Plus, Trash2, FileText, Navigation, Truck, ChevronDown, ChevronUp, Loader2, Camera, ImagePlus, X } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Receipt, Car, Plus, Trash2, FileText, Navigation, Truck, ChevronDown, ChevronUp, Loader2, Camera, ImagePlus, X, ShieldCheck, BarChart3 } from "lucide-react";
+import { computeFinance, computeSeries, rangeFor, inRange, etDate, endOfMonth, OVERVIEW_PERIODS } from "@/lib/finance/core";
+import InsightsTab from "@/components/finance/InsightsTab";
+import { useFinanceData, financeQueries } from "@/lib/finance/useFinanceData";
 // Note: Truck still used in MileageTab
 import PageHeader from "@/components/layout/PageHeader";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
@@ -37,44 +41,31 @@ const EXPENSE_CATEGORIES = [
 
 
 // ─── OVERVIEW TAB ─────────────────────────────────────────────────────────────
-function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
+// Every number comes from the shared finance module (lib/finance/core.js), the
+// same one Insights and the weekly report email use (Run 9, D2).
+function OverviewTab({ invoices, mileage, financeData }) {
   const [period, setPeriod] = useState("month");
   const now = new Date();
+  const range = rangeFor(period);
+  const f = computeFinance(financeData, range);
+  const inPeriod = (date) => inRange(etDate(date), range);
 
-  const filterByPeriod = (date) => {
-    if (!date) return false;
-    const d = new Date(date);
-    if (period === "month") return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    if (period === "quarter") {
-      const q = Math.floor(now.getMonth() / 3);
-      return Math.floor(d.getMonth() / 3) === q && d.getFullYear() === now.getFullYear();
-    }
-    if (period === "year") return d.getFullYear() === now.getFullYear();
-    return true;
-  };
-
-  const paidInvoices = invoices.filter(i => i.status === "paid" && filterByPeriod(i.paid_date));
-  const revenue = paidInvoices.reduce((s, i) => s + (i.total || 0), 0);
-  const periodExpenses = expenses.filter(e => filterByPeriod(e.date));
-  const expenseTotal = periodExpenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const periodMileage = mileage.filter(m => filterByPeriod(m.date));
+  const revenue = f.revenue;
+  const expenseTotal = f.expenses;
+  const periodMileage = mileage.filter(m => inPeriod(m.date));
   const mileageTotal = periodMileage.reduce((s, m) => s + (m.miles || 0), 0);
   const mileageDeduction = mileageTotal * IRS_RATE;
-  const netProfit = revenue - expenseTotal;
+  const netProfit = f.net;
   const outstandingInvoices = invoices.filter(i => i.status === "sent");
   const outstanding = outstandingInvoices.reduce((s, i) => s + (i.total || 0), 0);
 
-  const monthlyRevenue = Array.from({ length: 12 }, (_, month) => {
-    const total = invoices
-      .filter(i => i.status === "paid" && new Date(i.paid_date || i.created_date).getMonth() === month && new Date(i.paid_date || i.created_date).getFullYear() === now.getFullYear())
-      .reduce((s, i) => s + (i.total || 0), 0);
-    return { month: new Date(now.getFullYear(), month, 1).toLocaleDateString("en-US", { month: "short" }), total };
-  });
+  const monthlyRevenue = computeSeries(financeData, rangeFor("custom", { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` })).points
+    .map(p => ({ month: p.label.split(" ")[0], total: p.revenue, from: p.from }));
 
   return (
     <div className="space-y-4">
       <div className="flex gap-1.5 flex-wrap">
-        {[["month", "This Month"], ["quarter", "This Quarter"], ["year", "This Year"], ["all", "All Time"]].map(([key, label]) => (
+        {OVERVIEW_PERIODS.map(([key, label]) => (
           <button key={key} onClick={() => setPeriod(key)}
             className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === key ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             {label}
@@ -89,7 +80,7 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
             <p className="text-xs font-semibold text-green-800 dark:text-green-200">Revenue</p>
           </div>
           <p className="text-2xl font-bold text-green-700 dark:text-green-300">{formatCurrency(revenue)}</p>
-          <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">{paidInvoices.length} paid invoice{paidInvoices.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">{f.paidInvoices} paid invoice{f.paidInvoices !== 1 ? "s" : ""}{f.warrantyClaims ? " + warranty" : ""}</p>
         </Card>
 
         <Card className="p-3.5 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20">
@@ -98,7 +89,20 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
             <p className="text-xs font-semibold text-red-800 dark:text-red-200">Expenses</p>
           </div>
           <p className="text-2xl font-bold text-red-700 dark:text-red-300">{formatCurrency(expenseTotal)}</p>
-          <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{periodExpenses.length} expense{periodExpenses.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{f.expenseCount} expense{f.expenseCount !== 1 ? "s" : ""}</p>
+        </Card>
+
+        <Card className="p-3.5 col-span-2 border-violet-200 bg-violet-50 dark:border-violet-700 dark:bg-violet-900/20" data-testid="overview-warranty">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-violet-600 dark:text-violet-300" />
+              <div>
+                <p className="text-xs font-semibold text-violet-900 dark:text-violet-200">Warranty reimbursements</p>
+                <p className="text-xs text-violet-700 dark:text-violet-300">{f.warrantyClaims} claim{f.warrantyClaims !== 1 ? "s" : ""} paid · included in revenue</p>
+              </div>
+            </div>
+            <p className="text-lg font-bold text-violet-700 dark:text-violet-300">{formatCurrency(f.warranty)}</p>
+          </div>
         </Card>
 
         <Card className={`p-3.5 col-span-2 ${netProfit >= 0 ? "border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20" : "border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/20"}`}>
@@ -193,30 +197,27 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
           emergency:           "bg-red-500",
           battery_replacement: "bg-amber-500",
           warranty:            "bg-violet-500",
-          inspection:          "bg-purple-500",
           other:               "bg-gray-400",
         };
-        const jobMap = Object.fromEntries(jobs.map(j => [j.id, j]));
-        const byType = paidInvoices.reduce((acc, inv) => {
-          const job = jobMap[inv.job_id];
-          const type = job?.job_type || "other";
-          acc[type] = (acc[type] || 0) + (inv.total || 0);
-          return acc;
-        }, {});
-        const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]).filter(([, v]) => v > 0);
+        // Every type with paid work in the period, $0 no-charge visits too
+        // (they used to be dropped, so October showed only Maintenance).
+        const typeEntries = f.byJobType;
         if (typeEntries.length === 0) return null;
-        const maxVal = Math.max(...typeEntries.map(([, v]) => v), 1);
+        const maxVal = Math.max(...typeEntries.map(t => t.revenue), 1);
         return (
-          <div>
+          <div data-testid="revenue-by-type">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Revenue by Job Type</p>
             <Card className="p-3">
               <div className="space-y-2">
-                {typeEntries.map(([type, total]) => {
-                  const width = Math.max((total / maxVal) * 100, 4);
+                {typeEntries.map(({ type, label, revenue: total, count }) => {
+                  const width = total > 0 ? Math.max((total / maxVal) * 100, 4) : 0;
                   const colorClass = JOB_TYPE_COLORS[type] || "bg-gray-400";
                   return (
                     <div key={type} className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-20 shrink-0 capitalize">{type}</span>
+                      <div className="w-28 shrink-0 min-w-0">
+                        <p className="text-xs text-foreground truncate">{label}</p>
+                        <p className="text-[10px] text-muted-foreground">{count} {type === "warranty" ? "paid" : count === 1 ? "invoice" : "invoices"}</p>
+                      </div>
                       <div className="flex-1 h-5 bg-muted/40 rounded-lg overflow-hidden">
                         <div className={`h-full ${colorClass} opacity-70 rounded-lg transition-all`} style={{ width: `${width}%` }} />
                       </div>
@@ -232,6 +233,7 @@ function OverviewTab({ invoices, expenses, mileage, jobs = [] }) {
     </div>
   );
 }
+
 
 // ─── EXPENSES TAB ──────────────────────────────────────────────────────────────
 function ExpensesTab({ expenses }) {
@@ -849,7 +851,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
 }
 
 // ─── TAX SUMMARY TAB ───────────────────────────────────────────────────────────
-function TaxSummaryTab({ invoices, expenses, mileage }) {
+function TaxSummaryTab({ financeData, mileage }) {
   const year = new Date().getFullYear();
 
   const quarters = [
@@ -859,18 +861,13 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
     { label: "Q4 (Oct–Dec)", months: [9, 10, 11] },
   ];
 
+  // Revenue and expenses from the shared module (invoices + warranty), so the
+  // Tax tab agrees with Overview, Insights and the weekly report.
+  const quarterRange = (months) => rangeFor("custom", { from: `${year}-${String(months[0] + 1).padStart(2, "0")}-01`, to: endOfMonth(`${year}-${String(months[2] + 1).padStart(2, "0")}-01`) });
   const getQuarterData = (months) => {
-    const qRevenue = invoices.filter(i => {
-      if (i.status !== "paid" || !i.paid_date) return false;
-      const d = new Date(i.paid_date);
-      return d.getFullYear() === year && months.includes(d.getMonth());
-    }).reduce((s, i) => s + (i.total || 0), 0);
-
-    const qExpenses = expenses.filter(e => {
-      if (!e.date) return false;
-      const d = new Date(e.date);
-      return d.getFullYear() === year && months.includes(d.getMonth());
-    }).reduce((s, e) => s + (e.amount || 0), 0);
+    const qf = computeFinance(financeData, quarterRange(months));
+    const qRevenue = qf.revenue;
+    const qExpenses = qf.expenses;
 
     const qMiles = mileage.filter(m => {
       if (!m.date) return false;
@@ -883,8 +880,9 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
     return { qRevenue, qExpenses, qMiles, mileageDeduction, netProfit };
   };
 
-  const yearRevenue = invoices.filter(i => i.status === "paid" && i.paid_date && new Date(i.paid_date).getFullYear() === year).reduce((s, i) => s + (i.total || 0), 0);
-  const yearExpenses = expenses.filter(e => e.date && new Date(e.date).getFullYear() === year).reduce((s, e) => s + (e.amount || 0), 0);
+  const yf = computeFinance(financeData, rangeFor("custom", { from: `${year}-01-01`, to: `${year}-12-31` }));
+  const yearRevenue = yf.revenue;
+  const yearExpenses = yf.expenses;
   const yearMiles = mileage.filter(m => m.date && new Date(m.date).getFullYear() === year).reduce((s, m) => s + (m.miles || 0), 0);
   const yearMileageDeduction = yearMiles * IRS_RATE;
   const yearNetProfit = yearRevenue - yearExpenses - yearMileageDeduction;
@@ -938,10 +936,8 @@ function TaxSummaryTab({ invoices, expenses, mileage }) {
 export default function Finance() {
   const { settings = {} } = useSettings() || {};
   const { data: invoices = [] } = useQuery(invoicesListQuery(500));
-  const { data: expenses = [] } = useQuery({
-    queryKey: ["expenses"],
-    queryFn: () => db.Expense.list("-date", 500),
-  });
+  const { data: expenses = [] } = useQuery(financeQueries.expenses);
+  const { data: financeData } = useFinanceData();
   const { data: mileage = [] } = useQuery({
     queryKey: ["mileage"],
     queryFn: () => db.MileageLog.list("-date", 500),
@@ -951,17 +947,20 @@ export default function Finance() {
     queryFn: () => db.Vehicle.list("name"),
   }); // still needed for MileageTab
   const { data: customers = [] } = useQuery(customersListQuery("name"));
-  const { data: financeJobs = [] } = useQuery(jobsListQuery(500));
 
   return (
     <div>
-      <PageHeader title="Finance" subtitle="Revenue, expenses & tax summary" back />
+      <PageHeader title="Finance" subtitle="Revenue, expenses & tax summary" back
+        actions={<Link to="/invoices" data-testid="finance-invoices"><Button size="sm" variant="outline" className="rounded-xl gap-1.5"><Receipt className="w-4 h-4" /> Invoices</Button></Link>} />
       <div className="px-4 pt-3 pb-4 max-w-lg mx-auto">
         <Tabs defaultValue="overview">
           <div className="overflow-x-auto mb-4 -mx-1 px-1">
             <TabsList className="inline-flex w-max bg-muted/60 rounded-xl p-0.5 min-w-full">
               <TabsTrigger value="overview" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm px-3">
                 <DollarSign className="w-3 h-3 mr-1" />Overview
+              </TabsTrigger>
+              <TabsTrigger value="insights" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm px-3" data-testid="tab-insights">
+                <BarChart3 className="w-3 h-3 mr-1" />Insights
               </TabsTrigger>
               <TabsTrigger value="expenses" className="text-xs rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm px-3">
                 <TrendingDown className="w-3 h-3 mr-1" />Expenses
@@ -974,10 +973,11 @@ export default function Finance() {
               </TabsTrigger>
             </TabsList>
           </div>
-          <TabsContent value="overview"><OverviewTab invoices={invoices} expenses={expenses} mileage={mileage} jobs={financeJobs} /></TabsContent>
+          <TabsContent value="overview"><OverviewTab invoices={invoices} mileage={mileage} financeData={financeData} /></TabsContent>
+          <TabsContent value="insights"><InsightsTab financeData={financeData} /></TabsContent>
           <TabsContent value="expenses"><ExpensesTab expenses={expenses} /></TabsContent>
           <TabsContent value="mileage"><MileageTab mileage={mileage} vehicles={vehicles} customers={customers} homeAddress={settings.home_address} googleApiKey={settings.google_maps_api_key} /></TabsContent>
-          <TabsContent value="tax"><TaxSummaryTab invoices={invoices} expenses={expenses} mileage={mileage} /></TabsContent>
+          <TabsContent value="tax"><TaxSummaryTab financeData={financeData} mileage={mileage} /></TabsContent>
         </Tabs>
       </div>
     </div>

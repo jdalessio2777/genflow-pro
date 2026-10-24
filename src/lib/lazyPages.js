@@ -34,6 +34,7 @@ const loaders = {
   "/inbox": () => import("@/pages/Inbox"),
   "/call-list": () => import("@/pages/Inbox"),
   "/finance": () => import("@/pages/Finance"),
+  "/warranty": () => import("@/pages/Warranty"),
   "/settings": () => import("@/pages/Settings"),
   "/referrals": () => import("@/pages/Referrals"),
 };

@@ -87,6 +87,12 @@
   }
 }
 
+/* Chart series colors (Run 9, Finance Insights): the validated categorical
+   slots (dataviz reference palette; CVD + contrast checked by its validator in
+   light and dark). Revenue = 1, expenses = 2, profit = 3, warranty = 7. */
+:root { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-7: #6250d6; }
+.dark { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-7: #9085e9; }
+
 /* Safe areas (F-12). The installed app uses viewport-fit=cover with the
    black-translucent status bar, so the page runs under the clock / Dynamic
    Island and the home indicator. Every top/bottom offset goes through these

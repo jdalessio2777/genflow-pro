@@ -57,6 +57,7 @@ export const ROUTE_META = [
   { path: "/inbox", tab: "inbox" },
   { path: "/call-list", parent: "/inbox", tab: "inbox" },
   { path: "/finance", parent: "/", tab: "home" },
+  { path: "/warranty", parent: "/", tab: "home" },
   { path: "/settings", parent: "/", tab: "home" },
   { path: "/referrals", parent: "/", tab: "home" },
 ];
