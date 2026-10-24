@@ -9,7 +9,7 @@ import { toast } from "sonner";
  *
  * Returns null when phone is falsy.
  */
-export default function CallButtons({ phone }) {
+export default function CallButtons({ phone, className = "" }) {
   if (!phone) return null;
 
   function handleNextiva() {
@@ -23,7 +23,7 @@ export default function CallButtons({ phone }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-1.5 w-full">
+    <div className={`grid grid-cols-2 gap-1.5 w-full min-w-0 ${className}`}>
       <a
         href={`tel:${phone}`}
         className="relative hit-44 min-w-0 w-full flex items-center justify-center gap-1 h-9 px-1.5 rounded-xl bg-green-50 border border-green-200 text-xs font-semibold text-green-700 hover:bg-green-100 active:scale-95 transition-all"

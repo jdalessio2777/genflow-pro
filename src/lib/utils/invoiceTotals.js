@@ -73,3 +73,16 @@ export function buildInvoiceLineItems(parts, labor, { includeNoChargeParts = fal
     ...labor.map(l => ({ type: "labor", description: l.description, quantity: l.is_flat_rate ? 1 : l.hours, unit_price: l.is_flat_rate ? l.flat_rate_amount : l.rate, total: l.total_price })),
   ];
 }
+
+// Same invoice lines? Compared by content: the stored copy comes back from a
+// jsonb column with its keys reordered, and parts/labor rows load in no fixed
+// order — a plain JSON.stringify compare never matched, so opening any open
+// job rewrote its invoice (and refetched) every time (Run 9, B4).
+const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(",")}]`
+  : v && typeof v === "object" ? `{${Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${canon(v[k])}`).join(",")}}`
+  : typeof v === "number" || (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v)) && /^-?\d+(\.\d+)?$/.test(v.trim())) ? String(Number(v))
+  : JSON.stringify(v ?? null));
+export function sameLineItems(a, b) {
+  const x = (a || []).map(canon).sort(); const y = (b || []).map(canon).sort();
+  return x.length === y.length && x.every((s, i) => s === y[i]);
+}
