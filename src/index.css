@@ -137,7 +137,30 @@
 .m-dialog[data-state="open"] { animation: m-dialog-in var(--dur-dialog-in) var(--ease-ios); }
 .m-dialog[data-state="closed"] { animation: m-dialog-out var(--dur-dialog-out) var(--ease-out-ios) forwards; }
 
+/* Page push / back (lib/pageMotion.js, View Transitions): snapshots slide,
+   the real page never carries a transform. The tab bar stays put. */
+@keyframes m-push-in { from { transform: translate3d(100%, 0, 0); } to { transform: none; } }
+@keyframes m-push-out { from { transform: none; } to { transform: translate3d(-30%, 0, 0); } }
+@keyframes m-pop-in { from { transform: translate3d(-30%, 0, 0); } to { transform: none; } }
+@keyframes m-pop-out { from { transform: none; } to { transform: translate3d(100%, 0, 0); } }
+:root[data-nav]::view-transition-old(root),
+:root[data-nav]::view-transition-new(root) {
+  animation-duration: var(--dur-push);
+  animation-timing-function: var(--ease-spring);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+:root[data-nav="push"]::view-transition-old(root) { animation-name: m-push-out; }
+:root[data-nav="push"]::view-transition-new(root) { animation-name: m-push-in; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.14); }
+:root[data-nav="back"]::view-transition-old(root) { animation-name: m-pop-out; z-index: 2; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.14); }
+:root[data-nav="back"]::view-transition-new(root) { animation-name: m-pop-in; }
+[data-tab-bar] { view-transition-name: tab-bar; }
+::view-transition-group(tab-bar) { animation: none; }
+/* With page motion the old 150 ms page fade would play inside the slide. */
+:root[data-vt] .page-fade { animation: none; }
+
 @media (prefers-reduced-motion: reduce) {
+  :root[data-nav]::view-transition-old(root), :root[data-nav]::view-transition-new(root) { animation: none; }
   .m-sheet[data-state="open"], .m-dialog[data-state="open"], .m-overlay[data-state="open"] { animation: m-fade-in 150ms linear; }
   .m-sheet[data-state="closed"], .m-dialog[data-state="closed"], .m-overlay[data-state="closed"] { animation: m-fade-out 120ms linear forwards; }
 }

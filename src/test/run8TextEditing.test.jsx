@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React, { useState } from 'react'
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, Outlet, Link, useLocation } from 'react-router-dom'
 import { useKeyboardAware } from '@/hooks/useKeyboardAware'
 import { UnsavedChangesProvider } from '@/hooks/useUnsavedChangesGuard'
@@ -159,14 +159,16 @@ describe('A4: LongTextField keeps typed text through a reload', () => {
 describe('A3: full-screen editor', () => {
   beforeEach(() => localStorage.clear())
   afterEach(() => cleanup())
-  it('Expand opens it with the text; Done saves back; Cancel with changes asks first', () => {
+  it('Expand opens it with the text; Done saves back; Cancel with changes asks first', async () => {
     render(<Field initial="first" />)
     fireEvent.click(screen.getByLabelText('Expand Scope of Work'))
     const ed = screen.getByTestId('fullscreen-editor-text')
     expect(ed.value).toBe('first')
     fireEvent.change(ed, { target: { value: 'first\nsecond' } })
     fireEvent.click(screen.getByTestId('fullscreen-editor-done'))
-    expect(screen.queryByTestId('fullscreen-editor')).toBeNull()
+    // Run 9: it slides down (data-state closed), then goes away
+    expect(screen.getByTestId('fullscreen-editor').getAttribute('data-state')).toBe('closed')
+    await waitFor(() => expect(screen.queryByTestId('fullscreen-editor')).toBeNull())
     expect(screen.getByTestId('f').value).toBe('first\nsecond')
 
     fireEvent.click(screen.getByLabelText('Expand Scope of Work'))
@@ -177,7 +179,7 @@ describe('A3: full-screen editor', () => {
     expect(screen.getByTestId('fullscreen-editor-text').value).toBe('changed')
     fireEvent.click(screen.getByText('Cancel'))
     fireEvent.click(screen.getByText('Discard'))
-    expect(screen.queryByTestId('fullscreen-editor')).toBeNull()
+    await waitFor(() => expect(screen.queryByTestId('fullscreen-editor')).toBeNull())
     expect(screen.getByTestId('f').value).toBe('first\nsecond')
   })
   it('the page underneath is held still while it is open', () => {

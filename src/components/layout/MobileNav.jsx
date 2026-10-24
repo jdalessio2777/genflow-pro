@@ -86,6 +86,7 @@ export default function MobileNav() {
     <div
       ref={barRef}
       data-fixed-bottom=""
+      data-tab-bar=""
       className="fixed bottom-0 left-0 right-0 z-50 flex justify-center bg-background"
       style={{ paddingBottom: "max(var(--sab), 12px)", paddingLeft: 16, paddingRight: 16 }}
     >
