@@ -62,13 +62,26 @@ describe("JobForm weak signal", () => {
     const title = container.querySelector("input");
     // first text input in the form is the title (customer is a select)
     const inputs = [...container.querySelectorAll("input")].filter(i => i.type === "text" || !i.type);
-    fireEvent.change(inputs[0] || title, { target: { value: "QA job" } });
+    fireEvent.change(inputs[0] || title, { target: { value: "QA annual maintenance" } });
     const btn = screen.getByRole("button", { name: /Create & Skip/i });
     act(() => { fireEvent.click(btn); fireEvent.click(btn); });
     await waitFor(() => expect(jobCreate).toHaveBeenCalled());
     expect(jobCreate).toHaveBeenCalledTimes(1);
-    expect(jobCreate.mock.calls[0][0]).toMatchObject({ customer_id: "c1", customer_name: "Real Name" });
+    expect(jobCreate.mock.calls[0][0]).toMatchObject({ customer_id: "c1", customer_name: "Real Name", job_type: "maintenance" }); // typed from the title (Run 9)
     expect(jobCreate.mock.calls[0][0].id).toMatch(/[0-9a-f-]{36}/);
+  });
+
+  it("Run 9 D2: no job type is pre-picked; a title that doesn't say asks for one", async () => {
+    customersList = async () => [{ id: "c1", name: "Cust" }];
+    const { container } = renderAt("/jobs/new?customer=c1", "/jobs/new");
+    expect(screen.getByTestId("job-type")).toHaveTextContent("Pick the job type");
+    const inputs = [...container.querySelectorAll("input")].filter(i => i.type === "text" || !i.type);
+    fireEvent.change(inputs[0], { target: { value: "QA visit" } });
+    fireEvent.click(screen.getByRole("button", { name: /Create & Skip/i }));
+    await new Promise(r => setTimeout(r, 50));
+    expect(jobCreate).not.toHaveBeenCalled();
+    fireEvent.change(inputs[0], { target: { value: "QA starter replacement" } });
+    expect(screen.getByTestId("job-type")).toHaveTextContent("Diagnostic/Repair");
   });
 
   it("edit Save works while the customer list is still loading (batch-1 regression)", async () => {
@@ -87,7 +100,7 @@ describe("JobForm weak signal", () => {
     const { container } = renderAt("/jobs/new?customer=c1", "/jobs/new");
     expect(screen.getByRole("button", { name: "2 hr" })).toHaveAttribute("aria-pressed", "true");
     const inputs = [...container.querySelectorAll("input")].filter(i => i.type === "text" || !i.type);
-    fireEvent.change(inputs[0], { target: { value: "QA job" } });
+    fireEvent.change(inputs[0], { target: { value: "QA annual maintenance" } });
     fireEvent.click(screen.getByRole("button", { name: "3 hr" }));
     fireEvent.click(screen.getByRole("button", { name: /Create & Skip/i }));
     await waitFor(() => expect(jobCreate).toHaveBeenCalled());
@@ -100,7 +113,7 @@ describe("JobForm weak signal", () => {
     customersList = async () => [{ id: "c1", name: "Cust" }];
     const { container } = renderAt("/jobs/new?customer=c1", "/jobs/new");
     const inputs = [...container.querySelectorAll("input")].filter(i => i.type === "text" || !i.type);
-    fireEvent.change(inputs[0], { target: { value: "QA job" } });
+    fireEvent.change(inputs[0], { target: { value: "QA annual maintenance" } });
     fireEvent.click(screen.getByRole("button", { name: "3 hr" }));
     fireEvent.click(screen.getByRole("button", { name: /Create & Skip/i }));
     await waitFor(() => expect(jobCreate).toHaveBeenCalled());

@@ -24,7 +24,7 @@ import { newRequestId, createOnce, showSaveError, dismissSaveError } from "@/lib
 import { afterJobScheduled } from "@/lib/jobCreate";
 import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
 import { withEstimate } from "@/lib/jobEstimateColumn";
-import { JOB_TYPES, SERVICE_TYPES } from "@/lib/jobTypes";
+import { JOB_TYPES, SERVICE_TYPES, inferServiceType } from "@/lib/jobTypes";
 
 export default function JobForm() {
   const { id } = useParams();
@@ -41,7 +41,10 @@ export default function JobForm() {
     customer_id: preCustomer || "",
     customer_name: "",
     title: "",
-    job_type: "maintenance",
+    // Run 9 (D2): no type pre-picked. "Maintenance" used to be the default, so
+    // every job nobody changed was counted as Maintenance in Finance. The
+    // title suggests one when it's obvious; otherwise the tech picks.
+    job_type: "",
     status: "scheduled",
     scheduled_date: "",
     estimated_minutes: DEFAULT_ESTIMATE_MINUTES,
@@ -171,6 +174,12 @@ export default function JobForm() {
   };
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  const typeTouched = useRef(false);
+  const updateTitle = (value) => setForm(prev => ({
+    ...prev, title: value,
+    ...(!isEdit && !typeTouched.current ? { job_type: inferServiceType([value]) || "" } : {}),
+  }));
+  const typeMissing = () => { if (form.job_type) return false; haptics.error(); toast.error("Pick the job type"); return true; };
   // Local drafts of the long text fields (Run 8, A4): one set per job, or per
   // "new job" screen (and the customer it was opened for).
   const draftPrefix = isEdit ? `job:${id}:` : `job:new:${preCustomer || "any"}:`;
@@ -188,12 +197,14 @@ export default function JobForm() {
     e.preventDefault();
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
+    if (typeMissing()) return;
     submit({ data: form, sendConfirmation: false });
   };
 
   const handleCreate = (sendConfirmation) => {
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
+    if (typeMissing()) return;
     if (sendConfirmation && !form.scheduled_date) {
       haptics.error();
       toast.error('Set a scheduled date/time first, or use "Create & Skip Notification"');
@@ -221,12 +232,12 @@ export default function JobForm() {
           </div>
           <div>
             <Label className="text-xs">Title *</Label>
-            <Input value={form.title} onChange={e => update("title", e.target.value)} className="rounded-xl mt-1" placeholder="e.g. Annual maintenance" />
+            <Input value={form.title} onChange={e => updateTitle(e.target.value)} className="rounded-xl mt-1" placeholder="e.g. Annual maintenance" />
           </div>
           <div>
-            <Label className="text-xs">Job Type</Label>
-            <Select value={form.job_type} onValueChange={v => update("job_type", v)}>
-              <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>
+            <Label className="text-xs">Job Type *</Label>
+            <Select value={form.job_type} onValueChange={v => { typeTouched.current = true; update("job_type", v); }}>
+              <SelectTrigger className="rounded-xl mt-1" data-testid="job-type"><SelectValue placeholder="Pick the job type" /></SelectTrigger>
               <SelectContent>
                 {(form.job_type === "quote" ? JOB_TYPES : SERVICE_TYPES).map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>

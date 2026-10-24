@@ -114,6 +114,7 @@ const TABLE_MAP = {
   QuoteLineItem: 'quote_line_items',
   JobAgreement: 'job_agreements',
   PartsUsageLog: 'parts_usage_log',
+  WarrantyClaim: 'warranty_claims',
 };
 
 export const db = Object.fromEntries(
