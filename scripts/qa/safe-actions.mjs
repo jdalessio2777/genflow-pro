@@ -37,7 +37,7 @@ const PROD_HOSTS = new Set([
   'genflow-pro-jdalessio2777s-projects.vercel.app',
   'genflow-pro-git-main-jdalessio2777s-projects.vercel.app',
 ]);
-const PROD_DEPLOY_IDS = ['p8fkcpwg4', 'ca0gy4mpo', 'o4trppizt', 'n4tgec5ud', 'khrnhy3v0', 'riksip4zj'];
+const PROD_DEPLOY_IDS = ['r692fcifs', '898lhkepu', 'nhr2kp1wb', 'p8fkcpwg4', 'ca0gy4mpo', 'o4trppizt', 'n4tgec5ud', 'khrnhy3v0', 'riksip4zj'];
 const PREVIEW_RE = /^genflow-([a-z0-9]{9})-jdalessio2777s-projects\.vercel\.app$/;
 const LOCAL_RE = /^(localhost|127\.0\.0\.1)$/;
 

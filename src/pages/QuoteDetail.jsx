@@ -8,7 +8,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink, CalendarPlus } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
-import { jobFromApprovedQuote, jobLinesFromQuote } from "@/lib/quoteToJob";
+import { jobFromApprovedQuote, jobLinesFromQuote, quoteTitle, sortQuoteLines } from "@/lib/quoteToJob";
 import { createOnce, newRequestId } from "@/lib/saveSafety";
 import { afterSheetsClose } from "@/lib/sheetHistory";
 import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
@@ -35,7 +35,7 @@ export default function QuoteDetail() {
 
   const { data: lineItems = [] } = useQuery({
     queryKey: ["quote-line-items", id],
-    queryFn: () => db.QuoteLineItem.filter({ quote_id: id }),
+    queryFn: async () => sortQuoteLines(await db.QuoteLineItem.filter({ quote_id: id })),
   });
 
   const { data: customer } = useQuery({
@@ -111,7 +111,7 @@ export default function QuoteDetail() {
       ]);
       const ids = createIds.current.lines;
       lineItems.forEach(l => { ids[l.id] ??= newRequestId(); });
-      const rows = jobLinesFromQuote(lineItems, { jobId: job.id, catalogParts, catalogRates, ids, agreementTypeForRate });
+      const rows = jobLinesFromQuote(lineItems, { jobId: job.id, catalogParts, catalogRates, ids, agreementTypeForRate, at: Date.now() });
       await Promise.all([
         ...rows.parts.map(r => createOnce(db.JobPart, r.id, r)),
         ...rows.labor.map(r => createOnce(db.JobLabor, r.id, r)),
@@ -166,9 +166,12 @@ export default function QuoteDetail() {
 
       <div className="p-4 space-y-3 max-w-lg mx-auto pb-8">
         <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-base font-bold">{name}</p>
-            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${STATUS_STYLES[quote.status] || "bg-gray-100 text-gray-700"}`}>
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="min-w-0">
+              <p className="text-base font-bold">{name}</p>
+              {quoteTitle(lineItems) && <p className="text-sm text-muted-foreground" data-testid="quote-title">{quoteTitle(lineItems)}</p>}
+            </div>
+            <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${STATUS_STYLES[quote.status] || "bg-gray-100 text-gray-700"}`}>
               {quote.status}
             </span>
           </div>
