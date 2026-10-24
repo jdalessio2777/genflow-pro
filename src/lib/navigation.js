@@ -120,6 +120,7 @@ export function previousEntry(location) {
 // the tapped tab instead of the tab it was pushed from.
 let pendingTab = null;
 export const setPendingTab = (tab) => { pendingTab = tab; };
+export const isTabSwitchPending = () => pendingTab != null;
 
 // Called by the router subscriber after every completed navigation.
 export function recordNavigation(action, location) {

@@ -9,7 +9,9 @@ import { useEffect } from "react";
 // [data-no-sheet-drag] opts a region out (signature pads, horizontal strips).
 // sheet: the sheet element itself (from a callback ref, so this runs once it
 // is mounted); the others are refs.
-export function useSheetDrag({ sheet, scrollRef, grabberRef, overlayRef, onClose, enabled = true }) {
+// grabberOnly: only a drag that starts on the grabber/header moves the sheet
+// (the full-screen editor, whose text scrolls on its own).
+export function useSheetDrag({ sheet, scrollRef, grabberRef, overlayRef, onClose, enabled = true, grabberOnly = false }) {
   useEffect(() => {
     if (!enabled || !sheet) return undefined;
     let start = null; // { y, x, t, onGrabber }
@@ -27,15 +29,22 @@ export function useSheetDrag({ sheet, scrollRef, grabberRef, overlayRef, onClose
     };
     const begin = (x, y, target) => {
       if (target?.closest?.("[data-no-sheet-drag]")) { start = null; return; }
-      start = { x, y, t: performance.now(), onGrabber: !!grabberRef?.current?.contains(target) };
+      // Anything between the finger and the sheet that is scrolled down (the
+      // sheet body, or a list inside it) scrolls first; the sheet moves only
+      // once everything under the finger is at its top.
+      let scrolled = false;
+      for (let el = target; el && el !== sheet; el = el.parentElement) {
+        if (el.scrollTop > 0 && el.scrollHeight > el.clientHeight) { scrolled = true; break; }
+      }
+      start = { x, y, t: performance.now(), onGrabber: !!grabberRef?.current?.contains(target), scrolled };
       dy = 0; dragging = false;
     };
     const move = (x, y, e) => {
       if (!start) return;
       const d = y - start.y;
       if (!dragging) {
-        const atTop = (scrollRef?.current?.scrollTop ?? 0) <= 0;
-        if (d > 6 && Math.abs(x - start.x) < d && (start.onGrabber || atTop)) {
+        const atTop = !start.scrolled && (scrollRef?.current?.scrollTop ?? 0) <= 0;
+        if (d > 6 && Math.abs(x - start.x) < d && (start.onGrabber || (atTop && !grabberOnly))) {
           dragging = true;
           start.y = y; start.t = performance.now();
           document.activeElement?.blur?.(); // the keyboard goes down with the sheet
@@ -98,5 +107,5 @@ export function useSheetDrag({ sheet, scrollRef, grabberRef, overlayRef, onClose
       sheet.removeEventListener("touchcancel", te);
       sheet.removeEventListener("pointerdown", pd);
     };
-  }, [sheet, scrollRef, grabberRef, overlayRef, onClose, enabled]);
+  }, [sheet, scrollRef, grabberRef, overlayRef, onClose, enabled, grabberOnly]);
 }

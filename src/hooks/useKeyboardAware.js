@@ -27,7 +27,9 @@ export function keepFieldVisible(el, { vv = window.visualViewport, topReserve = 
   let dy = 0;
   if (r.bottom > bottom) dy = r.bottom - bottom;
   else if (r.top < top) dy = r.top - top - 8;
-  if (dy) window.scrollBy(0, dy);
+  // Run 9 (C2): one smooth move instead of a jump (instant under reduced motion).
+  const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (dy) window.scrollBy({ top: dy, behavior: reduce ? "auto" : "smooth" });
   return dy;
 }
 

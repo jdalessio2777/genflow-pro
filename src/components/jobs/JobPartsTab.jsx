@@ -391,11 +391,10 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
               <Plus className="w-3 h-3" /> Add Part
             </Button>
           </DialogTrigger>
-          {/* Pinned near the top on phones (not vertically centred) so the
-              dialog doesn't jump as the result list grows/shrinks or the
-              on-screen keyboard opens. */}
+          {/* A bottom sheet (Run 9) that never moves as the result list
+              grows/shrinks: its body is a column and the list scrolls inside. */}
           <DialogContent
-            className="max-w-sm top-3 translate-y-0 sm:top-[50%] sm:translate-y-[-50%] max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden"
+            className="flex flex-col overflow-hidden"
             onOpenAutoFocus={(e) => {
               // Don't pop the keyboard over the category list on touch
               // devices; on desktop, focus the search box straight away.

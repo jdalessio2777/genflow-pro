@@ -59,8 +59,9 @@ function composeRefs(...refs) {
 // taller than the visible area, top always below the clock/Dynamic Island
 // (--sat), bottom on the keyboard (--kb-h) — so its very top can always be
 // scrolled to. Its body is the one scroller; the page underneath is locked.
-// variant="center" (default for now): a centred box that fades + scales.
-const DialogContent = React.forwardRef(({ className, children, onPointerDownOutside, onInteractOutside, variant = "center", style, ...props }, ref) => {
+// variant="center": a centred box that fades + scales (command palette).
+// Sheet is the default: every form dialog in the app is a bottom sheet.
+const DialogContent = React.forwardRef(({ className, children, onPointerDownOutside, onInteractOutside, variant = "sheet", style, ...props }, ref) => {
   if (variant === "sheet") return <SheetContent ref={ref} className={className} style={style} onPointerDownOutside={onPointerDownOutside} onInteractOutside={onInteractOutside} {...props}>{children}</SheetContent>
   return (
     <DialogPortal>
