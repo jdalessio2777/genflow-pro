@@ -8,6 +8,12 @@
 // "parts-catalog", "job", ...), so every existing
 // invalidateQueries({ queryKey: ["jobs"] }) still matches them by prefix.
 import { db } from "@/lib/db";
+import { jobSlice, loadJobBundle } from "@/lib/jobBundle";
+
+// Catalog, labor rates and settings change rarely (and every screen that
+// edits them invalidates them): kept for 5 minutes instead of refetched on
+// every job opened (B4).
+export const REFERENCE_STALE_MS = 5 * 60_000;
 
 // ---- Lists -----------------------------------------------------------------
 export const jobsListQuery = (limit) => ({
@@ -44,17 +50,20 @@ export const normalizePart = (p) =>
 export const partsCatalogQuery = () => ({
   queryKey: ["parts-catalog"],
   queryFn: () => db.Part.list("name").then((rows) => rows.map(normalizePart)),
+  staleTime: REFERENCE_STALE_MS,
 });
 
 // Same key and shape as useSettings() (src/lib/useSettings.js).
 export const appSettingsQuery = () => ({
   queryKey: ["app-settings"],
   queryFn: () => db.AppSettings.list("key"),
+  staleTime: REFERENCE_STALE_MS,
 });
 
 export const laborRatesQuery = () => ({
   queryKey: ["labor-rates"],
   queryFn: () => db.LaborRate.list("name"),
+  staleTime: REFERENCE_STALE_MS,
 });
 
 // ---- Job screen ------------------------------------------------------------
@@ -65,33 +74,42 @@ export const DETAIL_STALE_MS = 10_000;
 
 export const jobQuery = (id) => ({
   queryKey: ["job", id],
-  queryFn: async () => { const r = await db.Job.filter({ id }); return r[0]; },
+  queryFn: () => jobSlice(id, "job", async () => (await db.Job.filter({ id }))[0]),
   staleTime: DETAIL_STALE_MS,
 });
 export const jobPartsQuery = (id) => ({
   queryKey: ["job-parts", id],
-  queryFn: () => db.JobPart.filter({ job_id: id }),
+  queryFn: () => jobSlice(id, "parts", () => db.JobPart.filter({ job_id: id })),
   staleTime: DETAIL_STALE_MS,
 });
 export const jobLaborQuery = (id) => ({
   queryKey: ["job-labor", id],
-  queryFn: () => db.JobLabor.filter({ job_id: id }),
+  queryFn: () => jobSlice(id, "labor", () => db.JobLabor.filter({ job_id: id })),
   staleTime: DETAIL_STALE_MS,
 });
 export const jobInvoiceQuery = (id) => ({
   queryKey: ["job-invoice", id],
-  queryFn: () => db.Invoice.filter({ job_id: id }),
+  queryFn: () => jobSlice(id, "invoices", () => db.Invoice.filter({ job_id: id })),
   staleTime: DETAIL_STALE_MS,
 });
 
 export const jobDocsQuery = (id) => ({
   queryKey: ["job-docs", id],
-  queryFn: () => db.JobDocument.filter({ job_id: id }),
+  queryFn: () => jobSlice(id, "documents", () => db.JobDocument.filter({ job_id: id })),
   staleTime: DETAIL_STALE_MS,
 });
 export const jobPhotosQuery = (id) => ({
   queryKey: ["job-photos", id],
-  queryFn: () => db.JobPhoto.filter({ job_id: id }),
+  queryFn: () => jobSlice(id, "photos", () => db.JobPhoto.filter({ job_id: id })),
+  staleTime: DETAIL_STALE_MS,
+});
+// The signed-agreement row for this job (job_agreements, migration 0022).
+export const jobAgreementQuery = (id) => ({
+  queryKey: ["job-agreement", id],
+  queryFn: () => jobSlice(id, "agreement", async () => {
+    try { const r = await db.JobAgreement.filter({ job_id: id }); return r[0] || null; }
+    catch { return null; }
+  }),
   staleTime: DETAIL_STALE_MS,
 });
 export const jobCustomerQuery = (customerId) => ({
@@ -108,16 +126,27 @@ export const customerHistoryQuery = (customerId) => ({
 // Everything the job screen loads, started together: the main records are
 // returned (the route loader waits for those), the rest just start loading —
 // including the job's customer and history as soon as the job row is in.
+// B4: all the per-job records come from one request (lib/jobBundle.js); the
+// bundle also carries the customer and their jobs, which seed those caches so
+// they need no request of their own.
 export function startJobQueries(queryClient, id) {
   const main = [jobQuery(id), jobPartsQuery(id), jobLaborQuery(id), jobInvoiceQuery(id)]
     .map((q) => queryClient.ensureQueryData(q).catch(() => null));
-  for (const q of [jobDocsQuery(id), jobPhotosQuery(id), partsCatalogQuery(), laborRatesQuery(), appSettingsQuery()]) queryClient.prefetchQuery(q).catch(() => {});
-  main[0].then((job) => {
-    if (!job?.customer_id) return;
-    queryClient.prefetchQuery(jobCustomerQuery(job.customer_id)).catch(() => {});
-    queryClient.prefetchQuery(customerHistoryQuery(job.customer_id)).catch(() => {});
-  });
+  for (const q of [jobDocsQuery(id), jobPhotosQuery(id), jobAgreementQuery(id), partsCatalogQuery(), laborRatesQuery(), appSettingsQuery()]) queryClient.prefetchQuery(q).catch(() => {});
+  seedJobCustomer(queryClient, id);
   return main;
+}
+
+// Customer + history from the bundle into their own cache entries (unless
+// fresher data is already there); fetched separately only if that fails.
+export function seedJobCustomer(queryClient, id) {
+  loadJobBundle(id).then((b) => {
+    const cid = b?.job?.customer_id;
+    if (!cid || !b.customer) return;
+    const fresh = (key) => { const s = queryClient.getQueryState(key); return s?.dataUpdatedAt && Date.now() - s.dataUpdatedAt < DETAIL_STALE_MS; };
+    if (!fresh(["job-customer", cid])) queryClient.setQueryData(["job-customer", cid], b.customer);
+    if (!fresh(["customer-history", cid])) queryClient.setQueryData(["customer-history", cid], b.customerHistory);
+  }).catch(() => {});
 }
 
 // Prefetch the job screen on touch-down on a job row (~100-300 ms before the

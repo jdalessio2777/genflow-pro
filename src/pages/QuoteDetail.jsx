@@ -5,7 +5,12 @@ import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import PageHeader from "@/components/layout/PageHeader";
-import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink, CalendarPlus } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink, CalendarPlus, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useBack } from "@/hooks/useBack";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { jobFromApprovedQuote, jobLinesFromQuote, quoteTitle, sortQuoteLines } from "@/lib/quoteToJob";
@@ -146,6 +151,25 @@ export default function QuoteDetail() {
   });
   const canScheduleResultingJob = !!resultingJob && !resultingJob.scheduled_date && resultingJob.status === "scheduled";
 
+  // Delete (B3): the app's own confirm, staff only (the app is staff-only and
+  // quotes are staff-only in the database). Only the quote and its lines go
+  // (lines cascade); a job it created is never touched — the confirm for an
+  // approved quote says so before anything happens.
+  const [askDelete, setAskDelete] = useState(false);
+  const goBack = useBack("/inbox?tab=quotes");
+  const deleteMutation = useMutation({
+    mutationFn: () => db.Quote.delete(id),
+    onSuccess: () => {
+      setAskDelete(false);
+      queryClient.removeQueries({ queryKey: ["quote", id] });
+      queryClient.invalidateQueries({ queryKey: ["quotes-inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      toast.success("Quote deleted");
+      afterSheetsClose(() => goBack());
+    },
+    onError: (e) => toast.error(`Quote NOT deleted: ${e.message}`),
+  });
+
   // Created / scheduled, or "Schedule later": the job replaces this quote
   // screen (back from the job returns to where the quote was opened from),
   // after the sheet's history entry is gone.
@@ -273,7 +297,39 @@ export default function QuoteDetail() {
             </Button>
           </div>
         )}
+        <Button
+          variant="ghost"
+          className="w-full rounded-xl gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+          data-testid="quote-delete"
+          disabled={deleteMutation.isPending}
+          onClick={() => setAskDelete(true)}
+        >
+          <Trash2 className="w-4 h-4" /> Delete Quote
+        </Button>
       </div>
+
+      <AlertDialog open={askDelete} onOpenChange={(o) => { if (!deleteMutation.isPending) setAskDelete(o); }}>
+        <AlertDialogContent className="max-w-sm rounded-2xl" data-testid="quote-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{quote.resulting_job_id ? "This quote created a job" : "Delete this quote?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {quote.resulting_job_id
+                ? <>Deleting the quote for {name} keeps its job{resultingJob?.title ? <> “{resultingJob.title}”</> : null} — the job, its lines and its invoice stay. Only the quote is removed. This can't be undone.</>
+                : <>The quote for {name} ({formatCurrency(total)}) will be removed. This can't be undone.</>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="h-11 rounded-xl" disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-11 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => { e.preventDefault(); deleteMutation.mutate(); }}
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {quote.resulting_job_id ? "Delete Quote Only" : "Delete Quote"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ScheduleJobSheet
         open={sheetOpen}

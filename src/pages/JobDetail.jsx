@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
-import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
+import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobAgreementQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
 import { DetailSkeleton } from "@/components/ui/skeleton";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
@@ -230,13 +230,7 @@ export default function JobDetail() {
 
   // Maintenance agreement signed during THIS job (job_agreements, migration
   // 0022). Its PDF rides on the completion email.
-  const { data: jobAgreement = null } = useQuery({
-    queryKey: ["job-agreement", id],
-    queryFn: async () => {
-      try { const r = await db.JobAgreement.filter({ job_id: id }); return r[0] || null; }
-      catch { return null; }
-    },
-  });
+  const { data: jobAgreement = null } = useQuery(jobAgreementQuery(id));
 
   const { data: catalogParts = [] } = useQuery(partsCatalogQuery());
 

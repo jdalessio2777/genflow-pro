@@ -1,6 +1,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { FIELD_BOX } from "@/components/ui/fieldStyles"
 
 // Text boxes grow with their text instead of scrolling inside themselves, so
 // a drag that starts on one scrolls the page (F-13 / H-4): the page stays the
@@ -47,7 +48,8 @@ const Textarea = React.forwardRef(({ className, style, onInput, ...props }, ref)
   return (
     (<textarea
       className={cn(
-        "flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2.5 text-base leading-6 shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        FIELD_BOX,
+        "flex min-h-[60px] py-2.5 leading-6",
         className
       )}
       style={{ overflowY: "hidden", resize: "none", ...style }}
