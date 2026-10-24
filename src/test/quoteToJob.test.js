@@ -20,9 +20,8 @@ describe('jobFromApprovedQuote (Run 9: A2 blank description, A4 quote title)', (
 
   it("titles the job with the quote's title (its main line), never \"Quote Follow-up\"", () => {
     const lines = [
-      { type: 'part', description: 'Main breaker 50A', created_at: '2026-10-20T03:11:30Z' },
-      { type: 'custom', description: 'One-Time Tune-Up (Air-Cooled)', created_at: '2026-10-20T03:11:36Z' },
-      { type: 'custom', description: 'Generator Main Line Circuit Breaker Replacement', created_at: '2026-10-20T03:11:35Z' },
+      { type: 'labor', description: 'One-Time Tune-Up (Air-Cooled)', created_at: '2026-10-20T03:11:35.001Z' },
+      { type: 'custom', description: 'Generator Main Line Circuit Breaker Replacement', created_at: '2026-10-20T03:11:35.000Z' },
     ]
     const job = jobFromApprovedQuote({}, { customerId: 'c', customerName: 'Lingyan Wang', lineItems: lines })
     expect(job.title).toBe('Generator Main Line Circuit Breaker Replacement')
@@ -30,9 +29,9 @@ describe('jobFromApprovedQuote (Run 9: A2 blank description, A4 quote title)', (
     expect(jobFromApprovedQuote({}, { customerId: 'c', customerName: 'Pat', lineItems: [] }).title).toBe('Job for Pat')
   })
 
-  it('quoteTitle: first labor line by order added, else first part; placeholder detection', () => {
+  it('quoteTitle: the first line in the order added (created_at), any type', () => {
     expect(quoteTitle([{ type: 'part', description: 'Battery 26R' }])).toBe('Battery 26R')
-    expect(quoteTitle([{ type: 'part', description: 'P', created_at: '1' }, { type: 'labor', description: '  Labor A ', created_at: '2' }])).toBe('Labor A')
+    expect(quoteTitle([{ type: 'labor', description: 'Labor B', created_at: '2026-10-24T16:00:00.002Z' }, { type: 'part', description: ' Part A ', created_at: '2026-10-24T16:00:00.001Z' }])).toBe('Part A')
     expect(quoteTitle([])).toBe('')
     expect(quoteTitle([{ description: '   ' }])).toBe('')
     expect(isPlaceholderJobTitle('Quote Follow-up — Lingyan Wang')).toBe(true)

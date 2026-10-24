@@ -8,7 +8,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { CheckCircle2, XCircle, Loader2, Mail, Phone, MapPin, ExternalLink, CalendarPlus } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
-import { jobFromApprovedQuote, jobLinesFromQuote, quoteTitle } from "@/lib/quoteToJob";
+import { jobFromApprovedQuote, jobLinesFromQuote, quoteTitle, sortQuoteLines } from "@/lib/quoteToJob";
 import { createOnce, newRequestId } from "@/lib/saveSafety";
 import { afterSheetsClose } from "@/lib/sheetHistory";
 import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
@@ -35,7 +35,7 @@ export default function QuoteDetail() {
 
   const { data: lineItems = [] } = useQuery({
     queryKey: ["quote-line-items", id],
-    queryFn: () => db.QuoteLineItem.filter({ quote_id: id }),
+    queryFn: async () => sortQuoteLines(await db.QuoteLineItem.filter({ quote_id: id })),
   });
 
   const { data: customer } = useQuery({

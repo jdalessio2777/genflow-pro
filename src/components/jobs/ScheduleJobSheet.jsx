@@ -114,8 +114,8 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
   useEffect(() => {
     if (!open || titleTouched.current || !isPlaceholderJobTitle(job?.title)) return;
     setTitle(quoteTitle([
-      ...labor.map(l => ({ type: "labor", description: l.description, created_at: l.created_at })),
-      ...parts.map(p => ({ type: "part", description: p.name, created_at: p.created_at })),
+      ...labor.map(l => ({ description: l.description, created_at: l.created_at })),
+      ...parts.map(p => ({ description: p.name, created_at: p.created_at })),
     ]));
   }, [open, job?.title, lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
 

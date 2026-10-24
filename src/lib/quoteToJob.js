@@ -1,14 +1,13 @@
 import { inferServiceType, isServiceType } from "./jobTypes.js";
 
-// A quote has no title column: its title is its main line — the first labor
-// line in the order the lines were added (else the first line). E.g. "Generator
-// Main Line Circuit Breaker Replacement". Empty string when it has no lines.
+// A quote has no title column: its title is its first line, in the order the
+// lines were added in the Quote Builder (created_at, 1 ms apart since Run 9).
+// E.g. "Generator Main Line Circuit Breaker Replacement". "" without lines.
+export const sortQuoteLines = (lineItems = []) =>
+  [...(lineItems || [])].sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
 export function quoteTitle(lineItems = []) {
-  const lines = [...(lineItems || [])]
-    .filter(l => (l?.description || "").trim())
-    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
-  const main = lines.find(l => l.type !== "part") || lines[0];
-  return (main?.description || "").trim();
+  const first = sortQuoteLines(lineItems).find(l => (l?.description || "").trim());
+  return (first?.description || "").trim();
 }
 
 // Jobs approved before Run 9 were titled "Quote Follow-up — <customer>". The
