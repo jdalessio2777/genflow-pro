@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FIELD } from "@/components/ui/fieldStyles";
 import { Gift, Trash2, Plus } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
@@ -258,7 +259,7 @@ function AddReferralModal({ open, onClose, onSuccess }) {
             <select
               value={form.planType}
               onChange={e => set("planType", e.target.value)}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              className={`${FIELD} bg-background`}
             >
               {PLAN_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>

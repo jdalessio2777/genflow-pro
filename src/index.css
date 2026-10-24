@@ -234,6 +234,14 @@ input[type="time"]::-webkit-datetime-edit,
 input[type="datetime-local"]::-webkit-datetime-edit {
   padding: 0;
 }
+/* No desktop spin arrows inside number fields (iPhone never shows them; they
+   ate the right edge of narrow Cost/Price fields in a desktop browser). */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
 /* Grid/flex children may shrink below their content (a field never pushes
    its column wider than its share). */
 .form-row > * { min-width: 0; }

@@ -136,8 +136,9 @@ export default function RouteMap() {
                     </div>
                   </div>
                   {/* Three equal buttons (B2): "Open Job" took half the row and
-                      squeezed Call/Nextiva into quarters, so an SE showed "Ne…". */}
-                  <div className="grid grid-cols-3 gap-1.5 mt-2.5 ml-10">
+                      squeezed Call/Nextiva into quarters, so an SE showed "Ne…". Full card
+                      width (no 40 px indent) so "Nextiva" fits an SE. */}
+                  <div className="grid grid-cols-3 gap-1.5 mt-2.5">
                     <Button asChild variant="outline" size="sm" className={`${cust?.phone ? "" : "col-span-3 "}min-w-0 rounded-xl h-9 text-xs px-1.5`}>
                       <Link to={`/jobs/${job.id}`}>Open Job</Link>
                     </Button>
