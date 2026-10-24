@@ -142,7 +142,10 @@ describe("B1 approve -> Schedule this job", () => {
     await screen.findByText("Schedule this job", { selector: "h2" });
     expect(jobCreate).toHaveBeenCalledTimes(1);
     expect(store.jobs).toHaveLength(1);
-    expect(store.jobs[0]).toMatchObject({ customer_description: "Replace starter", status: "scheduled", job_type: "diagnostic_repair" });
+    expect(store.jobs[0]).toMatchObject({ customer_description: null, title: "Install labor", status: "scheduled", job_type: "diagnostic_repair" });
+    // A2: the description box starts blank; A4: the title box shows the quote's title, editable
+    expect(screen.getByLabelText("Job Description (customer-facing)")).toHaveValue("");
+    expect(screen.getByTestId("schedule-sheet-title")).toHaveValue("Install labor");
     expect(screen.getByTestId("schedule-sheet-type")).toHaveTextContent("Diagnostic/Repair");
     expect(store.jobs[0].scheduled_date).toBeUndefined();
     expect(store.labor).toHaveLength(1);
@@ -155,6 +158,8 @@ describe("B1 approve -> Schedule this job", () => {
     expect(sheetLines).toHaveTextContent("Starter");
     expect(sheetLines).toHaveTextContent("$90.00");
 
+    fireEvent.change(screen.getByTestId("schedule-sheet-title"), { target: { value: "Starter replacement" } });
+    fireEvent.change(screen.getByLabelText("Job Description (customer-facing)"), { target: { value: "Replace starter" } });
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-11-03" } });
     fireEvent.change(screen.getByLabelText("Arrival time"), { target: { value: "10:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Alex" }));
@@ -162,7 +167,7 @@ describe("B1 approve -> Schedule this job", () => {
     fireEvent.click(screen.getByRole("button", { name: /Create & Skip Notification/ }));
     await waitFor(() => expect(sync).toHaveBeenCalled());
     const [, patch] = jobUpdate.mock.calls.find(([, p]) => p.scheduled_date);
-    expect(patch).toMatchObject({ scheduled_date: new Date("2026-11-03T10:00").toISOString(), assigned_to_name: "Alex", customer_description: "Replace starter", job_type: "diagnostic_repair" });
+    expect(patch).toMatchObject({ scheduled_date: new Date("2026-11-03T10:00").toISOString(), title: "Starter replacement", assigned_to_name: "Alex", customer_description: "Replace starter", job_type: "diagnostic_repair" });
     expect(patch).not.toHaveProperty("estimated_minutes"); // column missing -> not sent
     expect(sync.mock.calls[0][0].job).toMatchObject({ estimated_minutes: 180, estimated_duration: 3 });
     expect(sendEmail).not.toHaveBeenCalled();
@@ -208,9 +213,12 @@ describe("B1 approve -> Schedule this job", () => {
     seedQuote({ status: "approved", resulting_job_id: "jX", customer_id: "c1" });
     store.customers = [{ id: "c1", name: "QA Pat", email: "pat@example.com" }];
     store.jobs = [{ id: "jX", customer_id: "c1", customer_name: "QA Pat", status: "scheduled", scheduled_date: null, title: "Quote Follow-up — QA Pat" }];
+    store.labor = [{ id: "lX", job_id: "jX", description: "Install labor", total_price: 350, created_at: "2026-10-20T00:00:01Z" }];
     renderQuote();
     fireEvent.click(await screen.findByRole("button", { name: /Schedule this job/ }));
     await screen.findByText("Schedule this job", { selector: "h2" });
+    // A4: an old "Quote Follow-up — …" job is offered the quote's title instead
+    await waitFor(() => expect(screen.getByTestId("schedule-sheet-title")).toHaveValue("Install labor"));
     fireEvent.click(screen.getByRole("button", { name: /Schedule later/ }));
     await screen.findByText("job page");
     expect(jobCreate).not.toHaveBeenCalled();

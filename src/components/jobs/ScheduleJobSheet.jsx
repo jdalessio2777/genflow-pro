@@ -17,6 +17,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
 import { withEstimate } from "@/lib/jobEstimateColumn";
 import { afterJobScheduled } from "@/lib/jobCreate";
+import { isPlaceholderJobTitle, quoteTitle } from "@/lib/quoteToJob";
 import { SERVICE_TYPES, serviceTypePrefill } from "@/lib/jobTypes";
 import { newRequestId, showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
 import { haptics } from "@/lib/haptics";
@@ -35,9 +36,10 @@ export function appointmentIso(date, time) {
  * "Schedule this job" (B1). Opens right after a quote is approved, and from
  * the job screen of an approved job that isn't scheduled yet. The job row
  * already exists (created at Approve, with the quote's lines); this sheet
- * only gives it a service type, date, arrival time, tech and estimated time
- * on site, so
- * opening it twice or tapping twice never makes a second job.
+ * gives it its title (starts as the quote's title, Run 9 A4), a short
+ * customer-facing description (starts blank, A2), service type, date,
+ * arrival time, tech and estimated time on site, so opening it twice or
+ * tapping twice never makes a second job.
  *
  * onDone("scheduled" | "later", job) — the caller closes the sheet / moves on.
  * from: "quote" (Create & … labels) or "job" (Schedule & … labels).
@@ -55,6 +57,8 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
   const [tech, setTech] = useState("");
   const [estimate, setEstimate] = useState(DEFAULT_ESTIMATE_MINUTES);
   const [description, setDescription] = useState("");
+  const [title, setTitle] = useState("");
+  const titleTouched = useRef(false);
   const [serviceType, setServiceType] = useState("");
   const typeTouched = useRef(false);
   const filledFor = useRef(null);
@@ -70,6 +74,8 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     setTech(job.assigned_to_name || (TECHS.includes(me) ? me : ""));
     setEstimate(Number(job.estimated_minutes) > 0 ? Number(job.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES);
     setDescription(job.customer_description || "");
+    titleTouched.current = false;
+    setTitle(isPlaceholderJobTitle(job.title) ? "" : (job.title || ""));
     setFilledId(job.id);
     typeTouched.current = false;
     setServiceType(serviceTypePrefill(job.job_type, []));
@@ -103,9 +109,19 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     if (!open || typeTouched.current) return;
     setServiceType(serviceTypePrefill(job?.job_type, lineKey.split("\n")));
   }, [open, job?.job_type, lineKey]);
+  // A job approved before Run 9 still carries the "Quote Follow-up — …"
+  // placeholder: offer the quote's title (its main line) instead.
+  useEffect(() => {
+    if (!open || titleTouched.current || !isPlaceholderJobTitle(job?.title)) return;
+    setTitle(quoteTitle([
+      ...labor.map(l => ({ type: "labor", description: l.description, created_at: l.created_at })),
+      ...parts.map(p => ({ type: "part", description: p.name, created_at: p.created_at })),
+    ]));
+  }, [open, job?.title, lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = (sendConfirmation) => guard.run(async function scheduleIt() {
     const scheduled_date = appointmentIso(date, time);
+    if (!title.trim()) { haptics.error(); toast.error("Give the job a title"); return; }
     if (!serviceType) { haptics.error(); toast.error("Pick the service type"); return; }
     if (!scheduled_date) { haptics.error(); toast.error("Pick a date and arrival time"); return; }
     if (sendConfirmation && !customer?.email) {
@@ -117,6 +133,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     try {
       const payload = await withEstimate({
         scheduled_date,
+        title: title.trim(),
         job_type: serviceType,
         assigned_to_name: tech || null,
         customer_description: description.trim() || null,
@@ -149,17 +166,22 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!guard.busy) onOpenChange(v); }}>
-      {/* One column that can't grow past the sheet (minmax(0,1fr)): an auto
-          grid column took the width of its widest content (a long line name,
-          the date input), so the chips and lines card ran under the right
-          edge with no padding (B1 sheet, F6). */}
-      <DialogContent className="max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden p-5 gap-3 grid-cols-[minmax(0,1fr)]" data-testid="schedule-job-sheet">
+      {/* A bottom sheet (Run 9, A3): its top is always below the status bar
+          and above the keyboard, so it scrolls freely to the very top. One
+          column that can't grow past the sheet (minmax(0,1fr)): an auto grid
+          column took the width of its widest content (B1 sheet, F6). */}
+      <DialogContent variant="sheet" className="gap-3 grid-cols-[minmax(0,1fr)]" data-testid="schedule-job-sheet">
         <DialogHeader className="text-left">
           <DialogTitle>Schedule this job</DialogTitle>
-          <DialogDescription className="text-xs">
-            {job?.customer_name}{job?.title ? ` · ${job.title}` : ""}
-          </DialogDescription>
+          <DialogDescription className="text-xs">{job?.customer_name}</DialogDescription>
         </DialogHeader>
+
+        <div>
+          <Label className="text-xs" htmlFor="sched-title">Job Title</Label>
+          <Input id="sched-title" data-testid="schedule-sheet-title" value={title} enterKeyHint="done"
+            onChange={e => { titleTouched.current = true; setTitle(e.target.value); }}
+            placeholder="e.g. Main line breaker replacement" className="rounded-xl mt-1" />
+        </div>
 
         {lines.length > 0 && (
           <div className="rounded-xl border border-border px-3 py-2 space-y-1" data-testid="schedule-sheet-lines">
@@ -228,10 +250,10 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
               guard={false}
               title="Job Description"
               rows={5}
-              placeholder="What we'll be doing, in plain language"
+              placeholder="A short description of the job, in plain language"
             />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-1">From the quote's Scope of Work · included in the confirmation email</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Starts blank (the Scope of Work stays on the quote) · included in the confirmation email</p>
         </div>
 
         <p className="text-xs text-muted-foreground" data-testid="schedule-sheet-recipient">
