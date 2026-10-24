@@ -38,14 +38,19 @@ export function jobFromApprovedQuote(quote, { customerId, customerName, lineItem
   };
 }
 
-export function jobLinesFromQuote(lineItems, { jobId, catalogParts = [], catalogRates = [], ids = {}, agreementTypeForRate = () => null }) {
+// at (ms): when given, rows get created_at 1 ms apart in the quote's order, so
+// the job lists its lines in the order they were quoted.
+export function jobLinesFromQuote(lineItems, { jobId, catalogParts = [], catalogRates = [], ids = {}, agreementTypeForRate = () => null, at = null }) {
   const parts = [];
   const labor = [];
-  for (const l of lineItems || []) {
+  let n = 0;
+  for (const l of sortQuoteLines(lineItems)) {
+    const stamp = at != null ? { created_at: new Date(at + n++).toISOString() } : {};
     if (l.type === "part") {
       const cat = catalogParts.find(p => p.id === l.source_part_id);
       const qty = l.quantity || 1;
       parts.push({
+        ...stamp,
         id: ids[l.id],
         job_id: jobId,
         name: l.description,
@@ -61,6 +66,7 @@ export function jobLinesFromQuote(lineItems, { jobId, catalogParts = [], catalog
       const rate = catalogRates.find(r => r.id === l.source_labor_rate_id);
       const agreement = agreementTypeForRate(rate);
       labor.push({
+        ...stamp,
         id: ids[l.id],
         job_id: jobId,
         description: l.description,

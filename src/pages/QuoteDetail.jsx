@@ -111,7 +111,7 @@ export default function QuoteDetail() {
       ]);
       const ids = createIds.current.lines;
       lineItems.forEach(l => { ids[l.id] ??= newRequestId(); });
-      const rows = jobLinesFromQuote(lineItems, { jobId: job.id, catalogParts, catalogRates, ids, agreementTypeForRate });
+      const rows = jobLinesFromQuote(lineItems, { jobId: job.id, catalogParts, catalogRates, ids, agreementTypeForRate, at: Date.now() });
       await Promise.all([
         ...rows.parts.map(r => createOnce(db.JobPart, r.id, r)),
         ...rows.labor.map(r => createOnce(db.JobLabor, r.id, r)),

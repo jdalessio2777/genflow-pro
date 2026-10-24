@@ -88,7 +88,7 @@ const DialogContent = React.forwardRef(({ className, children, onPointerDownOuts
 })
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
-const SheetContent = React.forwardRef(({ className, children, onPointerDownOutside, onInteractOutside, style, ...props }, ref) => {
+const SheetContent = React.forwardRef(({ className, children, onPointerDownOutside, onInteractOutside, onOpenAutoFocus, style, ...props }, ref) => {
   const [sheet, setSheet] = React.useState(null)
   const scrollRef = React.useRef(null)
   const grabberRef = React.useRef(null)
@@ -102,6 +102,10 @@ const SheetContent = React.forwardRef(({ className, children, onPointerDownOutsi
       <DialogPrimitive.Content
         ref={composeRefs(ref, setSheet)}
         data-sheet=""
+        // Opening a sheet never focuses a field: on iPhone that pops the
+        // keyboard over the sheet as it slides up. Focus the sheet itself.
+        onOpenAutoFocus={(e) => { onOpenAutoFocus?.(e); if (!e.defaultPrevented) { e.preventDefault(); e.currentTarget?.focus?.({ preventScroll: true }); } }}
+        tabIndex={-1}
         onPointerDownOutside={(e) => { if (isToastEvent(e)) e.preventDefault(); onPointerDownOutside?.(e); }}
         onInteractOutside={(e) => { if (isToastEvent(e)) e.preventDefault(); onInteractOutside?.(e); }}
         className="m-sheet fixed inset-x-0 z-50 mx-auto flex w-full max-w-lg flex-col rounded-t-[20px] border-t bg-background shadow-[0_-8px_30px_rgba(0,0,0,0.18)] outline-none"

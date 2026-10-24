@@ -98,10 +98,11 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     queryFn: () => db.JobLabor.filter({ job_id: jobId }),
     enabled: open && !!jobId,
   });
+  // In the order they were quoted (created_at 1 ms apart since Run 9).
   const lines = [
-    ...labor.map(l => ({ id: l.id, name: l.description, amount: Number(l.total_price) || 0, kind: "Labor" })),
-    ...parts.map(p => ({ id: p.id, name: p.name, amount: Number(p.total_price) || 0, kind: `Part · ×${p.quantity || 1}` })),
-  ];
+    ...labor.map(l => ({ id: l.id, name: l.description, amount: Number(l.total_price) || 0, kind: "Labor", at: l.created_at })),
+    ...parts.map(p => ({ id: p.id, name: p.name, amount: Number(p.total_price) || 0, kind: `Part · ×${p.quantity || 1}`, at: p.created_at })),
+  ].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
   // Lines load after the sheet opens: prefill the type from them once they
   // arrive, unless the tech already picked one (Run 7: never "Quote").
   const lineKey = lines.map(l => l.name).join("\n");
