@@ -87,6 +87,8 @@ export async function jobSlice(id, key, fallback) {
   try {
     const b = await loadJobBundle(id);
     if (b === null) return key === "job" || key === "agreement" ? (key === "job" ? undefined : null) : [];
+    // customer slices are undefined when the job has no customer: ask directly
+    if (b[key] === undefined && (key === "customer" || key === "customerHistory")) return fallback();
     return b[key];
   } catch {
     return fallback();

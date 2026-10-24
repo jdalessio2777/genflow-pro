@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
+import { jobSlice } from "@/lib/jobBundle";
 import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobAgreementQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
 import { DetailSkeleton } from "@/components/ui/skeleton";
 import { integrationsCore } from "@/lib/coreIntegrations";
@@ -242,9 +243,10 @@ export default function JobDetail() {
   });
   const existingInvoice = existingInvoices[0] || null;
 
-  const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), enabled: !!job?.customer_id });
+  // Customer + their jobs ride on the job's one request (B4, lib/jobBundle).
+  const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), queryFn: () => jobSlice(id, "customer", jobCustomerQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
 
-  const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), enabled: !!job?.customer_id });
+  const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), queryFn: () => jobSlice(id, "customerHistory", customerHistoryQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
   const previousJobs = sortJobs(customerHistory
     .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status)))
     .slice(0, 10);
