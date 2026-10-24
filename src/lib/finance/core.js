@@ -236,7 +236,15 @@ export function bucketsFor(range) {
   const out = [];
   if (unit === "day") for (let k = range.from; k <= range.to; k = addDays(k, 1)) out.push({ from: k, to: k, label: short(k) });
   else if (unit === "week") for (let k = startOfWeek(range.from); k <= range.to; k = addDays(k, 7)) { const a = k < range.from ? range.from : k; const b = addDays(k, 6) > range.to ? range.to : addDays(k, 6); out.push({ from: a, to: b, label: short(a) }); }
-  else for (let k = startOfMonth(range.from); k <= range.to; k = addMonths(k, 1)) { const a = k < range.from ? range.from : k; const b = endOfMonth(k) > range.to ? range.to : endOfMonth(k); out.push({ from: a, to: b, label: monthName(k) }); }
+  else {
+    // "Sep" within one year; "Sep ’25" when the range spans years ("Sep 26" read as a day).
+    const oneYear = range.from.slice(0, 4) === range.to.slice(0, 4);
+    for (let k = startOfMonth(range.from); k <= range.to; k = addMonths(k, 1)) {
+      const a = k < range.from ? range.from : k; const b = endOfMonth(k) > range.to ? range.to : endOfMonth(k);
+      const mon = new Date(Date.UTC(...ymd(k))).toLocaleDateString("en-US", { timeZone: "UTC", month: "short" });
+      out.push({ from: a, to: b, label: oneYear ? mon : `${mon} ’${k.slice(2, 4)}` });
+    }
+  }
   return { unit, buckets: out };
 }
 export function computeSeries(data, range) {

@@ -135,3 +135,11 @@ describe('series over time', () => {
     expect(s.points.every(p => inRange(p.from, r) && inRange(p.to, r))).toBe(true)
   })
 })
+
+describe('month labels', () => {
+  it('"Sep" inside one year, "Sep ’25" across years (never "Sep 26", which reads as a day)', () => {
+    expect(bucketsFor(rangeFor('ytd', { now: NOW })).buckets.map(b => b.label).slice(-2)).toEqual(['Sep', 'Oct'])
+    const l = bucketsFor(rangeFor('last12', { now: NOW })).buckets.map(b => b.label)
+    expect(l[0]).toBe('Oct ’25'); expect(l[l.length - 1]).toBe('Oct ’26')
+  })
+})
