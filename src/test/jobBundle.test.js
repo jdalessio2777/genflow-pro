@@ -61,10 +61,16 @@ describe('job bundle (B4)', () => {
     expect(qc.getQueryData(['customer-history', 'c1']).map(j => j.id)).toEqual(['j1', 'j0'])
   })
 
-  it('a refetch after a save makes a new request (never reuses an older answer)', async () => {
-    await loadJobBundle('j1')
+  it('asks within 1.5 s share one request; an invalidation (a save) forces a new one', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    await Promise.all(startJobQueries(qc, 'j1'))
     await new Promise(r => setTimeout(r, 120))
-    await loadJobBundle('j1')
+    await qc.fetchQuery({ ...jobLaborQuery('j1'), staleTime: 0 }) // a late slice reuses the answer
+    expect(__jobBundleRequests()).toBe(1)
+    await qc.invalidateQueries({ queryKey: ['job-parts', 'j1'] }) // e.g. a part was added
+    await qc.fetchQuery(jobPartsQuery('j1')) // what the screen's refetch does
+    expect(__jobBundleRequests()).toBe(2)
+    await loadJobBundle('j1') // same generation, just landed: reused
     expect(__jobBundleRequests()).toBe(2)
   })
 

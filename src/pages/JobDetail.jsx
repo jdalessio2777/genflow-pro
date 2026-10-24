@@ -49,7 +49,7 @@ import { useBack, goBack } from "@/hooks/useBack";
 import { useUrlState } from "@/hooks/useUrlState";
 import { confirmationEmailHTML, fmtPaymentMethod } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
-import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
+import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge, sameLineItems } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 import JobSignatureButton from "@/components/signature/JobSignatureButton";
 import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
@@ -891,7 +891,7 @@ export default function JobDetail() {
       Math.abs((existingInvoice.tax_amount || 0) - fresh.tax_amount) < 0.005;
     const jobOpen = !["completed", "invoiced", "canceled"].includes(job.status);
     const itemsUnchanged = !jobOpen ||
-      JSON.stringify(existingInvoice.line_items || []) === JSON.stringify(fresh.line_items);
+      sameLineItems(existingInvoice.line_items, fresh.line_items);
     if (totalsUnchanged && itemsUnchanged) return;
 
     db.Invoice.update(existingInvoice.id, withResyncedSurcharge(fresh, existingInvoice, surchargeCfg)).then(patchInvoiceCache);

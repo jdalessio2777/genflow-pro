@@ -8,7 +8,7 @@
 // "parts-catalog", "job", ...), so every existing
 // invalidateQueries({ queryKey: ["jobs"] }) still matches them by prefix.
 import { db } from "@/lib/db";
-import { jobSlice, loadJobBundle } from "@/lib/jobBundle";
+import { jobSlice, loadJobBundle, watchJobInvalidations } from "@/lib/jobBundle";
 
 // Catalog, labor rates and settings change rarely (and every screen that
 // edits them invalidates them): kept for 5 minutes instead of refetched on
@@ -130,6 +130,7 @@ export const customerHistoryQuery = (customerId) => ({
 // bundle also carries the customer and their jobs, which seed those caches so
 // they need no request of their own.
 export function startJobQueries(queryClient, id) {
+  watchJobInvalidations(queryClient);
   const main = [jobQuery(id), jobPartsQuery(id), jobLaborQuery(id), jobInvoiceQuery(id)]
     .map((q) => queryClient.ensureQueryData(q).catch(() => null));
   for (const q of [jobDocsQuery(id), jobPhotosQuery(id), jobAgreementQuery(id), partsCatalogQuery(), laborRatesQuery(), appSettingsQuery()]) queryClient.prefetchQuery(q).catch(() => {});

@@ -24,11 +24,30 @@ export const JOB_BUNDLE_SELECT = [
   "customer:customers!jobs_customer_id_fkey(*, history:jobs!jobs_customer_id_fkey(*))",
 ].join(",");
 
-// Requests started within this window of each other share one round trip;
-// a refetch after a save starts a new one (never reuses a pre-save answer).
-const SHARE_MS = 40;
-const inflight = new Map(); // id -> { at, promise }
+// One answer is shared by every slice that asks while it is in flight or
+// for REUSE_MS after it lands (opening a job: the touch-down prefetch, the
+// route loader and the screen's own queries). Any invalidation of a job key
+// (a save, a pull-to-refresh) bumps the job's generation, so the next ask
+// always makes a new request — a post-save refetch never gets a pre-save
+// answer. watchJobInvalidations() connects that to the query cache.
+const REUSE_MS = 1500;
+const inflight = new Map(); // id -> { at, gen, promise, done }
+const generation = new Map(); // id -> n
 let requestCount = 0; // for tests
+const JOB_KEYS = new Set(["job", "job-parts", "job-labor", "job-invoice", "job-docs", "job-photos", "job-agreement"]);
+
+export function bumpJobBundle(id) { generation.set(id, (generation.get(id) || 0) + 1); }
+
+let watched = null;
+export function watchJobInvalidations(queryClient) {
+  if (!queryClient || watched === queryClient) return;
+  watched = queryClient;
+  queryClient.getQueryCache().subscribe((e) => {
+    if (e?.type !== "updated" || e.action?.type !== "invalidate") return;
+    const [k, id] = e.query.queryKey || [];
+    if (JOB_KEYS.has(k) && id) bumpJobBundle(id);
+  });
+}
 
 const byNewest = (a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""));
 
@@ -51,14 +70,16 @@ export function splitJobBundle(row) {
 
 export function loadJobBundle(id) {
   const now = Date.now();
+  const gen = generation.get(id) || 0;
   const hit = inflight.get(id);
-  if (hit && now - hit.at <= SHARE_MS) return hit.promise;
+  if (hit && hit.gen === gen && (!hit.done || now - hit.done <= REUSE_MS)) return hit.promise;
   requestCount++;
-  const promise = supabase.from("jobs").select(JOB_BUNDLE_SELECT).eq("id", id).maybeSingle()
+  const entry = { at: now, gen, done: 0, promise: null };
+  entry.promise = supabase.from("jobs").select(JOB_BUNDLE_SELECT).eq("id", id).maybeSingle()
     .then(({ data, error }) => { if (error) throw error; return splitJobBundle(data); });
-  inflight.set(id, { at: now, promise });
-  promise.finally(() => { if (inflight.get(id)?.promise === promise) setTimeout(() => { if (inflight.get(id)?.promise === promise) inflight.delete(id); }, SHARE_MS); }).catch(() => {});
-  return promise;
+  inflight.set(id, entry);
+  entry.promise.then(() => { entry.done = Date.now(); }, () => { if (inflight.get(id) === entry) inflight.delete(id); });
+  return entry.promise;
 }
 
 // A slice of the bundle, or its own request if the bundle can't be loaded.
@@ -73,4 +94,4 @@ export async function jobSlice(id, key, fallback) {
 }
 
 export const __jobBundleRequests = () => requestCount;
-export const __resetJobBundle = () => { inflight.clear(); requestCount = 0; };
+export const __resetJobBundle = () => { inflight.clear(); generation.clear(); requestCount = 0; watched = null; };
