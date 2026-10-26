@@ -557,7 +557,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <Label className="text-xs font-semibold">Description</Label>
                   <Input value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1 rounded-xl" placeholder="e.g. Fits Nexus 17-22kW standby units" />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 form-row">
                   <div>
                     <Label className="text-xs font-semibold">Your Cost</Label>
                     <Input type="number" step="0.01" min="0" value={form.cost || ""} onChange={e => setForm(f => ({...f, cost: parseFloat(e.target.value) || 0}))} className="mt-1 rounded-xl" placeholder="0.00" />
@@ -639,7 +639,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                     <QuantityField id="confirm-part-qty" value={form.quantity} onChange={q => setForm(f => ({ ...f, quantity: q }))} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 form-row">
                   <div>
                     <Label className="text-xs">Cost</Label>
                     <Input

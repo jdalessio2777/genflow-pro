@@ -215,7 +215,7 @@ export function computeFinance(data, range) {
     net: round2(revenue - expenseTotal),
     margin: revenue > 0 ? round2(((revenue - expenseTotal) / revenue) * 100) : null,
     jobsCompleted: completed.length, completedByType,
-    avgTicket, partsSpend,
+    avgTicket, chargedInvoices: charged.length, partsSpend,
     customersServed: custIn.size, newCustomers, returningCustomers: custIn.size - newCustomers,
     agreementsSold, activeMembers, agreementRevenue,
     byJobType, byTech, byPaymentMethod,

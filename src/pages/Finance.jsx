@@ -348,7 +348,7 @@ function ExpensesTab({ expenses }) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 form-row">
             <div>
               <Label className="text-xs">Date</Label>
               <Input type="date" value={form.date} onChange={e => setForm(f => ({...f, date: e.target.value}))} className="mt-1" />
@@ -651,7 +651,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
           <DialogContent className="max-w-sm">
             <DialogHeader><DialogTitle>Log Trip</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 form-row">
                 <div>
                   <Label className="text-xs">Date</Label>
                   <Input type="date" value={tripDate} onChange={e => setTripDate(e.target.value)} className="mt-1" />
@@ -731,7 +731,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
           <DialogContent className="max-w-sm">
             <DialogHeader><DialogTitle>Manual Mileage Entry</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 form-row">
                 <div>
                   <Label className="text-xs">Date</Label>
                   <Input type="date" value={manualForm.date} onChange={e => setManualForm(f => ({...f, date: e.target.value}))} className="mt-1" />

@@ -271,9 +271,19 @@ input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
 }
 input[type="number"] { -moz-appearance: textfield; }
-/* Grid/flex children may shrink below their content (a field never pushes
-   its column wider than its share). */
-.form-row > * { min-width: 0; }
+/* Two fields side by side (.form-row on the grid). Children may shrink
+   below their content (a field never pushes its column wider than its
+   share), and label / field / hint each share a row across the columns
+   (subgrid), so a label that wraps to two lines on an SE no longer pushes
+   its field below its neighbour (Run 9 black-box finding). Below 360 px a row
+   with a date or time field stacks: a date box narrower than ~130 px cuts
+   off the year. */
+.form-row { grid-template-rows: auto auto auto; align-items: start; }
+.form-row > * { min-width: 0; display: grid; grid-row: span 3; grid-template-rows: subgrid; align-content: start; }
+.form-row > * > label { align-self: end; }
+@media (max-width: 359px) {
+  .form-row:has(input[type="date"], input[type="time"], input[type="datetime-local"]) { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ---- Feel Phase 4: tap feedback and tap targets ------------------------ */
 

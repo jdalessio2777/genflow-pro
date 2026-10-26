@@ -210,7 +210,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
           </Select>
         </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 form-row">
           <div className="min-w-0">
             <Label className="text-xs" htmlFor="sched-date">Date</Label>
             <Input id="sched-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="rounded-xl mt-1 min-w-0" />

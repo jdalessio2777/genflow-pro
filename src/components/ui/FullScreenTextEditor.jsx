@@ -4,7 +4,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useSheetHistory } from "@/lib/sheetHistory";
+import { afterSheetPushed, useSheetHistory } from "@/lib/sheetHistory";
 import { writeDraft } from "@/lib/textDrafts";
 import { useSheetDrag } from "@/hooks/useSheetDrag";
 
@@ -67,15 +67,23 @@ export default function FullScreenTextEditor({ open, title, value, placeholder, 
   useSheetHistory(open, () => onDone?.(textRef.current));
 
   // Hold the page still underneath (no background scroll, no jump on close).
+  // Locked once the editor's history entry is in (afterSheetPushed): the
+  // router saves the screen's scroll position at that push, and it must save
+  // the real one, not the locked page's 0, or closing jumps to the top (Run 9).
   useLayoutEffect(() => {
     if (!open) return undefined;
-    const y = window.scrollY;
     const b = document.body.style;
-    const prev = { position: b.position, top: b.top, left: b.left, right: b.right, overflow: b.overflow };
-    Object.assign(b, { position: "fixed", top: `-${y}px`, left: "0", right: "0", overflow: "hidden" });
+    let lock = null;
+    const cancel = afterSheetPushed(() => {
+      const y = window.scrollY;
+      lock = { y, prev: { position: b.position, top: b.top, left: b.left, right: b.right, overflow: b.overflow } };
+      Object.assign(b, { position: "fixed", top: `-${y}px`, left: "0", right: "0", overflow: "hidden" });
+    });
     return () => {
-      Object.assign(b, prev);
-      window.scrollTo(0, y);
+      cancel();
+      if (!lock) return;
+      Object.assign(b, lock.prev);
+      window.scrollTo(0, lock.y);
     };
   }, [open]);
 
