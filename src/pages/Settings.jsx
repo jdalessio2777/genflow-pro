@@ -99,7 +99,7 @@ function CardSurchargeSettings({ settings, setSetting }) {
   return (
     <Card className="p-4 space-y-3" data-testid="card-surcharge-settings">
       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Card surcharge</p>
-      <div className="grid grid-cols-2 gap-3 items-end">
+      <div className="grid grid-cols-2 gap-3 form-row">
         <div>
           <Label className="text-xs">Rate (credit cards only)</Label>
           <div className="relative mt-1">
@@ -157,7 +157,7 @@ function OperationsTab({ settings, setSetting, isSaving }) {
 
       <Card className="p-4 space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Labor Rates</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 form-row">
           <div>
             <Label className="text-xs">First ½ Hour Rate</Label>
             <div className="relative mt-1">
@@ -287,7 +287,7 @@ function VehiclesTab() {
                 <div><Label className="text-xs">Make</Label><Input value={form.make} onChange={e => setForm(f => ({...f, make: e.target.value}))} className="mt-1" placeholder="Ford" /></div>
                 <div><Label className="text-xs">Model</Label><Input value={form.model} onChange={e => setForm(f => ({...f, model: e.target.value}))} className="mt-1" placeholder="F-250" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 form-row">
                 <div><Label className="text-xs">Plate</Label><Input value={form.plate} onChange={e => setForm(f => ({...f, plate: e.target.value.toUpperCase()}))} className="mt-1" placeholder="NJ ABC123" /></div>
                 <div><Label className="text-xs">Color</Label><Input value={form.color} onChange={e => setForm(f => ({...f, color: e.target.value}))} className="mt-1" placeholder="White" /></div>
               </div>

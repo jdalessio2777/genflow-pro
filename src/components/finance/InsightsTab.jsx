@@ -135,7 +135,7 @@ export default function InsightsTab({ financeData }) {
         <Kpi id="expenses" label="Expenses" value={formatCurrency(cur.expenses)} cur={cur.expenses} prev={prev.expenses} goodWhenUp={false} />
         <Kpi id="net" label="Net profit" value={formatCurrency(cur.net)} cur={cur.net} prev={prev.net} goodWhenUp sub={cur.margin != null ? `${cur.margin.toFixed(0)}% margin` : null} />
         <Kpi id="jobs" label="Jobs completed" value={cur.jobsCompleted} cur={cur.jobsCompleted} prev={prev.jobsCompleted} goodWhenUp />
-        <Kpi id="ticket" label="Average ticket" value={formatCurrency(cur.avgTicket)} cur={cur.avgTicket} prev={prev.avgTicket} goodWhenUp sub={`${cur.paidInvoices} paid`} />
+        <Kpi id="ticket" label="Average ticket" value={formatCurrency(cur.avgTicket)} cur={cur.avgTicket} prev={prev.avgTicket} goodWhenUp sub={`over ${cur.chargedInvoices} charged`} />
         <Kpi id="warranty" label="Warranty reimbursed" value={formatCurrency(cur.warranty)} cur={cur.warranty} prev={prev.warranty} goodWhenUp sub={`${cur.warrantyClaims} claim${cur.warrantyClaims !== 1 ? "s" : ""}`} />
         <Kpi id="tax" label="NJ sales tax collected" value={formatCurrency(cur.tax)} cur={cur.tax} prev={prev.tax} goodWhenUp />
         <Kpi id="parts" label="Parts used (cost)" value={formatCurrency(cur.partsSpend)} cur={cur.partsSpend} prev={prev.partsSpend} goodWhenUp={false} />

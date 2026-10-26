@@ -117,3 +117,24 @@ export function afterSheetsClose(fn, timeoutMs = 1500) {
 export function __sheetDebug() {
   return { open: [...open.entries()].map(([t, e]) => ({ t, pushed: e.pushed })) };
 }
+
+/**
+ * afterSheetPushed(fn): runs fn once every open sheet has its history entry
+ * (the push has landed). Run 9: the full-screen editor locks the page only
+ * then — React Router saves the screen's scroll position when the sheet entry
+ * is pushed, and a page already locked (position: fixed, scrollY 0) was saved
+ * as "top", so closing the editor jumped the page to the top. Returns a
+ * cancel function. Without the app router (tests) fn runs at once.
+ */
+export function afterSheetPushed(fn, timeoutMs = 600) {
+  if (!getAppRouter()) { fn(); return () => {}; }
+  const until = Date.now() + timeoutMs;
+  let t = null; let done = false;
+  const tick = () => {
+    const pending = [...open.values()].some(e => !e.pushed);
+    if ((pending || isNavigating()) && Date.now() < until) { t = setTimeout(tick, 16); return; }
+    done = true; fn();
+  };
+  t = setTimeout(tick, 0);
+  return () => { if (!done) clearTimeout(t); };
+}
