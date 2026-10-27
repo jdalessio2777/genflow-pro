@@ -4,6 +4,7 @@ import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { MapPin, Navigation, Clock, ExternalLink } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
@@ -70,13 +71,14 @@ export default function RouteMap() {
         </div>
 
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="date"
+            aria-label="Route date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="flex-1 h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="flex-1 bg-background"
           />
-          <Button variant="outline" size="sm" className="rounded-xl h-10"
+          <Button variant="outline" size="sm" className="rounded-xl h-11 shrink-0"
             onClick={() => setSelectedDate(etDateKey(new Date()))}>
             Today
           </Button>
@@ -133,11 +135,14 @@ export default function RouteMap() {
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-2.5 ml-10">
-                    <Button asChild variant="outline" size="sm" className="flex-1 rounded-xl h-9 text-xs">
+                  {/* Three equal buttons (B2): "Open Job" took half the row and
+                      squeezed Call/Nextiva into quarters, so an SE showed "Ne…". Full card
+                      width (no 40 px indent) so "Nextiva" fits an SE. */}
+                  <div className="grid grid-cols-3 gap-1.5 mt-2.5">
+                    <Button asChild variant="outline" size="sm" className={`${cust?.phone ? "" : "col-span-3 "}min-w-0 rounded-xl h-9 text-xs px-1.5`}>
                       <Link to={`/jobs/${job.id}`}>Open Job</Link>
                     </Button>
-                    <CallButtons phone={cust?.phone} />
+                    <CallButtons phone={cust?.phone} className="col-span-2" />
                   </div>
                 </Card>
               );

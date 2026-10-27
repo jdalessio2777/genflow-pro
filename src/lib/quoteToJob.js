@@ -1,9 +1,25 @@
 import { inferServiceType, isServiceType } from "./jobTypes.js";
 
+// A quote has no title column: its title is its first line, in the order the
+// lines were added in the Quote Builder (created_at, 1 ms apart since Run 9).
+// E.g. "Generator Main Line Circuit Breaker Replacement". "" without lines.
+export const sortQuoteLines = (lineItems = []) =>
+  [...(lineItems || [])].sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+export function quoteTitle(lineItems = []) {
+  const first = sortQuoteLines(lineItems).find(l => (l?.description || "").trim());
+  return (first?.description || "").trim();
+}
+
+// Jobs approved before Run 9 were titled "Quote Follow-up — <customer>". The
+// schedule sheet offers the quote's title instead of that placeholder.
+export const isPlaceholderJobTitle = (title) => /^\s*quote follow[\s-]?up\b/i.test(title || "");
+
 // Job row created when staff mark a quote Approved (QuoteDetail.jsx).
-// - quote.scope_notes ("Scope of Work", customer-facing — already in the quote
-//   email) -> jobs.customer_description (customer-facing; shown in the
-//   appointment confirmation email).
+// - title: the quote's title (its main line), editable on the "Schedule this
+//   job" sheet before it is saved. Never "Quote Follow-up" (Run 9, A4).
+// - customer_description starts BLANK: the tech types a short job description
+//   on the sheet. The Scope of Work stays on the quote (Run 9, A2; it used to
+//   be copied into the job).
 // - quote.notes ("Notes (internal)") -> internal job fields only
 //   (jobs.notes / jobs.quote_notes), never customer_description.
 // job_type: the Service Type picked on the quote (quotes.job_type, Run 8 A5),
@@ -13,28 +29,28 @@ export function jobFromApprovedQuote(quote, { customerId, customerName, lineItem
   return {
     customer_id: customerId,
     customer_name: customerName,
-    title: `Quote Follow-up — ${customerName}`,
+    title: quoteTitle(lineItems) || `Job for ${customerName}`,
     job_type: isServiceType(quote?.job_type) ? quote.job_type : inferServiceType(lineItems.map(l => l.description)),
     status: "scheduled",
-    customer_description: quote?.scope_notes?.trim() || null,
+    customer_description: null,
     notes: quote?.notes || null,
     quote_notes: quote?.notes || null,
   };
 }
 
-// The job's parts/labor rows from the quote's lines (B-01/B-02). Lines keep
-// the quoted price (already member-priced). Catalog parts keep their catalog
-// link and cost; agreement lines keep the signing requirement.
-// ids: { [quoteLineId]: rowId } — fixed per Approve screen, so a retry after a
-// lost response finds the rows it already made instead of duplicating them.
-export function jobLinesFromQuote(lineItems, { jobId, catalogParts = [], catalogRates = [], ids = {}, agreementTypeForRate = () => null }) {
+// at (ms): when given, rows get created_at 1 ms apart in the quote's order, so
+// the job lists its lines in the order they were quoted.
+export function jobLinesFromQuote(lineItems, { jobId, catalogParts = [], catalogRates = [], ids = {}, agreementTypeForRate = () => null, at = null }) {
   const parts = [];
   const labor = [];
-  for (const l of lineItems || []) {
+  let n = 0;
+  for (const l of sortQuoteLines(lineItems)) {
+    const stamp = at != null ? { created_at: new Date(at + n++).toISOString() } : {};
     if (l.type === "part") {
       const cat = catalogParts.find(p => p.id === l.source_part_id);
       const qty = l.quantity || 1;
       parts.push({
+        ...stamp,
         id: ids[l.id],
         job_id: jobId,
         name: l.description,
@@ -50,6 +66,7 @@ export function jobLinesFromQuote(lineItems, { jobId, catalogParts = [], catalog
       const rate = catalogRates.find(r => r.id === l.source_labor_rate_id);
       const agreement = agreementTypeForRate(rate);
       labor.push({
+        ...stamp,
         id: ids[l.id],
         job_id: jobId,
         description: l.description,

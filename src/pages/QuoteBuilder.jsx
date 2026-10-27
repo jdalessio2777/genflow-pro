@@ -129,8 +129,12 @@ export default function QuoteBuilder() {
         scope_notes: scopeNotes.trim() || null,
       }, serviceType || null));
 
-      // 2. Attach line items
-      await Promise.all(pricedLines.map(l => db.QuoteLineItem.create({
+      // 2. Attach line items. Saved together, so each gets a created_at 1 ms
+      // apart: the quote keeps the order the lines were added in (its first
+      // line is the quote's title, Run 9 A4).
+      const linesAt = Date.now();
+      await Promise.all(pricedLines.map((l, i) => db.QuoteLineItem.create({
+        created_at: new Date(linesAt + i).toISOString(),
         quote_id: quote.id,
         type: l.type,
         description: l.description,

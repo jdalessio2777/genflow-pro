@@ -6,7 +6,7 @@ import { integrationsCore } from "@/lib/coreIntegrations";
 import { renewalEmailHTML, renewalEmailSubject } from "@/lib/emailTemplates/renewalEmail";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, Gift, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, Wrench, Users, Plus, AlertTriangle, CheckCircle2, FileText, Package, Navigation, Shield, Gift, Settings as SettingsIcon, Mail, Loader2, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
@@ -403,12 +403,13 @@ export default function Dashboard() {
                 <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Today's Route</p>
               </div>
             </Link>
-            <Link to="/invoices">
-              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 hover:bg-slate-100/60 transition-colors active:scale-[0.99] dark:bg-slate-800 dark:border-slate-700/60 dark:hover:bg-slate-700/60">
-                <div className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-slate-700">
-                  <FileText className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+            {/* Run 9 (D1): Warranty replaces Invoices here; Invoices stays in Finance. */}
+            <Link to="/warranty" data-testid="qa-warranty">
+              <div className="h-14 flex items-center gap-3 px-3.5 rounded-2xl bg-violet-50 border border-violet-200/60 hover:bg-violet-100/60 transition-colors active:scale-[0.99] dark:bg-violet-900/20 dark:border-violet-700/60 dark:hover:bg-violet-900/30">
+                <div className="w-8 h-8 bg-violet-100 rounded-xl flex items-center justify-center shrink-0 dark:bg-violet-900">
+                  <ShieldCheck className="w-4 h-4 text-violet-600 dark:text-violet-300" />
                 </div>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Invoices</p>
+                <p className="text-sm font-semibold text-violet-900 dark:text-violet-200">Warranty</p>
               </div>
             </Link>
             <Link to="/finance">

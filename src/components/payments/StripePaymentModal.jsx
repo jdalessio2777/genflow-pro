@@ -359,7 +359,7 @@ export default function StripePaymentModal({ invoice, open, onClose, onPaid }) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md flex flex-col max-h-[90dvh] overflow-hidden">
+      <DialogContent className="flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5" /> Charge Card

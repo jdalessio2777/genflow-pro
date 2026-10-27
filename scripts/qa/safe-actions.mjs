@@ -14,6 +14,11 @@
 // all, and every write requires the email routes to be blocked in the browser
 // context (page._sendsBlocked) so nothing can email from production; see the
 // genflow-ship skill).
+// Run 9: production is ONLY reachable when the script was started with an
+// explicit --prod-smoke flag (a smoke rehearsal once defaulted to production
+// because its --base argument was mangled). Without the flag every production
+// URL/alias is refused before anything loads, in either mode. With it, only
+// the documented no-email, no-payment smoke steps are allowed (PROD_SMOKE_KINDS).
 //
 // Tracked copy (scripts/qa/, excluded from deploys by .vercelignore). Run notes
 // go to the untracked .qa-scratch/ folder: set QA_RUN_DIR (e.g.
@@ -37,11 +42,20 @@ const PROD_HOSTS = new Set([
   'genflow-pro-jdalessio2777s-projects.vercel.app',
   'genflow-pro-git-main-jdalessio2777s-projects.vercel.app',
 ]);
-const PROD_DEPLOY_IDS = ['p8fkcpwg4', 'ca0gy4mpo', 'o4trppizt', 'n4tgec5ud', 'khrnhy3v0', 'riksip4zj'];
+const PROD_DEPLOY_IDS = ['r692fcifs', '898lhkepu', 'nhr2kp1wb', 'p8fkcpwg4', 'ca0gy4mpo', 'o4trppizt', 'n4tgec5ud', 'khrnhy3v0', 'riksip4zj'];
 const PREVIEW_RE = /^genflow-([a-z0-9]{9})-jdalessio2777s-projects\.vercel\.app$/;
 const LOCAL_RE = /^(localhost|127\.0\.0\.1)$/;
 
 export const WRITE_KINDS = ['save', 'delete', 'cancel', 'complete', 'send', 'charge', 'approve', 'payment', 'create'];
+// The production smoke test's steps (genflow-ship skill §6): create a QA
+// customer/job, save/dispatch/arrive, complete as unpaid with email blocked,
+// cancel/delete it again. Never send, charge, record a payment or approve.
+export const PROD_SMOKE_FLAG = '--prod-smoke';
+export const PROD_SMOKE_KINDS = ['create', 'save', 'delete', 'cancel', 'complete'];
+let prodSmokeOverride = null; // tests only
+export const __setProdSmokeForTests = (v) => { prodSmokeOverride = v; };
+export const prodSmokeArmed = () => (prodSmokeOverride ?? process.argv.includes(PROD_SMOKE_FLAG));
+export const isProductionHost = (h) => PROD_HOSTS.has(h) || /^genflow-pro[.-]/.test(h) || (() => { const m = h.match(PREVIEW_RE); return !!m && PROD_DEPLOY_IDS.includes(m[1]); })();
 
 export class GuardError extends Error { constructor(msg) { super('SAFETY GUARD REFUSED: ' + msg); this.name = 'GuardError'; } }
 
@@ -49,8 +63,9 @@ export function checkHost(urlString, { mode = 'preview', allowLocal = !!process.
   let u; try { u = new URL(urlString); } catch { throw new GuardError(`bad page URL ${urlString}`); }
   const h = u.hostname.toLowerCase();
   if (mode === 'prod-readonly') {
-    if (PROD_HOSTS.has(h)) return { host: h, prod: true };
-    throw new GuardError(`prod-readonly mode expects the production host, got ${h}`);
+    if (!PROD_HOSTS.has(h)) throw new GuardError(`prod-readonly mode expects the production host, got ${h}`);
+    if (!prodSmokeArmed()) throw new GuardError(`production host ${h} without the ${PROD_SMOKE_FLAG} flag: refusing (start the smoke script with ${PROD_SMOKE_FLAG} on purpose)`);
+    return { host: h, prod: true };
   }
   if (PROD_HOSTS.has(h) || /^genflow-pro[.-]/.test(h)) throw new GuardError(`production host ${h}`);
   const m = h.match(PREVIEW_RE);
@@ -143,6 +158,7 @@ export async function guardedTap(page, locator, opts = {}) {
     if (!visible) visible = await inFieldValues(page, record);
     if (!visible) throw new GuardError(`record "${record}" is not visible on screen`);
     if (mode === 'prod-readonly' && ['send', 'charge', 'payment'].includes(kind)) throw new GuardError(`kind ${kind} is never allowed in prod-readonly mode`);
+    if (mode === 'prod-readonly' && !PROD_SMOKE_KINDS.includes(kind)) throw new GuardError(`kind ${kind} is not a documented production smoke step (${PROD_SMOKE_KINDS.join(', ')})`);
     if (mode === 'prod-readonly' && !page._sendsBlocked) throw new GuardError('prod-readonly mode requires the email routes to be blocked in this browser context');
     const btnText = ((await locator.first().innerText().catch(() => '')) || '').trim();
     entry.button = btnText.slice(0, 80);

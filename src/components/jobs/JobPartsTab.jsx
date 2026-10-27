@@ -391,11 +391,10 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
               <Plus className="w-3 h-3" /> Add Part
             </Button>
           </DialogTrigger>
-          {/* Pinned near the top on phones (not vertically centred) so the
-              dialog doesn't jump as the result list grows/shrinks or the
-              on-screen keyboard opens. */}
+          {/* A bottom sheet (Run 9) that never moves as the result list
+              grows/shrinks: its body is a column and the list scrolls inside. */}
           <DialogContent
-            className="max-w-sm top-3 translate-y-0 sm:top-[50%] sm:translate-y-[-50%] max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden"
+            className="flex flex-col overflow-hidden"
             onOpenAutoFocus={(e) => {
               // Don't pop the keyboard over the category list on touch
               // devices; on desktop, focus the search box straight away.
@@ -558,7 +557,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <Label className="text-xs font-semibold">Description</Label>
                   <Input value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1 rounded-xl" placeholder="e.g. Fits Nexus 17-22kW standby units" />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 form-row">
                   <div>
                     <Label className="text-xs font-semibold">Your Cost</Label>
                     <Input type="number" step="0.01" min="0" value={form.cost || ""} onChange={e => setForm(f => ({...f, cost: parseFloat(e.target.value) || 0}))} className="mt-1 rounded-xl" placeholder="0.00" />
@@ -640,7 +639,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                     <QuantityField id="confirm-part-qty" value={form.quantity} onChange={q => setForm(f => ({ ...f, quantity: q }))} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 form-row">
                   <div>
                     <Label className="text-xs">Cost</Label>
                     <Input

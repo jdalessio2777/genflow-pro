@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createBrowserRouter, Navigate, Outlet, ScrollRestoration } from "react-router-dom";
+import { installPageMotion, setNavDirection } from "@/lib/pageMotion";
 import { OfflineProvider } from "@/lib/OfflineContext";
 import { useAuth } from "@/lib/AuthContext";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
@@ -8,7 +9,7 @@ import PageNotFound from "./lib/PageNotFound";
 import AppLayout from "./components/layout/AppLayout";
 import RouteError from "./components/layout/RouteError";
 import {
-  ROUTE_META, recordNavigation, markNavigating, markSettled, setAppRouter,
+  ROUTE_META, recordNavigation, markNavigating, markSettled, setAppRouter, isTabSwitchPending,
 } from "@/lib/navigation";
 
 import { lazyRoute, hasPage, preloadLikelyPages } from "@/lib/lazyPages";
@@ -104,6 +105,17 @@ export function installNavigationHooks(router) {
     if (typeof to !== "number" && router.state.location.state?.__sheet && !opts?.state?.__sheet) {
       opts = { ...opts, replace: true };
     }
+    // Page motion (lib/pageMotion.js): a new screen slides in; back slides
+    // out. Not for tab switches, sheet entries or same-screen URL changes.
+    if (typeof to === "number") {
+      setNavDirection(to < 0 ? "back" : "push");
+    } else if (!opts?.state?.__sheet && !isTabSwitchPending()) {
+      const path = typeof to === "string" ? to.split(/[?#]/)[0] : to?.pathname;
+      if (path && path !== router.state.location.pathname) {
+        setNavDirection("push");
+        opts = { ...opts, viewTransition: true };
+      }
+    }
     return navigate(to, opts);
   };
   let lastKey = router.state.location.key;
@@ -119,5 +131,6 @@ export function installNavigationHooks(router) {
 }
 
 export function createAppRouter() {
+  installPageMotion();
   return installNavigationHooks(createBrowserRouter(routes));
 }

@@ -57,6 +57,7 @@ export const ROUTE_META = [
   { path: "/inbox", tab: "inbox" },
   { path: "/call-list", parent: "/inbox", tab: "inbox" },
   { path: "/finance", parent: "/", tab: "home" },
+  { path: "/warranty", parent: "/", tab: "home" },
   { path: "/settings", parent: "/", tab: "home" },
   { path: "/referrals", parent: "/", tab: "home" },
 ];
@@ -120,6 +121,7 @@ export function previousEntry(location) {
 // the tapped tab instead of the tab it was pushed from.
 let pendingTab = null;
 export const setPendingTab = (tab) => { pendingTab = tab; };
+export const isTabSwitchPending = () => pendingTab != null;
 
 // Called by the router subscriber after every completed navigation.
 export function recordNavigation(action, location) {

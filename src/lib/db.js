@@ -13,7 +13,7 @@ function resolveOrderColumn(rawCol) {
   return map[rawCol] ?? rawCol;
 }
 
-function normalizeRow(row) {
+export function normalizeRow(row) {
   if (!row || typeof row !== 'object') return row;
   const out = { ...row };
   if (out.created_at != null && out.created_date == null) out.created_date = out.created_at;
@@ -21,7 +21,7 @@ function normalizeRow(row) {
   return out;
 }
 
-function normalizeRows(data) {
+export function normalizeRows(data) {
   if (!Array.isArray(data)) return data;
   return data.map(normalizeRow);
 }
@@ -114,6 +114,7 @@ const TABLE_MAP = {
   QuoteLineItem: 'quote_line_items',
   JobAgreement: 'job_agreements',
   PartsUsageLog: 'parts_usage_log',
+  WarrantyClaim: 'warranty_claims',
 };
 
 export const db = Object.fromEntries(

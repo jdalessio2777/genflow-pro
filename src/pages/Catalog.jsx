@@ -354,7 +354,7 @@ function LaborRatesList() {
             <DialogHeader><DialogTitle>New Labor Rate</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" placeholder="e.g. Standard Hour" /></div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 form-row">
                 <div><Label className="text-xs">Bill Rate/hr</Label><Input type="number" step="0.01" value={form.rate} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
                 <div><Label className="text-xs">Cost Rate/hr</Label><Input type="number" step="0.01" value={form.cost_rate} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, cost_rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
               </div>
@@ -455,7 +455,7 @@ function FlatRatesItemList({ folder }) {
             <DialogHeader><DialogTitle>New {folder.label} Rate</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 form-row">
                 <div><Label className="text-xs">Flat Price</Label><Input type="number" step="0.01" value={form.flat_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
                 <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
               </div>
@@ -540,7 +540,7 @@ function MaintenanceList() {
             <DialogHeader><DialogTitle>New Maintenance Package</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" placeholder="e.g. Full Annual Maintenance (Liquid-Cooled)" /></div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 form-row">
                 <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.flat_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
                 <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
               </div>

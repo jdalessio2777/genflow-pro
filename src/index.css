@@ -87,6 +87,12 @@
   }
 }
 
+/* Chart series colors (Run 9, Finance Insights): the validated categorical
+   slots (dataviz reference palette; CVD + contrast checked by its validator in
+   light and dark). Revenue = 1, expenses = 2, profit = 3, warranty = 7. */
+:root { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-7: #6250d6; }
+.dark { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-7: #9085e9; }
+
 /* Safe areas (F-12). The installed app uses viewport-fit=cover with the
    black-translucent status bar, so the page runs under the clock / Dynamic
    Island and the home indicator. Every top/bottom offset goes through these
@@ -98,6 +104,71 @@
   /* Measured by MobileNav / BottomActionBar (fallbacks until measured). */
   --nav-h: calc(66px + max(var(--sab), 12px));
   --action-h: 0px;
+}
+
+/* ---- Motion system (Run 9, C2) -----------------------------------------
+   One set of curves and durations for every moving thing, iPhone-style:
+   sheets slide up from the bottom on a spring and leave sliding down,
+   centred dialogs fade with a slight scale, pages push in from the right.
+   transform/opacity only (compositor, 60 fps). Reduced motion: short fades. */
+:root {
+  /* Critically damped-ish spring (damping 0.95, response 0.3 s), no overshoot
+     (an overshooting sheet would show a gap under it). */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-ios: cubic-bezier(0.4, 0, 0.6, 1);
+  --dur-sheet-in: 380ms;
+  --dur-sheet-out: 260ms;
+  --dur-dialog-in: 250ms;
+  --dur-dialog-out: 180ms;
+  --dur-push: 350ms;
+}
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, 0.0264, 0.0907, 0.1753, 0.2685, 0.3625, 0.4524, 0.5352, 0.6097, 0.6753, 0.7321, 0.7806, 0.8216, 0.8559, 0.8844, 0.9078, 0.9269, 0.9424, 0.9549, 0.9649, 0.9729, 0.9792, 0.9841, 0.988, 0.991, 0.9933, 0.995, 0.9964, 0.9974, 0.9982, 0.9987, 0.9991, 1);
+  }
+}
+@keyframes m-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes m-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes m-sheet-in { from { transform: translate3d(0, 100%, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes m-sheet-out { from { transform: translate3d(0, var(--sheet-drag, 0px), 0); } to { transform: translate3d(0, 100%, 0); } }
+@keyframes m-dialog-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes m-dialog-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -50%) scale(0.97); } }
+
+.m-overlay[data-state="open"] { animation: m-fade-in var(--dur-sheet-in) var(--ease-ios); }
+.m-overlay[data-state="closed"] { animation: m-fade-out var(--dur-sheet-out) var(--ease-out-ios) forwards; }
+.m-sheet { will-change: transform; }
+.m-sheet[data-state="open"] { animation: m-sheet-in var(--dur-sheet-in) var(--ease-spring); }
+.m-sheet[data-state="closed"] { animation: m-sheet-out var(--dur-sheet-out) var(--ease-out-ios) forwards; }
+.m-dialog[data-state="open"] { animation: m-dialog-in var(--dur-dialog-in) var(--ease-ios); }
+.m-dialog[data-state="closed"] { animation: m-dialog-out var(--dur-dialog-out) var(--ease-out-ios) forwards; }
+
+/* Page push / back (lib/pageMotion.js, View Transitions): snapshots slide,
+   the real page never carries a transform. The tab bar stays put. */
+@keyframes m-push-in { from { transform: translate3d(100%, 0, 0); } to { transform: none; } }
+@keyframes m-push-out { from { transform: none; } to { transform: translate3d(-30%, 0, 0); } }
+@keyframes m-pop-in { from { transform: translate3d(-30%, 0, 0); } to { transform: none; } }
+@keyframes m-pop-out { from { transform: none; } to { transform: translate3d(100%, 0, 0); } }
+:root[data-nav]::view-transition-old(root),
+:root[data-nav]::view-transition-new(root) {
+  animation-duration: var(--dur-push);
+  animation-timing-function: var(--ease-spring);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+:root[data-nav="push"]::view-transition-old(root) { animation-name: m-push-out; }
+:root[data-nav="push"]::view-transition-new(root) { animation-name: m-push-in; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.14); }
+:root[data-nav="back"]::view-transition-old(root) { animation-name: m-pop-out; z-index: 2; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.14); }
+:root[data-nav="back"]::view-transition-new(root) { animation-name: m-pop-in; }
+[data-tab-bar] { view-transition-name: tab-bar; }
+::view-transition-group(tab-bar) { animation: none; }
+/* With page motion the old 150 ms page fade would play inside the slide. */
+:root[data-vt] .page-fade { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-nav]::view-transition-old(root), :root[data-nav]::view-transition-new(root) { animation: none; }
+  .m-sheet[data-state="open"], .m-dialog[data-state="open"], .m-overlay[data-state="open"] { animation: m-fade-in 150ms linear; }
+  .m-sheet[data-state="closed"], .m-dialog[data-state="closed"], .m-overlay[data-state="closed"] { animation: m-fade-out 120ms linear forwards; }
 }
 
 /* On-screen keyboard open (useKeyboardAware): the fixed bottom bars would
@@ -159,6 +230,59 @@ html[data-kb-open] [data-fixed-bottom] {
   input, textarea, select {
     font-size: 16px !important;
   }
+}
+
+/* ---- One form-field style (Run 9, A1 + B1) -----------------------------
+   iOS draws date/time inputs natively: they keep their own intrinsic width
+   (wider than a half-width column on an SE, so Date ran into Amount), are
+   taller than text fields and centre their text. Here they behave like every
+   other field: shrink to their column, same 44 px height, same left-aligned
+   text and padding as the Input component around them. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  text-align: left;
+  line-height: 1.5rem;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value,
+input[type="month"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+  min-height: 1.5rem;
+}
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit,
+input[type="datetime-local"]::-webkit-datetime-edit {
+  padding: 0;
+}
+/* No desktop spin arrows inside number fields (iPhone never shows them; they
+   ate the right edge of narrow Cost/Price fields in a desktop browser). */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+/* Two fields side by side (.form-row on the grid). Children may shrink
+   below their content (a field never pushes its column wider than its
+   share), and label / field / hint each share a row across the columns
+   (subgrid), so a label that wraps to two lines on an SE no longer pushes
+   its field below its neighbour (Run 9 black-box finding). Below 360 px a row
+   with a date or time field stacks: a date box narrower than ~130 px cuts
+   off the year. */
+.form-row { grid-template-rows: auto auto auto; align-items: start; }
+.form-row > * { min-width: 0; display: grid; grid-row: span 3; grid-template-rows: subgrid; align-content: start; }
+.form-row > * > label { align-self: end; }
+@media (max-width: 359px) {
+  .form-row:has(input[type="date"], input[type="time"], input[type="datetime-local"]) { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---- Feel Phase 4: tap feedback and tap targets ------------------------ */

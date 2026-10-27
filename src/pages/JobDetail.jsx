@@ -1,7 +1,8 @@
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
-import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
+import { jobSlice } from "@/lib/jobBundle";
+import { partsCatalogQuery, jobQuery, jobPartsQuery, jobLaborQuery, jobInvoiceQuery, jobDocsQuery, jobPhotosQuery, jobAgreementQuery, jobCustomerQuery, customerHistoryQuery } from "@/lib/queries";
 import { DetailSkeleton } from "@/components/ui/skeleton";
 import { integrationsCore } from "@/lib/coreIntegrations";
 import { Card } from "@/components/ui/card";
@@ -49,7 +50,7 @@ import { useBack, goBack } from "@/hooks/useBack";
 import { useUrlState } from "@/hooks/useUrlState";
 import { confirmationEmailHTML, fmtPaymentMethod } from "@/lib/emailTemplates";
 import { sendJobSummaryEmail, newResendNonce } from "@/lib/jobSummaryEmail";
-import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge } from "@/lib/utils/invoiceTotals";
+import { buildInvoiceLineItems, isZeroDollarJob, canCloseAsNoCharge, sameLineItems } from "@/lib/utils/invoiceTotals";
 import { AGREEMENT_TYPE_TO_PLAN } from "@/lib/agreementTerms";
 import JobSignatureButton from "@/components/signature/JobSignatureButton";
 import ScheduleJobSheet from "@/components/jobs/ScheduleJobSheet";
@@ -230,13 +231,7 @@ export default function JobDetail() {
 
   // Maintenance agreement signed during THIS job (job_agreements, migration
   // 0022). Its PDF rides on the completion email.
-  const { data: jobAgreement = null } = useQuery({
-    queryKey: ["job-agreement", id],
-    queryFn: async () => {
-      try { const r = await db.JobAgreement.filter({ job_id: id }); return r[0] || null; }
-      catch { return null; }
-    },
-  });
+  const { data: jobAgreement = null } = useQuery(jobAgreementQuery(id));
 
   const { data: catalogParts = [] } = useQuery(partsCatalogQuery());
 
@@ -248,9 +243,10 @@ export default function JobDetail() {
   });
   const existingInvoice = existingInvoices[0] || null;
 
-  const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), enabled: !!job?.customer_id });
+  // Customer + their jobs ride on the job's one request (B4, lib/jobBundle).
+  const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), queryFn: () => jobSlice(id, "customer", jobCustomerQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
 
-  const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), enabled: !!job?.customer_id });
+  const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), queryFn: () => jobSlice(id, "customerHistory", customerHistoryQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
   const previousJobs = sortJobs(customerHistory
     .filter(j => j.id !== id && ["completed", "invoiced"].includes(j.status)))
     .slice(0, 10);
@@ -897,7 +893,7 @@ export default function JobDetail() {
       Math.abs((existingInvoice.tax_amount || 0) - fresh.tax_amount) < 0.005;
     const jobOpen = !["completed", "invoiced", "canceled"].includes(job.status);
     const itemsUnchanged = !jobOpen ||
-      JSON.stringify(existingInvoice.line_items || []) === JSON.stringify(fresh.line_items);
+      sameLineItems(existingInvoice.line_items, fresh.line_items);
     if (totalsUnchanged && itemsUnchanged) return;
 
     db.Invoice.update(existingInvoice.id, withResyncedSurcharge(fresh, existingInvoice, surchargeCfg)).then(patchInvoiceCache);

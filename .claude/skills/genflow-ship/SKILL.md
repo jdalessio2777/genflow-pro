@@ -70,6 +70,13 @@ report. Do not fix on main.
 - Record the new `dpl_` id + URL.
 
 ## 6. Production smoke test — no email, QA only, guard in prod-readonly mode
+- Production is refused unless the script is started with an explicit
+  `--prod-smoke` flag (tracked guard, `scripts/qa/safe-actions.mjs`): e.g.
+  `node s10.mjs <phase> --base https://genflow-pro.vercel.app --prod-smoke`.
+  Never give a smoke script a default target; pass `--base` and the URL as two
+  arguments (Run 9: a quoted `"--base <url>"` silently fell back to production).
+  With the flag the guard allows only `create`, `save`, `delete`, `cancel`,
+  `complete` (emails blocked) — never `send`, `charge`, `payment`, `approve`.
 Playwright WebKit, iPhone 15 standalone profile, signed in as QA, on
 `https://genflow-pro.vercel.app`.
 - Block in the browser context: every email route (`/api/send-email`,

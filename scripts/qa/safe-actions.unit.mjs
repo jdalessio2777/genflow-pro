@@ -3,7 +3,7 @@
 import test from 'node:test'; import assert from 'node:assert/strict'; import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs';
 process.env.SAFE_ACTIONS_LOG = path.join(os.tmpdir(), 'safe-actions-test.log');
 process.env.SAFE_ACTIONS_SHOTS = path.join(os.tmpdir(), 'safe-actions-test-shots');
-const { guardedTap, checkHost, checkRecord, GuardError, attachDialogGuard } = await import('./safe-actions.mjs');
+const { guardedTap, checkHost, checkRecord, GuardError, attachDialogGuard, __setProdSmokeForTests, PROD_SMOKE_KINDS, isProductionHost } = await import('./safe-actions.mjs');
 const PREVIEW = 'https://genflow-abc123xyz-jdalessio2777s-projects.vercel.app/jobs/1';
 function fakePage(url, { text = 'QA-AUDIT-T Job', stripe = 'test', sendsBlocked = true, fields = [] } = {}) {
   const clicks = [];
@@ -61,7 +61,9 @@ test('checkHost/checkRecord basics', () => {
   assert.throws(() => checkHost('https://genflow-pro.vercel.app'), GuardError);
   assert.ok(checkHost(PREVIEW)); assert.throws(() => checkRecord('Kyle Soden'), GuardError);
   assert.equal(checkRecord('QA-AUDIT-B1 Cust'), 'QA-AUDIT-B1 Cust');
+  __setProdSmokeForTests(true);
   assert.ok(checkHost('https://genflow-pro.vercel.app/', { mode: 'prod-readonly' }).prod);
+  __setProdSmokeForTests(null);
 });
 test('allows a QA-AUDIT name typed in a form field (new customer form)', async () => {
   const p = fakePage(PREVIEW, { text: 'New Customer', fields: ['QA-AUDIT-B4 Pat'] });
@@ -74,8 +76,39 @@ test('refuses when the form field holds a real name', async () => {
   assert.equal(p.clicks.length, 0);
 });
 
-// ── prod-readonly mode (genflow-ship production smoke test) ──────────────────
+// ── Run 9: production only with an explicit --prod-smoke flag ─────────────────
 const PROD = 'https://genflow-pro.vercel.app/jobs/1';
+test('production is refused without --prod-smoke, in prod-readonly AND preview mode (the Run 9 slip)', async () => {
+  __setProdSmokeForTests(false);
+  for (const u of ['https://genflow-pro.vercel.app/', 'https://genflow-pro-jdalessio2777s-projects.vercel.app/', 'https://genflow-pro-git-main-jdalessio2777s-projects.vercel.app/']) {
+    assert.throws(() => checkHost(u, { mode: 'prod-readonly' }), /without the --prod-smoke flag/);
+    assert.throws(() => checkHost(u), /production host/);
+  }
+  const p = fakePage(PROD);
+  await assert.rejects(guardedTap(p, p.loc, { kind: 'create', record: 'QA-AUDIT-T Job', mode: 'prod-readonly' }), /--prod-smoke/);
+  assert.equal(p.clicks.length, 0);
+  __setProdSmokeForTests(null);
+});
+test('the flag is read from the command line (process.argv)', async () => {
+  const { prodSmokeArmed } = await import('./safe-actions.mjs');
+  assert.equal(prodSmokeArmed(), process.argv.includes('--prod-smoke'));
+  assert.equal(process.argv.includes('--prod-smoke'), false); // node --test never passes it
+});
+test('production deployment URLs and aliases are recognised as production', () => {
+  for (const h of ['genflow-pro.vercel.app', 'genflow-pro-git-main-jdalessio2777s-projects.vercel.app', 'genflow-r692fcifs-jdalessio2777s-projects.vercel.app']) assert.ok(isProductionHost(h), h);
+  assert.ok(!isProductionHost('genflow-ahv50llor-jdalessio2777s-projects.vercel.app'));
+});
+test('with --prod-smoke only the documented smoke steps run (no approve, send, charge, payment)', async () => {
+  __setProdSmokeForTests(true);
+  assert.deepEqual(PROD_SMOKE_KINDS, ['create', 'save', 'delete', 'cancel', 'complete']);
+  const p = fakePage(PROD);
+  await assert.rejects(guardedTap(p, p.loc, { kind: 'approve', record: 'QA-AUDIT-T Job', mode: 'prod-readonly' }), /not a documented production smoke step/);
+  assert.equal(p.clicks.length, 0);
+  __setProdSmokeForTests(null);
+});
+
+// ── prod-readonly mode (genflow-ship production smoke test, flag given) ──────
+test('prod-readonly section: arm the flag', () => { __setProdSmokeForTests(true); });
 test('prod-readonly: refuses a Preview or any other host', () => {
   assert.throws(() => checkHost(PREVIEW, { mode: 'prod-readonly' }), /expects the production host/);
   assert.throws(() => checkHost('https://genshieldservice.com/', { mode: 'prod-readonly' }), GuardError);
@@ -102,6 +135,7 @@ test('prod-readonly: allows a QA-AUDIT save on production with emails blocked', 
   const e = await guardedTap(p, p.loc, { kind: 'save', record: 'QA-AUDIT-T Job', item: 'unit', mode: 'prod-readonly' });
   assert.equal(p.clicks.length, 1); assert.equal(e.result, 'tapped');
 });
+test('prod-readonly section: disarm the flag', () => { __setProdSmokeForTests(null); });
 test('preview mode (default) still refuses production', async () => {
   const p = fakePage(PROD);
   await assert.rejects(guardedTap(p, p.loc, { kind: 'save', record: 'QA-AUDIT-T Job' }), /production host/);

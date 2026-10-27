@@ -20,6 +20,7 @@ function api(key, extra = {}) {
       const r = { id: row.id || `${key}-${store[key].length + 1}`, ...row }; store[key].push(r); return r;
     }),
     update: vi.fn(async (id, patch) => { const r = store[key].find(x => x.id === id); Object.assign(r, patch); return { ...r }; }),
+    delete: vi.fn(async (id) => { store[key] = store[key].filter(r => r.id !== id); }),
     ...extra,
   };
 }
@@ -142,7 +143,10 @@ describe("B1 approve -> Schedule this job", () => {
     await screen.findByText("Schedule this job", { selector: "h2" });
     expect(jobCreate).toHaveBeenCalledTimes(1);
     expect(store.jobs).toHaveLength(1);
-    expect(store.jobs[0]).toMatchObject({ customer_description: "Replace starter", status: "scheduled", job_type: "diagnostic_repair" });
+    expect(store.jobs[0]).toMatchObject({ customer_description: null, title: "Install labor", status: "scheduled", job_type: "diagnostic_repair" });
+    // A2: the description box starts blank; A4: the title box shows the quote's title, editable
+    expect(screen.getByLabelText("Job Description (customer-facing)")).toHaveValue("");
+    expect(screen.getByTestId("schedule-sheet-title")).toHaveValue("Install labor");
     expect(screen.getByTestId("schedule-sheet-type")).toHaveTextContent("Diagnostic/Repair");
     expect(store.jobs[0].scheduled_date).toBeUndefined();
     expect(store.labor).toHaveLength(1);
@@ -155,6 +159,8 @@ describe("B1 approve -> Schedule this job", () => {
     expect(sheetLines).toHaveTextContent("Starter");
     expect(sheetLines).toHaveTextContent("$90.00");
 
+    fireEvent.change(screen.getByTestId("schedule-sheet-title"), { target: { value: "Starter replacement" } });
+    fireEvent.change(screen.getByLabelText("Job Description (customer-facing)"), { target: { value: "Replace starter" } });
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-11-03" } });
     fireEvent.change(screen.getByLabelText("Arrival time"), { target: { value: "10:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Alex" }));
@@ -162,7 +168,7 @@ describe("B1 approve -> Schedule this job", () => {
     fireEvent.click(screen.getByRole("button", { name: /Create & Skip Notification/ }));
     await waitFor(() => expect(sync).toHaveBeenCalled());
     const [, patch] = jobUpdate.mock.calls.find(([, p]) => p.scheduled_date);
-    expect(patch).toMatchObject({ scheduled_date: new Date("2026-11-03T10:00").toISOString(), assigned_to_name: "Alex", customer_description: "Replace starter", job_type: "diagnostic_repair" });
+    expect(patch).toMatchObject({ scheduled_date: new Date("2026-11-03T10:00").toISOString(), title: "Starter replacement", assigned_to_name: "Alex", customer_description: "Replace starter", job_type: "diagnostic_repair" });
     expect(patch).not.toHaveProperty("estimated_minutes"); // column missing -> not sent
     expect(sync.mock.calls[0][0].job).toMatchObject({ estimated_minutes: 180, estimated_duration: 3 });
     expect(sendEmail).not.toHaveBeenCalled();
@@ -208,9 +214,12 @@ describe("B1 approve -> Schedule this job", () => {
     seedQuote({ status: "approved", resulting_job_id: "jX", customer_id: "c1" });
     store.customers = [{ id: "c1", name: "QA Pat", email: "pat@example.com" }];
     store.jobs = [{ id: "jX", customer_id: "c1", customer_name: "QA Pat", status: "scheduled", scheduled_date: null, title: "Quote Follow-up — QA Pat" }];
+    store.labor = [{ id: "lX", job_id: "jX", description: "Install labor", total_price: 350, created_at: "2026-10-20T00:00:01Z" }];
     renderQuote();
     fireEvent.click(await screen.findByRole("button", { name: /Schedule this job/ }));
     await screen.findByText("Schedule this job", { selector: "h2" });
+    // A4: an old "Quote Follow-up — …" job is offered the quote's title instead
+    await waitFor(() => expect(screen.getByTestId("schedule-sheet-title")).toHaveValue("Install labor"));
     fireEvent.click(screen.getByRole("button", { name: /Schedule later/ }));
     await screen.findByText("job page");
     expect(jobCreate).not.toHaveBeenCalled();
@@ -228,5 +237,47 @@ describe("B1 approve -> Schedule this job", () => {
     await screen.findByText("Schedule this job", { selector: "h2" });
     expect(jobCreate).not.toHaveBeenCalled();
     expect(store.jobs).toHaveLength(1);
+  });
+});
+
+describe("B3 Delete a quote (app confirm; never the job)", () => {
+  it("a sent quote: Delete asks in the app, then removes only the quote", async () => {
+    seedQuote();
+    renderQuote();
+    fireEvent.click(await screen.findByTestId("quote-delete"));
+    const dlg = await screen.findByTestId("quote-delete-confirm");
+    expect(dlg).toHaveTextContent("Delete this quote?");
+    expect(dbMock.Quote.delete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /^Delete Quote$/ }));
+    await waitFor(() => expect(dbMock.Quote.delete).toHaveBeenCalledWith("q1"));
+    expect(store.quotes).toHaveLength(0);
+  });
+
+  it("Cancel deletes nothing", async () => {
+    dbMock.Quote.delete.mockClear();
+    seedQuote();
+    renderQuote();
+    fireEvent.click(await screen.findByTestId("quote-delete"));
+    await screen.findByTestId("quote-delete-confirm");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByTestId("quote-delete-confirm")).toBeNull());
+    expect(dbMock.Quote.delete).not.toHaveBeenCalled();
+    expect(store.quotes).toHaveLength(1);
+  });
+
+  it("an approved quote that created a job says the job stays, and never deletes the job", async () => {
+    dbMock.Quote.delete.mockClear();
+    seedQuote({ status: "approved", resulting_job_id: "jX", customer_id: "c1" });
+    store.customers = [{ id: "c1", name: "QA Pat", email: "pat@example.com" }];
+    store.jobs = [{ id: "jX", customer_id: "c1", customer_name: "QA Pat", status: "scheduled", scheduled_date: "2026-11-03T14:00:00Z", title: "Starter replacement" }];
+    renderQuote();
+    fireEvent.click(await screen.findByTestId("quote-delete"));
+    const dlg = await screen.findByTestId("quote-delete-confirm");
+    expect(dlg).toHaveTextContent("This quote created a job");
+    await waitFor(() => expect(dlg).toHaveTextContent("“Starter replacement” — the job, its lines and its invoice stay"));
+    fireEvent.click(screen.getByRole("button", { name: /Delete Quote Only/ }));
+    await waitFor(() => expect(dbMock.Quote.delete).toHaveBeenCalledWith("q1"));
+    expect(store.jobs).toEqual([expect.objectContaining({ id: "jX", title: "Starter replacement" })]);
+    expect(dbMock.Job.delete).not.toHaveBeenCalled();
   });
 });
