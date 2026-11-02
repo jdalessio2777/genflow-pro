@@ -106,7 +106,8 @@ done
 say ""
 say "--- RESTORE.md new-project steps (auth and storage tables pre-created locally, as a new project has them)"
 "$PGBIN/psql" -X -q -d postgres -c "CREATE DATABASE gf_recipe_test" || bad "create recipe database"
-"$PGBIN/pg_restore" --schema-only --no-owner --schema=auth --schema=storage --schema=extensions --dbname=gf_recipe_test "$B/database.dump" >/dev/null 2>&1
+"$PGBIN/psql" -X -q -d gf_recipe_test -c 'CREATE SCHEMA auth; CREATE SCHEMA storage; CREATE SCHEMA extensions; CREATE EXTENSION "uuid-ossp" SCHEMA extensions; CREATE EXTENSION pgcrypto SCHEMA extensions;' || bad "recipe: prepare database"
+"$PGBIN/pg_restore" --schema-only --no-owner --schema=auth --schema=storage --dbname=gf_recipe_test "$B/database.dump" >/dev/null 2>&1
 "$PGBIN/pg_restore" --data-only --schema=auth --table=users --table=identities --file="$TMP_ROOT/auth-data.sql" "$B/database.dump" || bad "recipe: auth data file"
 "$PGBIN/pg_restore" --schema=public --no-owner --file="$TMP_ROOT/public.sql" "$B/database.dump" || bad "recipe: public file"
 if "$PGBIN/psql" -X -q --single-transaction -v ON_ERROR_STOP=1 -c 'SET session_replication_role = replica' -f "$TMP_ROOT/auth-data.sql" -f "$TMP_ROOT/public.sql" -d gf_recipe_test > /dev/null 2> "$TMP_ROOT/recipe.err"; then

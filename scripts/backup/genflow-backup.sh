@@ -146,8 +146,10 @@ prune() {
   # Unfinished copies left by an earlier failed run
   while IFS= read -r leftover; do
     guarded_delete "$root" "$leftover"
-  done < <(/usr/bin/find "$root" -maxdepth 1 -type f -name 'GenFlow Backup *.zip.partial' -print)
-  /usr/bin/find "$root" -maxdepth 1 -type f -name 'GenFlow Backup *.zip' -print | /usr/bin/sort > "$list" || fail "could not list $root"
+  done < <(/usr/bin/find "$root" -maxdepth 1 -type f -name 'GenFlow Backup *.zip.partial' -print | /usr/bin/grep -E '/GenFlow Backup [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{4}\.zip\.partial$')
+  # Only files with this script's exact name count toward the 30; anything else is ignored.
+  /usr/bin/find "$root" -maxdepth 1 -type f -name 'GenFlow Backup *.zip' -print | /usr/bin/grep -E '/GenFlow Backup [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{4}\.zip$' | /usr/bin/sort > "$list"
+  [ -s "$list" ] || fail "could not list backups in $root"
   count="$(/usr/bin/grep -c . "$list" || true)"
   log "$root holds $count backups (keeping $KEEP)"
   if [ "$count" -gt "$KEEP" ]; then
@@ -159,7 +161,10 @@ prune() {
 }
 
 copy_verified() {
-  local root="$1" dest="$root/$NAME.zip" partial="$root/$NAME.zip.partial" a b
+  local root="$1"
+  local dest="$root/$NAME.zip"
+  local partial="$root/$NAME.zip.partial"
+  local a b
   [ ! -e "$dest" ] || fail "$dest already exists"
   /bin/cp "$ZIP" "$partial" || fail "could not copy to $root"
   a="$(/usr/bin/shasum -a 256 "$ZIP" | /usr/bin/awk '{print $1}')"
