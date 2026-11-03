@@ -1,3 +1,4 @@
+import DateField from "@/components/ui/DateField";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, ShieldCheck, Loader2, Trash2, ChevronRight } from "lucide-react";
@@ -170,7 +171,7 @@ export default function Warranty() {
               </div>
               <div>
                 <Label className="text-xs" htmlFor="wc-date">Date paid</Label>
-                <Input id="wc-date" type="date" value={form.date_paid} onChange={e => set("date_paid", e.target.value)} className="mt-1" />
+                <DateField id="wc-date" value={form.date_paid} onChange={v => set("date_paid", v)} className="mt-1" />
               </div>
             </div>
             <div>

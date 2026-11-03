@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { generatorSummary } from "@/lib/generatorInfo";
 import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
@@ -56,7 +57,7 @@ export default function CallList() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{customer.generator_model || "Generator"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{generatorSummary(customer) || "Generator"}</p>
             <p className={`text-xs font-semibold mt-1 ${isOverdue ? "text-red-600" : "text-amber-700"}`}>
               {isOverdue ? `Overdue by ${Math.abs(daysUntilDue)} days`
                 : daysUntilDue === 0 ? "Due today"

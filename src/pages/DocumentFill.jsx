@@ -16,6 +16,12 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { toast } from "sonner";
 import { debounce } from "lodash";
 import { useAuth } from "@/lib/AuthContext";
+import DateField from "@/components/ui/DateField";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  generatorFor, generatorsOf, generatorSummary, generatorFieldValue, generatorChanges, generatorPatch,
+  GENERATOR_FIELD_IDS, MAIN_GENERATOR_ID,
+} from "@/lib/generatorInfo";
 
 // ── Style constants ────────────────────────────────────────────────────────────
 
@@ -153,9 +159,12 @@ export default function DocumentFill() {
     }
   }, [doc]);
 
-  // Auto-fill from customer/job — non-destructive (never overwrites existing values)
+  // Auto-fill from customer/job — non-destructive (never overwrites existing
+  // values). A completed checklist is a record of what it showed: never touched.
+  const isDone = doc?.status === "completed";
+  const jobGenerator = generatorFor(customer, job);
   useEffect(() => {
-    if (!initialized.current || !doc || !job || !customer) return;
+    if (!initialized.current || !doc || !job || !customer || isDone) return;
 
     const fillMap = {
       // New template field IDs
@@ -163,21 +172,19 @@ export default function DocumentFill() {
       customer_address:       customer.address,
       customer_phone:         customer.phone,
       customer_email:         customer.email,
-      generator_brand:        customer.generator_brand,
-      generator_kw:           customer.generator_kw != null ? String(customer.generator_kw) : undefined,
-      generator_model:        customer.generator_model,
-      generator_serial:       customer.generator_serial,
-      generator_install_date: customer.generator_install_date,
       date_of_service:        new Date().toISOString().split("T")[0],
       // Legacy field IDs (old templates)
       service_address:        customer.address,
-      gen_model:              customer.generator_model,
-      gen_serial:             customer.generator_serial,
-      gen_install_date:       customer.generator_install_date,
       service_date:           job.scheduled_date
         ? job.scheduled_date.split("T")[0]
         : new Date().toISOString().split("T")[0],
     };
+    // Generator boxes on this checklist, from the record of the generator this
+    // visit is for (A4).
+    for (const f of doc.field_definitions || []) {
+      const key = GENERATOR_FIELD_IDS[f.id];
+      if (key) fillMap[f.id] = generatorFieldValue(jobGenerator, key);
+    }
 
     setValues(prev => {
       const next = { ...prev };
@@ -191,11 +198,11 @@ export default function DocumentFill() {
       }
       return changed ? next : prev;
     });
-  }, [job, customer, doc]);
+  }, [job, customer, doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-fill exercise_datetime from previous completed doc
   useEffect(() => {
-    if (!initialized.current || !prevExerciseTime) return;
+    if (!initialized.current || !prevExerciseTime || isDone) return;
     setValues(prev => {
       if (prev.exercise_datetime) return prev;
       preFilledFields.current.add("exercise_datetime");
@@ -205,7 +212,7 @@ export default function DocumentFill() {
 
   // Auto-fill tech name
   useEffect(() => {
-    if (!user?.full_name) return;
+    if (!user?.full_name || isDone) return;
     setValues(prev => {
       if (prev.tech_name) return prev;
       preFilledFields.current.add("tech_name");
@@ -247,37 +254,105 @@ export default function DocumentFill() {
     });
   };
 
-  // Reverse sync: write generator fields back to the customer record if currently empty
-  const syncToCustomer = (savedValues) => {
-    if (!customer) return;
-    const SYNC_MAP = {
-      generator_brand:        "generator_brand",
-      generator_kw:           "generator_kw",
-      generator_model:        "generator_model",
-      generator_serial:       "generator_serial",
-      generator_install_date: "generator_install_date",
-    };
-    const updates = {};
-    for (const [fieldId, col] of Object.entries(SYNC_MAP)) {
-      const formVal = savedValues[fieldId];
-      if (formVal && !customer[col]) updates[col] = formVal;
+  // ── Saving back to the customer's generator record (A4) ──────────────────
+  // An empty saved field is filled silently; a different saved value is asked
+  // about first, one question at a time, and the checklist is finished after the
+  // last answer. Only the generator fields are in the map (generatorChanges), so
+  // run hours, voltages and notes stay on this visit's checklist.
+  const [question, setQuestion] = useState(null); // { conflicts, index, customer, generator, finish }
+
+  const writeGenerator = async (customerRow, generatorId, updates) => {
+    if (!Object.keys(updates).length) return customerRow;
+    const saved = await db.Customer.update(customerRow.id, generatorPatch(customerRow, generatorId, updates));
+    queryClient.invalidateQueries({ queryKey: ["doc-customer", customerRow.id] });
+    queryClient.invalidateQueries({ queryKey: ["customer", customerRow.id] });
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
+    return saved || customerRow;
+  };
+
+  // The checklist's values with the generator boxes run through `finish` once
+  // every question has an answer.
+  const syncThenFinish = async (savedValues, finish) => {
+    if (!customer) { finish(savedValues); return; }
+    try {
+      // Fresh copy: another tech may have corrected the record since this opened.
+      const rows = await db.Customer.filter({ id: customer.id });
+      const fresh = rows[0] || customer;
+      const generator = generatorFor(fresh, job);
+      const { fills, conflicts } = generatorChanges(doc.field_definitions || [], savedValues, generator);
+      const updated = await writeGenerator(fresh, generator.id, fills);
+      if (Object.keys(fills).length) toast.success("Customer record updated");
+      if (conflicts.length) {
+        setQuestion({ conflicts, index: 0, customer: updated, generatorId: generator.id, values: savedValues, finish });
+        return;
+      }
+    } catch (e) {
+      toast.error(`Checklist saved, but the customer record wasn't updated: ${e.message}`);
     }
-    if (Object.keys(updates).length > 0) {
-      db.Customer.update(customer.id, updates)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["doc-customer", customer.id] });
-          toast.success("Customer record updated");
-        })
-        .catch(e => console.warn("[DocumentFill] Customer sync failed:", e.message));
+    finish(savedValues);
+  };
+
+  const answerQuestion = async (update) => {
+    const { conflicts, index, generatorId, finish } = question;
+    const conflict = conflicts[index];
+    let { customer: customerRow, values: current } = question;
+    if (update) {
+      try {
+        customerRow = await writeGenerator(customerRow, generatorId, {
+          [conflict.key]: conflict.key === "kw" ? Number(conflict.to) : conflict.to,
+        });
+        toast.success("Customer record updated");
+      } catch (e) {
+        toast.error(`Customer record NOT updated: ${e.message}`);
+      }
+    } else {
+      // Keep saved: the saved value is the right one, so the checklist shows it too.
+      current = { ...current };
+      for (const fid of conflict.fieldIds) current[fid] = conflict.from;
+      setValues(current);
     }
+    if (index + 1 < conflicts.length) {
+      setQuestion({ ...question, index: index + 1, customer: customerRow, values: current });
+      return;
+    }
+    setQuestion(null);
+    finish(current);
+  };
+
+  // A customer with more than one generator: which one this visit is for. The
+  // boxes the tech hasn't touched follow the choice.
+  const pickGenerator = async (generatorId) => {
+    const nextId = generatorId === MAIN_GENERATOR_ID ? null : generatorId;
+    try {
+      await db.Job.update(job.id, { generator_id: nextId });
+    } catch (e) {
+      toast.error(`Generator not changed: ${e.message}`);
+      return;
+    }
+    queryClient.setQueryData(["doc-job", doc.job_id], { ...job, generator_id: nextId });
+    queryClient.invalidateQueries({ queryKey: ["job", job.id] });
+    const picked = generatorFor(customer, { generator_id: nextId });
+    setValues(prev => {
+      const next = { ...prev };
+      for (const f of doc.field_definitions || []) {
+        const key = GENERATOR_FIELD_IDS[f.id];
+        if (key && (preFilledFields.current.has(f.id) || !next[f.id])) {
+          next[f.id] = generatorFieldValue(picked, key);
+          preFilledFields.current.add(f.id);
+        }
+      }
+      debouncedSave(next);
+      return next;
+    });
   };
 
   const handleSave = () => {
     debouncedSave.cancel();
-    saveMutation.mutate({ field_values: values });
-    syncToCustomer(values);
-    toast.success("Checklist saved");
-    goBack();
+    syncThenFinish(values, (finalValues) => {
+      saveMutation.mutate({ field_values: finalValues });
+      toast.success("Checklist saved");
+      goBack();
+    });
   };
 
   const handleComplete = () => {
@@ -288,10 +363,11 @@ export default function DocumentFill() {
       return;
     }
     debouncedSave.cancel();
-    saveMutation.mutate({ field_values: values, status: "completed", completed_date: new Date().toISOString() });
-    syncToCustomer(values);
-    toast.success("Document completed");
-    goBack();
+    syncThenFinish(values, (finalValues) => {
+      saveMutation.mutate({ field_values: finalValues, status: "completed", completed_date: new Date().toISOString() });
+      toast.success("Document completed");
+      goBack();
+    });
   };
 
   // ── Early returns ──────────────────────────────────────────────────────────
@@ -304,7 +380,8 @@ export default function DocumentFill() {
   if (!doc) return <div className="p-4 text-center">Document not found</div>;
 
   const fields = doc.field_definitions || [];
-  const filling = doc.status !== "completed";
+  const filling = !isDone;
+  const allGenerators = generatorsOf(customer);
   const isPreFilled = (fieldId) => preFilledFields.current.has(fieldId);
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -386,18 +463,41 @@ export default function DocumentFill() {
       );
     }
 
-    if (field.type === "dropdown") {
+    if (field.type === "date" || field.type === "time") {
       return (
         <div key={field.id} style={{ marginBottom: 12 }}>
           <label style={S.label}>
             {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
           </label>
-          <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)}>
-            <SelectTrigger className="rounded-xl h-10 text-sm" style={inputStyle(field.id)}>
+          <DateField
+            type={field.type}
+            value={values[field.id] || ""}
+            onChange={v => updateValue(field.id, v)}
+            clearable={!field.required && !isDone}
+            disabled={isDone}
+            data-testid={`field-${field.id}`}
+            className="rounded-xl h-10 text-base"
+            style={inputStyle(field.id)}
+          />
+        </div>
+      );
+    }
+
+    if (field.type === "dropdown") {
+      // A saved value that isn't one of the options (typed on an older
+      // checklist) still shows and stays selected.
+      const savedOption = values[field.id] && !field.options?.includes(values[field.id]) ? [values[field.id]] : [];
+      return (
+        <div key={field.id} style={{ marginBottom: 12 }}>
+          <label style={S.label}>
+            {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
+          </label>
+          <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)} disabled={isDone}>
+            <SelectTrigger className="rounded-xl h-10 text-sm" style={inputStyle(field.id)} data-testid={`field-${field.id}`}>
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+              {[...savedOption, ...(field.options || [])].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -416,6 +516,8 @@ export default function DocumentFill() {
             value={values[field.id] || ""}
             onChange={e => updateValue(field.id, e.target.value)}
             placeholder={field.placeholder}
+            disabled={isDone}
+            data-testid={`field-${field.id}`}
             className="rounded-xl h-10 text-base flex-1"
             style={inputStyle(field.id)}
           />
@@ -625,6 +727,17 @@ export default function DocumentFill() {
 
       {/* Form body */}
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 0" }}>
+        {filling && allGenerators.length > 1 && job && (
+          <div className="no-print" style={{ marginBottom: 12 }} data-testid="doc-generator-picker">
+            <label style={S.label}>Which generator is this visit for?</label>
+            <Select value={jobGenerator.id} onValueChange={pickGenerator}>
+              <SelectTrigger className="rounded-xl h-10 text-sm" style={S.input}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {allGenerators.map(g => <SelectItem key={g.id} value={g.id}>{[g.label, generatorSummary(g)].filter(Boolean).join(" — ")}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {saveMutation.isPending && (
           <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 py-1 no-print">
             <Loader2 className="w-3 h-3 animate-spin" /> Saving...
@@ -634,6 +747,29 @@ export default function DocumentFill() {
           {renderSections()}
         </div>
       </div>
+
+      {/* Saved generator info differs from what was entered: ask first (A4). */}
+      <Dialog open={!!question} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm" data-testid="generator-update-dialog">
+          {question && (() => {
+            const c = question.conflicts[question.index];
+            return (
+              <>
+                <DialogHeader className="text-left">
+                  <DialogTitle>Update customer record?</DialogTitle>
+                  <DialogDescription data-testid="generator-update-question">
+                    Update this customer's {c.label} from {c.from} to {c.to}?
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" className="flex-1 rounded-xl h-11" data-testid="generator-keep" onClick={() => answerQuestion(false)}>Keep saved</Button>
+                  <Button type="button" className="flex-1 rounded-xl h-11" data-testid="generator-update" onClick={() => answerQuestion(true)}>Update</Button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Sticky footer */}
       <div data-fixed-bottom="" className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border safe-bottom z-50 no-print">

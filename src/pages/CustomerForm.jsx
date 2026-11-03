@@ -10,12 +10,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LongTextField from "@/components/ui/LongTextField";
 import { markDraftsSaved } from "@/lib/textDrafts";
+import { generatorLine } from "@/lib/generatorInfo";
+import { newRequestId } from "@/lib/saveSafety";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import PageHeader from "@/components/layout/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Loader2 } from "lucide-react";
+import GeneratorFields from "@/components/customers/GeneratorFields";
+import { Save, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+
+const MAIN_GENERATOR_COLUMNS = {
+  brand: "generator_brand", kw: "generator_kw", model: "generator_model", serial: "generator_serial",
+  install_date: "generator_install_date", cooling: "generator_cooling",
+};
 
 export default function CustomerForm() {
   const { id } = useParams();
@@ -30,8 +38,8 @@ export default function CustomerForm() {
   const [form, setForm] = useState(() => ({
     name: searchParams.get("name") || "", email: searchParams.get("email") || "",
     phone: searchParams.get("phone") || "", address: searchParams.get("address") || "",
-    property_notes: "", generator_model: "", generator_serial: "",
-    generator_install_date: "", service_interval: "", notes: "", status: "active",
+    property_notes: "", generator_brand: "", generator_kw: "", generator_model: "", generator_serial: "",
+    generator_install_date: "", generator_cooling: "", extra_generators: [], service_interval: "", notes: "", status: "active",
     membership_plan: "", membership_start: "", membership_expiry: "",
     membership_signed: false, credit_card_on_file: false, repeat_note: "", referred_by: "",
   }));
@@ -65,7 +73,8 @@ export default function CustomerForm() {
   const cleanPayload = (data) => {
     const allowedFields = [
       'name', 'phone', 'email', 'address',
-      'generator_model', 'generator_serial', 'service_interval',
+      'generator_brand', 'generator_kw', 'generator_model', 'generator_serial',
+      'generator_install_date', 'generator_cooling', 'extra_generators', 'service_interval',
       'last_service_date', 'membership_plan', 'membership_start',
       'membership_expiry', 'membership_signed', 'membership_signature',
       'repeat_note', 'property_notes', 'credit_card_on_file', 'notes'
@@ -73,7 +82,8 @@ export default function CustomerForm() {
     const nullableFields = [
       'last_service_date', 'membership_start', 'membership_expiry',
       'membership_plan', 'service_interval', 'membership_signature',
-      'credit_card_on_file'
+      'credit_card_on_file', 'generator_brand', 'generator_kw', 'generator_install_date',
+      'generator_cooling'
     ];
     const out = {};
     allowedFields.forEach(f => {
@@ -107,7 +117,7 @@ export default function CustomerForm() {
               buildRow("Name", form.name),
               buildRow("Phone", form.phone),
               buildRow("Address", form.address),
-              buildRow("Generator", form.generator_model),
+              buildRow("Generator", generatorLine(form)),
               buildRow("Referred By", form.referred_by),
             ])}
           `,
@@ -127,6 +137,8 @@ export default function CustomerForm() {
   });
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  const setExtra = (fn) => setForm(prev => ({ ...prev, extra_generators: fn(prev.extra_generators || []) }));
+  const updateExtra = (genId, key, value) => setExtra(extras => extras.map(g => (g.id === genId ? { ...g, [key]: value } : g)));
   // Local drafts of the long text fields (Run 8, A4), per customer.
   const draftPrefix = isEdit ? `customer:${id}:` : "customer:new:";
   const savedText = (field) => (isEdit ? customerData?.[field] ?? "" : "");
@@ -186,18 +198,10 @@ export default function CustomerForm() {
         <Card className="p-4 space-y-4">
           <h3 className="text-sm font-semibold">Generator Info</h3>
           <div className="space-y-3">
-            <div>
-              <Label className="text-xs">Model</Label>
-              <Input value={form.generator_model} onChange={e => update("generator_model", e.target.value)} className="rounded-xl mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs">Serial Number</Label>
-              <Input value={form.generator_serial} onChange={e => update("generator_serial", e.target.value)} className="rounded-xl mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs">Install Date</Label>
-              <Input value={form.generator_install_date} onChange={e => update("generator_install_date", e.target.value)} type="date" className="rounded-xl mt-1" />
-            </div>
+            <GeneratorFields
+              value={{ brand: form.generator_brand, kw: form.generator_kw, model: form.generator_model, serial: form.generator_serial, install_date: form.generator_install_date, cooling: form.generator_cooling }}
+              onChange={(key, v) => update(MAIN_GENERATOR_COLUMNS[key], v)}
+            />
             <div>
               <Label className="text-xs">Service Interval</Label>
               <Select value={form.service_interval || ""} onValueChange={v => update("service_interval", v)}>
@@ -213,6 +217,28 @@ export default function CustomerForm() {
             </div>
           </div>
         </Card>
+
+        {/* A customer with a second generator (A4): each visit then picks which one it's for. */}
+        {(form.extra_generators || []).map((gen, i) => (
+          <Card key={gen.id} className="p-4 space-y-4" data-testid={`extra-generator-${i}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Generator {i + 2}</h3>
+              <button type="button" aria-label={`Remove generator ${i + 2}`} className="min-h-11 min-w-11 flex items-center justify-center text-muted-foreground"
+                onClick={() => { if (window.confirm(`Remove generator ${i + 2} from this customer?`)) setExtra(extras => extras.filter(g => g.id !== gen.id)); }}>
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            <div>
+              <Label className="text-xs">Name (shown when picking it for a visit)</Label>
+              <Input value={gen.label || ""} placeholder="e.g. Pool house" onChange={e => updateExtra(gen.id, "label", e.target.value)} className="rounded-xl mt-1" />
+            </div>
+            <GeneratorFields value={gen} onChange={(key, v) => updateExtra(gen.id, key, v)} testPrefix={`gen${i + 2}`} />
+          </Card>
+        ))}
+        <Button type="button" variant="outline" className="w-full rounded-xl gap-2" data-testid="add-generator"
+          onClick={() => setExtra(extras => [...extras, { id: newRequestId(), label: "" }])}>
+          <Plus className="w-4 h-4" /> Add another generator
+        </Button>
 
         <Card className="p-4 space-y-3">
           <div>

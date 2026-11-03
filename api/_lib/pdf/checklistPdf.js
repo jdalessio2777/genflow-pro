@@ -1,5 +1,21 @@
 // Completed service checklist (job_documents row) -> PDF bytes.
 import { createDoc, BRAND, PAGE, fmtDateLong, safeFilename } from './common.js';
+import { generatorLine, GENERATOR_FIELD_IDS, generatorFor } from '../../../src/lib/generatorInfo.js';
+
+// The checklist's own generator values when it has them, so a later correction to
+// the customer's record never changes what an old checklist showed (A4). Older
+// checklists without those fields fall back to the customer's record.
+function checklistGeneratorLine(doc, customer, job) {
+  const values = doc?.field_values || {};
+  const recorded = {};
+  for (const [fieldId, key] of Object.entries(GENERATOR_FIELD_IDS)) {
+    if (!recorded[key] && String(values[fieldId] ?? '').trim()) recorded[key] = values[fieldId];
+  }
+  if (!Object.keys(recorded).length) return generatorLine(customer, job);
+  return generatorLine(generatorFor({
+    generator_brand: recorded.brand, generator_kw: recorded.kw, generator_model: recorded.model, generator_serial: recorded.serial,
+  }));
+}
 
 // '' = the row is not printed (never "undefined" / "null" / "NaN" / "{...}").
 function displayValue(field, raw) {
@@ -38,7 +54,7 @@ export async function buildChecklistPdf({ doc, customer, job }) {
   L.infoBox([
     ['Customer', customer?.name],
     ['Service Address', customer?.address],
-    ['Generator', [customer?.generator_model, customer?.generator_serial ? `S/N ${customer.generator_serial}` : ''].filter(Boolean).join('  |  ')],
+    ['Generator', checklistGeneratorLine(doc, customer, job)],
     ['Job', job?.title],
     // Customer-facing job description only — never job notes.
     ['Description of Work', job?.customer_description],

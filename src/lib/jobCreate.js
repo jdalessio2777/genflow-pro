@@ -13,6 +13,7 @@ import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyT
 import { syncJobToCalendar } from "@/lib/calendarSync";
 import { createOnce } from "@/lib/saveSafety";
 import { formatEstimate, estimateMinutes } from "@/lib/jobDuration";
+import { jobDateTimeLabel } from "@/lib/arrivalWindow";
 import { toast } from "sonner";
 
 export async function ensureDraftInvoice(job, invoiceId) {
@@ -44,7 +45,7 @@ export function notifyNewJob({ job, customer, triggeredBy }) {
         buildRow("Job", job.title),
         buildRow("Type", job.job_type),
         buildRow("Assigned To", job.assigned_to_name || "Unassigned"),
-        buildRow("Scheduled", job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""),
+        buildRow("Scheduled", jobDateTimeLabel(job)),
         buildRow("Est. time on site", formatEstimate(estimateMinutes(job))),
       ])}
     `,

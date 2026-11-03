@@ -22,24 +22,22 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { sortJobs, isJobOverdue } from "@/lib/utils/jobSort";
 import { splitActive, UPCOMING_AFTER_DAYS } from "@/lib/jobWindows";
+import { jobTimeLabel } from "@/lib/arrivalWindow";
 
-function formatJobDate(dateStr, use24h = false) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
+function formatJobDate(job, use24h = false) {
+  if (!job?.scheduled_date) return null;
+  const d = new Date(job.scheduled_date);
   const today = new Date();
-  if (d.toDateString() === today.toDateString()) {
-    return "Today, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
-  }
+  // Its arrival window, or its exact time (A2).
+  const time = jobTimeLabel(job, use24h);
+  if (d.toDateString() === today.toDateString()) return `Today, ${time}`;
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-  if (d.toDateString() === tomorrow.toDateString()) {
-    return "Tomorrow, " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
-  }
+  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow, ${time}`;
   // Upcoming jobs can be next year: show the year when it isn't this year.
   const dateOpts = { weekday: "short", month: "short", day: "numeric" };
   if (d.getFullYear() !== today.getFullYear()) dateOpts.year = "numeric";
-  return d.toLocaleDateString("en-US", dateOpts) +
-    ", " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
+  return `${d.toLocaleDateString("en-US", dateOpts)}, ${time}`;
 }
 
 const TECH_COLORS = {
@@ -328,7 +326,7 @@ export default function Jobs() {
                           {job.scheduled_date ? (
                             <p className={`text-xs mt-0.5 flex items-center gap-1.5 ${isJobOverdue(job) ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
                               {isJobOverdue(job) && <StatusBadge status="overdue" />}
-                              {formatJobDate(job.scheduled_date, use24h)}
+                              {formatJobDate(job, use24h)}
                             </p>
                           ) : (
                             <p className="mt-1"><span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" data-testid="not-scheduled-badge">Not scheduled</span></p>

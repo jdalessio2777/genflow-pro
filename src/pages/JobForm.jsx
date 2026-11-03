@@ -4,7 +4,8 @@ import { goBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { usePreferences } from "@/hooks/usePreferences";
-import { toDatetimeLocalValue } from "@/lib/formatTime";
+import ArrivalWindowPicker from "@/components/jobs/ArrivalWindowPicker";
+import { emptyPicker, pickerFromJob, appointmentFromPicker } from "@/lib/arrivalWindow";
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName, getUserColor } from "@/lib/userColors";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,10 @@ export default function JobForm() {
     assigned_to_name: "",
   });
 
+  // The appointment is edited here and only turned into scheduled_date +
+  // arrival_window_end when saving (A2).
+  const [picker, setPicker] = useState(emptyPicker);
+
   useEffect(() => {
     if (!isEdit && user) {
       const name = getUserDisplayName(user);
@@ -82,6 +87,7 @@ export default function JobForm() {
     if (!isEdit || formLoaded.current || !savedJobRow) return;
     formLoaded.current = true;
     setForm(prev => ({ ...prev, ...savedJobRow, estimated_minutes: Number(savedJobRow.estimated_minutes) > 0 ? Number(savedJobRow.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES }));
+    setPicker(pickerFromJob(savedJobRow));
     setFormFilled(true);
   }, [isEdit, savedJobRow]);
 
@@ -99,10 +105,10 @@ export default function JobForm() {
 
   const JOB_FIELDS = new Set([
     'customer_id', 'customer_name', 'title', 'job_type', 'status',
-    'scheduled_date', 'notes', 'customer_description', 'generator_notes', 'quote_notes',
+    'scheduled_date', 'arrival_window_end', 'notes', 'customer_description', 'generator_notes', 'quote_notes',
     'requires_document', 'assigned_to_name', 'calendar_event_id', 'last_synced_at',
   ]);
-  const nullableFields = ['scheduled_date', 'last_synced_at'];
+  const nullableFields = ['scheduled_date', 'arrival_window_end', 'last_synced_at'];
   const cleanPayload = (data) =>
     Object.fromEntries(
       Object.entries(data)
@@ -198,19 +204,23 @@ export default function JobForm() {
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
     if (typeMissing()) return;
-    submit({ data: form, sendConfirmation: false });
+    const appointment = appointmentFromPicker(picker);
+    if (appointment.error) { haptics.error(); toast.error(appointment.error); return; }
+    submit({ data: { ...form, ...appointment }, sendConfirmation: false });
   };
 
   const handleCreate = (sendConfirmation) => {
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
     if (typeMissing()) return;
-    if (sendConfirmation && !form.scheduled_date) {
+    const appointment = appointmentFromPicker(picker);
+    if (appointment.error) { haptics.error(); toast.error(appointment.error); return; }
+    if (sendConfirmation && !appointment.scheduled_date) {
       haptics.error();
-      toast.error('Set a scheduled date/time first, or use "Create & Skip Notification"');
+      toast.error('Set a date and arrival window first, or use "Create & Skip Notification"');
       return;
     }
-    submit({ data: form, sendConfirmation });
+    submit({ data: { ...form, ...appointment }, sendConfirmation });
   };
 
   if (loadingJob || !formFilled) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
@@ -278,15 +288,7 @@ export default function JobForm() {
               </Select>
             </div>
           )}
-          <div>
-            <Label className="text-xs">Scheduled Date/Time</Label>
-            <Input
-              type="datetime-local"
-              value={toDatetimeLocalValue(form.scheduled_date)}
-              onChange={e => update("scheduled_date", e.target.value ? new Date(e.target.value).toISOString() : "")}
-              className="rounded-xl mt-1"
-            />
-          </div>
+          <ArrivalWindowPicker value={picker} onChange={setPicker} clearable idPrefix="job" />
           <EstimatedLengthPicker value={form.estimated_minutes} onChange={m => update("estimated_minutes", m)} />
           <div>
             <Label className="text-xs">Job Description (customer-facing)</Label>

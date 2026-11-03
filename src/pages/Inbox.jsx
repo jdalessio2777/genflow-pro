@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { generatorSummary } from "@/lib/generatorInfo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, markServiceRequestContacted } from "@/lib/db";
 import { customersListQuery, jobsListQuery } from "@/lib/queries";
@@ -204,7 +205,7 @@ export default function Inbox() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{customer.generator_model || "Generator"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{generatorSummary(customer) || "Generator"}</p>
             <p className={`text-xs font-semibold mt-1 ${isOverdue ? "text-red-600" : "text-amber-700"}`}>
               {isOverdue ? `Overdue by ${Math.abs(daysUntilDue)} days`
                 : daysUntilDue === 0 ? "Due today"

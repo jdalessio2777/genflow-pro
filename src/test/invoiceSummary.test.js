@@ -6,13 +6,19 @@ import { goldenCases, goldenCustomer } from './fixtures/invoiceCases'
 // (before the $0 branch existed). Never regenerate this file from new code.
 import golden from './fixtures/invoiceSummary.golden.json'
 
+// Run 12 (A3), the only change allowed vs the golden besides A6: the generator
+// box prints one clean line instead of a model line + an S/N line.
+const OLD_GENERATOR = /<p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">Generac 22kW<\/p>\n\s*<p style="font-size:12px;color:#555;margin:0 0 6px 0;">S\/N: SN-12345<\/p>/
+const NEW_GENERATOR = '<p style="font-size:13px;font-weight:600;margin:0 0 6px 0;">Generac 22kW · S/N SN-12345</p>'
+const expectedFor = (name) => (golden[name] ?? '').replace(OLD_GENERATOR, NEW_GENERATOR)
+
 const PAYMENT_LANGUAGE = [/PAYMENT DUE/i, /\bPAID\b/, /THANK YOU!/, /Cash · Check/, /payable to/i, /\bunpaid\b/i]
 
 describe('invoiceSummaryHTML — every invoice that is not exactly $0.00 is byte-identical to the pre-change output', () => {
   for (const [name, invoice] of Object.entries(goldenCases)) {
     it(`${name}`, () => {
       expect(isZeroDollarInvoice(invoice)).toBe(false)
-      expect(invoiceSummaryHTML({ invoice, customer: goldenCustomer })).toBe(golden[name])
+      expect(invoiceSummaryHTML({ invoice, customer: goldenCustomer })).toBe(expectedFor(name))
     })
   }
   // A6 (customer-copy audit): with no customer record the golden printed a
@@ -22,7 +28,7 @@ describe('invoiceSummaryHTML — every invoice that is not exactly $0.00 is byte
   it('no_customer_unpaid (golden minus the "—" generator placeholder)', () => {
     const generatorDash = 'GENERATOR</p>\n            <p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">—</p>'
     expect(golden.no_customer_unpaid).toContain(generatorDash)
-    const expected = golden.no_customer_unpaid.replace(generatorDash, 'PAYMENT</p>\n            ')
+    const expected = golden.no_customer_unpaid.replace(generatorDash, 'PAYMENT</p>').replace(/PAYMENT<\/p>\n\s*\n/, 'PAYMENT</p>\n            \n')
     const html = invoiceSummaryHTML({ invoice: goldenCases.unpaid, customer: null })
     expect(html).toBe(expected)
     expect(html).not.toContain('>—<')
@@ -145,7 +151,7 @@ describe('jobSummaryEmailHTML', () => {
     const html = jobSummaryEmailHTML({ invoice: goldenCases.unpaid, customer: goldenCustomer, attachmentLabels: ['Annual Maintenance Checklist', 'Signed Maintenance Agreement'] })
     expect(html).toContain('Hi Big,')
     expect(html).toContain('Attached (PDF): Annual Maintenance Checklist, Signed Maintenance Agreement.')
-    expect(html).toContain(golden.unpaid)
+    expect(html).toContain(expectedFor("unpaid"))
   })
   it('pay-later receipt is the SHORT "Payment received" email (Item 1d): no line items', () => {
     const html = jobSummaryEmailHTML({ invoice: goldenCases.paid_cash, customer: goldenCustomer, kind: 'receipt' })

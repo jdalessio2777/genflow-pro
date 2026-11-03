@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { getRecentCalendarChanges } from "@/lib/googleCalendar";
 import { getAccessToken } from "@/lib/googleTokenStore";
 import { resolveJobsCalendar } from "@/lib/calendarSync";
-import { formatTime } from "@/lib/formatTime";
+import { jobTimeLabel, movedJobPatch } from "@/lib/arrivalWindow";
 import { sortJobs, etDateKey, localDateKey } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 
@@ -113,7 +113,7 @@ export default function Schedule() {
 
         for (const change of silentUpdates) {
           try {
-            await db.Job.update(change.jobId, { scheduled_date: change.newStartTime });
+            await db.Job.update(change.jobId, movedJobPatch(jobsRef.current.find(j => j.id === change.jobId), change.newStartTime));
           } catch { /* silent */ }
         }
         if (silentUpdates.length > 0) {
@@ -133,7 +133,7 @@ export default function Schedule() {
   const handleConflictUpdate = async () => {
     const { change } = pendingConflicts[0];
     try {
-      await db.Job.update(change.jobId, { scheduled_date: change.newStartTime });
+      await db.Job.update(change.jobId, movedJobPatch(jobsRef.current.find(j => j.id === change.jobId), change.newStartTime));
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
     } catch { /* silent */ }
     setPendingConflicts(prev => prev.slice(1));
@@ -351,7 +351,7 @@ export default function Schedule() {
                             <CalendarCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
                           )}
                           <span className="text-xs text-primary font-medium">
-                            {formatTime(job.scheduled_date, use24h)}
+                            {jobTimeLabel(job, use24h)}
                           </span>
                           <StatusBadge status={job.status} />
                         </div>

@@ -1,4 +1,5 @@
 import { escapeHtml, multilineHtml } from './utils/escapeHtml.js'
+import { generatorLine, installDateLabel } from './generatorInfo.js'
 
 // Customer-facing job text on the printable Service History
 // (CustomerDetail.jsx). Only these job fields may appear:
@@ -74,8 +75,9 @@ export function serviceHistoryDocumentHtml({ customer, completedJobs = [] }) {
     statBox(lastService, "Most Recent"),
   ].filter(Boolean);
 
-  const installed = shortDate(customer.generator_install_date);
-  const hasGenerator = !!(customer.generator_model || customer.generator_serial || installed);
+  const installed = installDateLabel(customer.generator_install_date);
+  const generatorText = generatorLine(customer);
+  const hasGenerator = !!(generatorText || installed);
   const customerBox = `
     <div style="background:#f8f9fa;border-radius:8px;padding:16px;">
   <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin-bottom:8px;">CUSTOMER</p>
@@ -86,8 +88,7 @@ export function serviceHistoryDocumentHtml({ customer, completedJobs = [] }) {
   const generatorBox = hasGenerator ? `
     <div style="background:#f8f9fa;border-radius:8px;padding:16px;">
   <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin-bottom:8px;">GENERATOR</p>
-  ${customer.generator_model ? `<p style="font-size:14px;font-weight:bold;margin-bottom:3px;">${escapeHtml(customer.generator_model)}</p>` : ""}
-  ${customer.generator_serial ? `<p style="font-size:12px;color:#555;margin-bottom:2px;">S/N: ${escapeHtml(customer.generator_serial)}</p>` : ""}
+  ${generatorText ? `<p style="font-size:14px;font-weight:bold;margin-bottom:3px;">${escapeHtml(generatorText)}</p>` : ""}
   ${installed ? `<p style="font-size:12px;color:#555;">Installed: ${installed}</p>` : ""}
     </div>` : "";
 
