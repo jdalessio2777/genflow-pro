@@ -198,9 +198,32 @@ psql_section() {
 trap on_exit EXIT
 /bin/mkdir -p "$APP" "$WORK_ROOT" || { notify "GenFlow backup FAILED — see log"; FINISHED=1; exit 1; }
 take_lock
+
+# The schedule runs several times a day so a missed night catches up (see
+# docs/backups.md). One good backup per day is enough: if today's zip is already
+# in both folders, stop here and leave no trace.
+has_today() {
+  local f
+  for f in "$1/GenFlow Backup $(date '+%Y-%m-%d') "[0-9][0-9][0-9][0-9].zip; do
+    if [ -f "$f" ]; then return 0; fi
+  done
+  return 1
+}
+if [ "${GENFLOW_BACKUP_FORCE:-}" != "1" ] && has_today "$DESKTOP_ROOT" && has_today "$DRIVE_ROOT"; then
+  printf '%s  already backed up today; nothing to do\n' "$(date '+%H:%M:%S')"
+  release_lock
+  FINISHED=1
+  exit 0
+fi
+
+# Hold the Mac awake for this run. On 2026-11-03 launchd started a run during a
+# 7-second maintenance wake on battery; the Mac slept mid-dump and the server had
+# dropped the connection by the next wake. caffeinate stops when this script ends.
+/usr/bin/caffeinate -i -s -w $$ >/dev/null 2>&1 &
+
 /bin/mkdir -p "$OUT/code" "$OUT/storage" || fail "could not create the work folder"
 
-log "$NAME starting on $(/bin/hostname -s), launched by pid $PPID"
+log "$NAME starting on $(/bin/hostname -s), launched by pid $PPID. Power: $(/usr/bin/pmset -g batt | /usr/bin/head -n 1 | /usr/bin/sed "s/.*'\(.*\)'.*/\1/")"
 
 for tool in pg_dump pg_restore psql; do
   [ -x "$PGBIN/$tool" ] || fail "$tool is missing at $PGBIN"

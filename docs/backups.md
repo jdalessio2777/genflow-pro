@@ -21,7 +21,7 @@ Each folder keeps the 30 newest zips. Old ones are deleted only after a new back
 History and errors: `~/Desktop/GenFlow Backups/logs/backup-history.log`. A failed run also shows a macOS notification.
 
 ## Schedule
-launchd job `com.genshield.genflow-backup`. If the Mac is asleep at 3:00 AM, it runs at the next wake. If the Mac is shut down at 3:00 AM, or you aren't logged in, that night's backup is skipped.
+launchd job `com.genshield.genflow-backup`. It also tries at 8 AM, noon, 5 PM and 9 PM, and stops immediately once today's backup is in both folders, so a missed or failed night catches up the next time the Mac is awake (GENFLOW_BACKUP_FORCE=1 forces a run). The script holds the Mac awake while it runs. If the Mac is asleep at a scheduled time, it runs at the next wake. If the Mac is shut down at 3:00 AM, or you aren't logged in, that night's backup is skipped.
 
 ## How it's put together
 | Where | What |
