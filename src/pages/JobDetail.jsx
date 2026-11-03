@@ -1431,6 +1431,7 @@ export default function JobDetail() {
                       {job.confirmation_send_failed ? "Confirmation email failed to send" : "Confirmation email never sent"}
                     </span>
                   </div>
+                  <p className="text-xs text-red-800 dark:text-red-200" data-testid="confirmation-recipient">Goes to {customer.email}</p>
                   <Button size="sm" variant="outline" className="w-full rounded-xl gap-1.5 mt-2 border-red-300 dark:border-red-600 text-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
                     disabled={resendingConfirmation}
                     onClick={resendConfirmation}>

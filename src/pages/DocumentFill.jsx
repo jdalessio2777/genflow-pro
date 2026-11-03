@@ -793,7 +793,7 @@ export default function DocumentFill() {
       </div>
 
       {/* Saved generator info differs from what was entered: ask first (A4). */}
-      <Dialog open={!!question} onOpenChange={() => {}}>
+      <Dialog open={!!question} onOpenChange={(open) => { if (!open) answerQuestion(false); }}>
         <DialogContent className="max-w-sm" data-testid="generator-update-dialog">
           {question && (() => {
             const c = question.conflicts[question.index];

@@ -339,6 +339,9 @@ export default function JobForm() {
           </Button>
         ) : (
           <div className="space-y-2">
+            {customers.find(c => c.id === form.customer_id)?.email && (
+              <p className="text-xs text-muted-foreground" data-testid="job-form-recipient">Confirmation goes to <span className="font-medium text-foreground">{customers.find(c => c.id === form.customer_id).email}</span></p>
+            )}
             <Button type="button" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending} onClick={() => handleCreate(true)}>
               {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Create & Send Confirmation
