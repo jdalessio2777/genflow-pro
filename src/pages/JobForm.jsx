@@ -9,7 +9,7 @@ import { emptyPicker, pickerFromJob, appointmentFromPicker } from "@/lib/arrival
 import { useAuth } from "@/lib/AuthContext";
 import { getUserDisplayName } from "@/lib/userColors";
 import TechPicker from "@/components/jobs/TechPicker";
-import { jobTechs, techsPatch } from "@/lib/jobTechs";
+import { TECHS, jobTechs, techsPatch } from "@/lib/jobTechs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LongTextField from "@/components/ui/LongTextField";
@@ -68,7 +68,8 @@ export default function JobForm() {
   useEffect(() => {
     if (!isEdit && user) {
       const name = getUserDisplayName(user);
-      setForm(prev => ({ ...prev, assigned_to: user.email, ...techsPatch([name]) }));
+      const first = name.split(" ")[0];
+      setForm(prev => ({ ...prev, assigned_to: user.email, ...techsPatch(TECHS.includes(first) ? [first] : []) }));
     }
   }, [user, isEdit]);
 
