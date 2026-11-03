@@ -27,6 +27,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { jobHeaderStatus } from "@/lib/jobStatus";
 import { TAX_RATE, computeJobFinancials, partChargeTotal } from "@/lib/utils/jobFinancials";
 import ArrivalWindowPicker from "@/components/jobs/ArrivalWindowPicker";
+import { techsLabel } from "@/lib/jobTechs";
 import { appointmentFromPicker, hasArrivalWindow, jobTimeLabel, windowLabel, emptyPicker, etParts } from "@/lib/arrivalWindow";
 import { generatorFor, generatorsOf, generatorSummary, hasGeneratorInfo, installDateLabel, MAIN_GENERATOR_ID } from "@/lib/generatorInfo";
 import { sortJobs } from "@/lib/utils/jobSort";
@@ -526,15 +527,15 @@ export default function JobDetail() {
     }
     const triggeredBy = getUserDisplayName(user);
     if (newStatus === "dispatched") {
-      notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned")])}`, triggeredBy });
+      notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned")])}`, triggeredBy });
     }
     if (newStatus === "on_site") {
-      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned"), buildRow("Arrived", formatTime(new Date(), use24h))])}`, triggeredBy });
+      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned"), buildRow("Arrived", formatTime(new Date(), use24h))])}`, triggeredBy });
     }
     if (newStatus === "completed") {
       const { partsPrice, laborPrice } = getJobTotals();
       const total = partsPrice + laborPrice;
-      notifyTeam({ subject: `Job Completed — ${job.title} · ${job.customer_name}${total > 0 ? ` · $${total.toFixed(2)}` : ""}`, body: `${buildEventBadge("Job Completed", "green")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Type", job.job_type), buildRow("Tech", job.assigned_to_name || "Unassigned"), buildRow("Total", total > 0 ? `$${total.toFixed(2)}` : "TBD")])}`, triggeredBy });
+      notifyTeam({ subject: `Job Completed — ${job.title} · ${job.customer_name}${total > 0 ? ` · $${total.toFixed(2)}` : ""}`, body: `${buildEventBadge("Job Completed", "green")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Type", job.job_type), buildRow("Tech", techsLabel(job) || "Unassigned"), buildRow("Total", total > 0 ? `$${total.toFixed(2)}` : "TBD")])}`, triggeredBy });
     }
     if (newStatus === "canceled") {
       notifyTeam({ subject: `Job Canceled — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Job Canceled", "red")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Reason", cancelReason || "No reason given")])}`, triggeredBy });
@@ -601,11 +602,10 @@ export default function JobDetail() {
     if (!customer?.email) return;
     setResendingConfirmation(true);
     try {
-      const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
       await integrationsCore.SendEmailWithRetry({
         to: customer.email,
         subject: `Appointment Confirmed — GenShield Generator Service`,
-        html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
+        html: confirmationEmailHTML({ customer, job, use24h }),
       });
       await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
       queryClient.invalidateQueries({ queryKey: ['job', id] });
@@ -1086,7 +1086,7 @@ export default function JobDetail() {
                 {job.title}
               </p>
               <div className="flex items-center gap-1.5 min-w-0">
-                <p className="text-white text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+                <p className="text-white text-xs truncate min-w-0">{job.customer_name}{techsLabel(job) ? ` · ${techsLabel(job)}` : ""}</p>
                 <RewardBadge show={customer?.pending_reward} />
               </div>
             </div>
@@ -1905,7 +1905,7 @@ export default function JobDetail() {
                         <p className="text-sm font-semibold truncate">{prevJob.title}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(prevJob.completed_date || prevJob.created_date)}
-                          {prevJob.assigned_to_name ? ` · ${prevJob.assigned_to_name}` : ""}
+                          {techsLabel(prevJob) ? ` · ${techsLabel(prevJob)}` : ""}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">

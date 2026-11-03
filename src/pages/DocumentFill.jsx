@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { debounce } from "lodash";
 import { useAuth } from "@/lib/AuthContext";
 import DateField from "@/components/ui/DateField";
+import { formatDate } from "@/lib/utils/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   generatorFor, generatorsOf, generatorSummary, generatorFieldValue, generatorChanges, generatorPatch,
@@ -143,6 +144,9 @@ export default function DocumentFill() {
   // ── State ──────────────────────────────────────────────────────────────────
 
   const [values, setValues] = useState({});
+  // Correcting a completed checklist: nothing changes until Edit is tapped.
+  const [editing, setEditing] = useState(false);
+  const [showSent, setShowSent] = useState(false);
   const initialized = useRef(false);
   const [valuesReady, setValuesReady] = useState(false); // notes drafts restore after the saved values are in
   const preFilledFields = useRef(new Set());
@@ -237,7 +241,7 @@ export default function DocumentFill() {
     preFilledFields.current.delete(fieldId);
     setValues(prev => {
       const next = { ...prev, [fieldId]: value };
-      debouncedSave(next);
+      if (doc?.status !== "completed") debouncedSave(next); // a correction saves only on Save Changes
       return next;
     });
   };
@@ -279,7 +283,10 @@ export default function DocumentFill() {
       const rows = await db.Customer.filter({ id: customer.id });
       const fresh = rows[0] || customer;
       const generator = generatorFor(fresh, job);
-      const { fills, conflicts } = generatorChanges(doc.field_definitions || [], savedValues, generator);
+      // Correcting an old checklist: only what was changed now counts. An old value
+      // left alone must not look like a correction to today's record.
+      const relevant = (doc.field_definitions || []).filter(f => !isDone || savedValues[f.id] !== doc.field_values?.[f.id]);
+      const { fills, conflicts } = generatorChanges(relevant, savedValues, generator);
       const updated = await writeGenerator(fresh, generator.id, fills);
       if (Object.keys(fills).length) toast.success("Customer record updated");
       if (conflicts.length) {
@@ -355,6 +362,32 @@ export default function DocumentFill() {
     });
   };
 
+  // Save a correction. The version the customer was sent stays as it was (the
+  // first edit of an older checklist keeps its values as that version), the
+  // checklist is marked Edited, and nothing is emailed.
+  const handleSaveEdit = () => {
+    const fields = doc.field_definitions || [];
+    const missing = fields.filter(f => f.required && f.type !== "section_header" && !values[f.id]);
+    if (missing.length > 0) {
+      toast.error(`Fill required fields: ${missing.map(f => f.label).join(", ")}`);
+      return;
+    }
+    syncThenFinish(values, (finalValues) => {
+      saveMutation.mutate({
+        field_values: finalValues,
+        edited_at: new Date().toISOString(),
+        ...(doc.emailed_field_values ? {} : { emailed_field_values: doc.field_values || {} }),
+      });
+      setEditing(false);
+      toast.success("Changes saved. Nothing was emailed.");
+    });
+  };
+
+  const cancelEdit = () => {
+    setValues(doc.field_values || {});
+    setEditing(false);
+  };
+
   const handleComplete = () => {
     const fields = doc.field_definitions || [];
     const missing = fields.filter(f => f.required && f.type !== "section_header" && !values[f.id]);
@@ -381,6 +414,7 @@ export default function DocumentFill() {
 
   const fields = doc.field_definitions || [];
   const filling = !isDone;
+  const locked = isDone && !editing;
   const allGenerators = generatorsOf(customer);
   const isPreFilled = (fieldId) => preFilledFields.current.has(fieldId);
 
@@ -410,7 +444,7 @@ export default function DocumentFill() {
             guard={false}
             title={field.label}
             rows={5}
-            disabled={doc.status === "completed"}
+            disabled={locked}
             placeholder={field.placeholder || ""}
           />
         </div>
@@ -426,7 +460,7 @@ export default function DocumentFill() {
           {values[field.id] ? (
             <div className="space-y-1">
               <img src={values[field.id]} alt="Upload" className="w-full max-h-32 object-cover rounded-xl" />
-              <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>
+              {!locked && <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -473,8 +507,8 @@ export default function DocumentFill() {
             type={field.type}
             value={values[field.id] || ""}
             onChange={v => updateValue(field.id, v)}
-            clearable={!field.required && !isDone}
-            disabled={isDone}
+            clearable={!field.required && !locked}
+            disabled={locked}
             data-testid={`field-${field.id}`}
             className="rounded-xl h-10 text-base"
             style={inputStyle(field.id)}
@@ -492,7 +526,7 @@ export default function DocumentFill() {
           <label style={S.label}>
             {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
           </label>
-          <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)} disabled={isDone}>
+          <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)} disabled={locked}>
             <SelectTrigger className="rounded-xl h-10 text-sm" style={inputStyle(field.id)} data-testid={`field-${field.id}`}>
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
@@ -516,7 +550,7 @@ export default function DocumentFill() {
             value={values[field.id] || ""}
             onChange={e => updateValue(field.id, e.target.value)}
             placeholder={field.placeholder}
-            disabled={isDone}
+            disabled={locked}
             data-testid={`field-${field.id}`}
             className="rounded-xl h-10 text-base flex-1"
             style={inputStyle(field.id)}
@@ -530,7 +564,7 @@ export default function DocumentFill() {
   const renderCheckboxRow = (field) => {
     const checked = !!values[field.id];
     return (
-      <div key={field.id} style={S.checkRow(checked)} onClick={() => updateValue(field.id, !checked)}>
+      <div key={field.id} style={S.checkRow(checked)} onClick={() => { if (!locked) updateValue(field.id, !checked); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           {checked
             ? <CheckCircle2 style={{ width: 20, height: 20, color: "#16a34a", flexShrink: 0 }} />
@@ -565,13 +599,13 @@ export default function DocumentFill() {
             <div key={field.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 8, marginBottom: 12 }}>
               <div>
                 <label style={S.label}>{field.label}</label>
-                <Input type="text" value={values[field.id] || ""}
+                <Input type="text" disabled={locked} value={values[field.id] || ""}
                   onChange={e => updateValue(field.id, e.target.value)}
                   placeholder="Part #" className="rounded-xl h-10 text-sm" style={S.input} />
               </div>
               <div>
                 <label style={S.label}>{descField.label}</label>
-                <Input type="text" value={values[descId] || ""}
+                <Input type="text" disabled={locked} value={values[descId] || ""}
                   onChange={e => updateValue(descId, e.target.value)}
                   placeholder="Description" className="rounded-xl h-10 text-sm" style={S.input} />
               </div>
@@ -727,6 +761,16 @@ export default function DocumentFill() {
 
       {/* Form body */}
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 0" }}>
+        {doc.edited_at && (
+          <div className="no-print flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 mb-3 text-xs text-amber-900" data-testid="doc-edited-banner">
+            <span>Edited {formatDate(doc.edited_at)}</span>
+            {doc.emailed_field_values && (
+              <button type="button" className="min-h-11 px-1 font-medium underline underline-offset-2" data-testid="doc-show-sent" onClick={() => setShowSent(true)}>
+                View original version
+              </button>
+            )}
+          </div>
+        )}
         {filling && allGenerators.length > 1 && job && (
           <div className="no-print" style={{ marginBottom: 12 }} data-testid="doc-generator-picker">
             <label style={S.label}>Which generator is this visit for?</label>
@@ -771,6 +815,21 @@ export default function DocumentFill() {
         </DialogContent>
       </Dialog>
 
+      {/* The version from before any correction: read-only. */}
+      <Dialog open={showSent} onOpenChange={setShowSent}>
+        <DialogContent variant="sheet" data-testid="doc-sent-version">
+          <DialogHeader className="text-left">
+            <DialogTitle>Original version</DialogTitle>
+            <DialogDescription>What this checklist said before it was edited. Corrections never change it.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1 text-sm">
+            {fields.filter(f => f.type !== "section_header" && f.type !== "photo" && doc.emailed_field_values?.[f.id]).map(f => (
+              <p key={f.id}><span className="text-muted-foreground">{f.label}:</span> {f.type === "checkbox" ? "Yes" : String(doc.emailed_field_values[f.id])}</p>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Sticky footer */}
       <div data-fixed-bottom="" className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border safe-bottom z-50 no-print">
         {doc.status !== "completed" ? (
@@ -786,11 +845,19 @@ export default function DocumentFill() {
               <CheckCircle2 className="w-4 h-4 mr-1 shrink-0" /> Submit & Complete
             </Button>
           </div>
+        ) : editing ? (
+          <div className="flex gap-2 max-w-lg mx-auto">
+            <Button type="button" variant="ghost" className="flex-1 min-w-0 rounded-xl h-12" onClick={cancelEdit} data-testid="doc-edit-cancel">Cancel</Button>
+            <Button type="button" className="flex-1 min-w-0 rounded-xl h-12" onClick={handleSaveEdit} disabled={saveMutation.isPending} data-testid="doc-edit-save">Save Changes</Button>
+          </div>
         ) : (
           <div className="flex gap-2 max-w-lg mx-auto">
             <Button type="button" variant="outline" className="flex-1 rounded-xl h-12"
               onClick={goBack}>
               Back to Job
+            </Button>
+            <Button type="button" variant="outline" className="rounded-xl h-12 px-4" onClick={() => setEditing(true)} data-testid="doc-edit">
+              Edit
             </Button>
             <Button type="button" variant="outline" className="rounded-xl h-12 px-4"
               onClick={() => window.print()}>

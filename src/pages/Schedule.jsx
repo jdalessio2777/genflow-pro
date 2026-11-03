@@ -16,6 +16,7 @@ import { getRecentCalendarChanges } from "@/lib/googleCalendar";
 import { getAccessToken } from "@/lib/googleTokenStore";
 import { resolveJobsCalendar } from "@/lib/calendarSync";
 import { jobTimeLabel, movedJobPatch } from "@/lib/arrivalWindow";
+import { jobIsFor, sharesTech, techsLabel } from "@/lib/jobTechs";
 import { sortJobs, etDateKey, localDateKey } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 
@@ -99,9 +100,7 @@ export default function Schedule() {
             j.id !== change.jobId &&
             j.scheduled_date &&
             new Date(j.scheduled_date).toDateString() === newDateStr &&
-            j.assigned_to_name &&
-            changedJob.assigned_to_name &&
-            j.assigned_to_name === changedJob.assigned_to_name
+            sharesTech(j, changedJob)
           );
 
           if (conflicting) {
@@ -202,7 +201,7 @@ export default function Schedule() {
 
   const rawSelectedJobs = selectedDate ? getJobsForDate(selectedDate) : [];
   const selectedJobs = techFilter === "mine"
-    ? rawSelectedJobs.filter(j => !j.assigned_to_name || j.assigned_to_name === getUserDisplayName(user)?.split(" ")[0])
+    ? rawSelectedJobs.filter(j => jobIsFor(j, getUserDisplayName(user)))
     : rawSelectedJobs;
 
   return (
@@ -343,7 +342,7 @@ export default function Schedule() {
                           <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_COLORS[job.status] || "bg-gray-400"}`} />
                           <div className="min-w-0">
                             <p className="text-sm font-semibold truncate">{job.title}</p>
-                            <p className="text-xs text-muted-foreground">{job.customer_name}</p>
+                            <p className="text-xs text-muted-foreground">{[job.customer_name, techsLabel(job)].filter(Boolean).join(" · ")}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -394,7 +393,7 @@ export default function Schedule() {
                 <AlertDialogDescription>
                   <strong>{changedJob.title}</strong> was moved to <strong>{newTime}</strong> in Google
                   Calendar, but <strong>{conflicting.title}</strong> is already scheduled for{" "}
-                  {changedJob.assigned_to_name} at that time. Update GenFlow anyway?
+                  {techsLabel(changedJob)} at that time. Update GenFlow anyway?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

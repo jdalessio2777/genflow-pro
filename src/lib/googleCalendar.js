@@ -11,6 +11,7 @@
 import { estimateMinutes } from "@/lib/jobDuration";
 import { calendarEndMs, windowLabel } from "@/lib/arrivalWindow";
 import { generatorLine } from "@/lib/generatorInfo";
+import { techsLabel, jobTechs, isSharedJob } from "@/lib/jobTechs";
 
 export const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 export const TIME_ZONE = "America/New_York";
@@ -37,13 +38,16 @@ export function serviceTypeLabel(jobType) {
   return JOB_TYPE_LABELS[jobType] || String(jobType).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// "Jeremy", "Jeremy & Alex"; "Unassigned" when nobody is on it.
 export function techFirstName(job) {
-  return String(job?.assigned_to_name || "").trim().split(/\s+/)[0] || "Unassigned";
+  return techsLabel(job) || "Unassigned";
 }
 
-// Jeremy = Blueberry (9), Alex = Basil (10), anyone else = Graphite (8).
+// Jeremy = Blueberry (9), Alex = Basil (10), a shared job = Tangerine (6, stands
+// apart from both), anyone else = Graphite (8).
 export function techColorId(job) {
-  const t = techFirstName(job).toLowerCase();
+  if (isSharedJob(job)) return "6";
+  const t = (jobTechs(job)[0] || "").toLowerCase();
   if (t === "jeremy") return "9";
   if (t === "alex") return "10";
   return "8";

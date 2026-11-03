@@ -14,7 +14,9 @@ import { emptyPicker, appointmentFromPicker } from "@/lib/arrivalWindow";
 import EstimatedLengthPicker from "@/components/jobs/EstimatedLengthPicker";
 import { useAuth } from "@/lib/AuthContext";
 import { usePreferences } from "@/hooks/usePreferences";
-import { getUserDisplayName, getUserColor } from "@/lib/userColors";
+import { getUserDisplayName } from "@/lib/userColors";
+import TechPicker from "@/components/jobs/TechPicker";
+import { TECHS, jobTechs, techsPatch } from "@/lib/jobTechs";
 import { formatCurrency } from "@/lib/utils/format";
 import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
 import { withEstimate } from "@/lib/jobEstimateColumn";
@@ -24,8 +26,6 @@ import { SERVICE_TYPES, serviceTypePrefill } from "@/lib/jobTypes";
 import { newRequestId, showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
 import { haptics } from "@/lib/haptics";
 import { toast } from "sonner";
-
-const TECHS = ["Jeremy", "Alex", "Derek", "Sean"];
 
 /**
  * "Schedule this job" (B1). Opens right after a quote is approved, and from
@@ -48,7 +48,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
 
   const me = getUserDisplayName(user).split(" ")[0];
   const [picker, setPicker] = useState(emptyPicker);
-  const [tech, setTech] = useState("");
+  const [techs, setTechs] = useState([]);
   const [estimate, setEstimate] = useState(DEFAULT_ESTIMATE_MINUTES);
   const [description, setDescription] = useState("");
   const [title, setTitle] = useState("");
@@ -64,7 +64,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     if (filledFor.current === job.id) return;
     filledFor.current = job.id;
     setPicker(emptyPicker());
-    setTech(job.assigned_to_name || (TECHS.includes(me) ? me : ""));
+    setTechs(jobTechs(job).length ? jobTechs(job) : (TECHS.includes(me) ? [me] : []));
     setEstimate(Number(job.estimated_minutes) > 0 ? Number(job.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES);
     setDescription(job.customer_description || "");
     titleTouched.current = false;
@@ -130,7 +130,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
         ...appointment,
         title: title.trim(),
         job_type: serviceType,
-        assigned_to_name: tech || null,
+        ...techsPatch(techs),
         customer_description: description.trim() || null,
       }, estimate);
       saved = await db.Job.update(job.id, payload);
@@ -208,17 +208,7 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
 
         <div>
           <Label className="text-xs">Tech</Label>
-          <div className="grid grid-cols-4 gap-2 mt-1">
-            {TECHS.map(name => {
-              const color = getUserColor(name);
-              return (
-                <button key={name} type="button" aria-pressed={tech === name} onClick={() => setTech(name)}
-                  className={`h-10 rounded-xl border text-sm font-medium transition-colors ${tech === name ? `${color.border} ${color.bg} ${color.text}` : "border-border text-muted-foreground"}`}>
-                  {name}
-                </button>
-              );
-            })}
-          </div>
+          <TechPicker key={`${job?.id}-${open}`} value={techs} onChange={setTechs} />
         </div>
 
         <EstimatedLengthPicker key={`${job?.id}-${open}`} value={estimate} onChange={setEstimate} />

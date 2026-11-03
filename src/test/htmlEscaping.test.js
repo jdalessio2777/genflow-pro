@@ -50,7 +50,7 @@ function assertInert(html) {
 
 const outputs = {
   quote: () => quoteEmailHTML({ customer, job, lineItems: [{ description: `Line ${P}`, qty: `×${P2}`, amount: 5 }], subtotal: 5, total: 5, scopeNotes: `Scope ${P}\nline2`, approveUrl: `https://x.test/?a="${P2}` }),
-  confirmation: () => confirmationEmailHTML({ customer, job, techFirstName: `Tech ${P}` }),
+  confirmation: () => confirmationEmailHTML({ customer, job: { ...job, assigned_techs: [P] } }),
   completion: () => completionEmailHTML({ customer, job, parts: [{ name: `Part ${P}`, quantity: 1, total_price: 5, charge_for_part: true }], labor: [{ description: `Lab ${P}`, total_price: 5 }], documents: [doc] }),
   invoice: () => invoiceSummaryHTML({ invoice, customer }),
   invoiceZero: () => invoiceSummaryHTML({ invoice: zeroInvoice, customer }),

@@ -7,7 +7,9 @@ import { usePreferences } from "@/hooks/usePreferences";
 import ArrivalWindowPicker from "@/components/jobs/ArrivalWindowPicker";
 import { emptyPicker, pickerFromJob, appointmentFromPicker } from "@/lib/arrivalWindow";
 import { useAuth } from "@/lib/AuthContext";
-import { getUserDisplayName, getUserColor } from "@/lib/userColors";
+import { getUserDisplayName } from "@/lib/userColors";
+import TechPicker from "@/components/jobs/TechPicker";
+import { jobTechs, techsPatch } from "@/lib/jobTechs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LongTextField from "@/components/ui/LongTextField";
@@ -56,6 +58,7 @@ export default function JobForm() {
     requires_document: false,
     assigned_to: "",
     assigned_to_name: "",
+    assigned_techs: [],
   });
 
   // The appointment is edited here and only turned into scheduled_date +
@@ -65,7 +68,7 @@ export default function JobForm() {
   useEffect(() => {
     if (!isEdit && user) {
       const name = getUserDisplayName(user);
-      setForm(prev => ({ ...prev, assigned_to: user.email, assigned_to_name: name }));
+      setForm(prev => ({ ...prev, assigned_to: user.email, ...techsPatch([name]) }));
     }
   }, [user, isEdit]);
 
@@ -86,7 +89,7 @@ export default function JobForm() {
   useEffect(() => {
     if (!isEdit || formLoaded.current || !savedJobRow) return;
     formLoaded.current = true;
-    setForm(prev => ({ ...prev, ...savedJobRow, estimated_minutes: Number(savedJobRow.estimated_minutes) > 0 ? Number(savedJobRow.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES }));
+    setForm(prev => ({ ...prev, ...savedJobRow, ...techsPatch(jobTechs(savedJobRow)), estimated_minutes: Number(savedJobRow.estimated_minutes) > 0 ? Number(savedJobRow.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES }));
     setPicker(pickerFromJob(savedJobRow));
     setFormFilled(true);
   }, [isEdit, savedJobRow]);
@@ -106,7 +109,7 @@ export default function JobForm() {
   const JOB_FIELDS = new Set([
     'customer_id', 'customer_name', 'title', 'job_type', 'status',
     'scheduled_date', 'arrival_window_end', 'notes', 'customer_description', 'generator_notes', 'quote_notes',
-    'requires_document', 'assigned_to_name', 'calendar_event_id', 'last_synced_at',
+    'requires_document', 'assigned_to_name', 'assigned_techs', 'calendar_event_id', 'last_synced_at',
   ]);
   const nullableFields = ['scheduled_date', 'arrival_window_end', 'last_synced_at'];
   const cleanPayload = (data) =>
@@ -255,25 +258,7 @@ export default function JobForm() {
           </div>
           <div>
             <Label className="text-xs">Assigned To</Label>
-            <div className="grid grid-cols-4 gap-2 mt-1">
-              {["Jeremy", "Alex", "Derek", "Sean"].map(name => {
-                const color = getUserColor(name);
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => update("assigned_to_name", name)}
-                    className={`p-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                      form.assigned_to_name === name
-                        ? `${color.border} ${color.bg} ${color.text}`
-                        : "border-border text-muted-foreground hover:bg-muted/50"
-                    }`}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
-            </div>
+            <TechPicker value={jobTechs(form)} onChange={names => setForm(prev => ({ ...prev, ...techsPatch(names) }))} />
           </div>
           {isEdit && (
             <div>

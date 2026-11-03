@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils/format";
 import { jobTimeLabel, jobDateTimeLabel } from "@/lib/arrivalWindow";
 import { generatorSummary } from "@/lib/generatorInfo";
+import { techsLabel } from "@/lib/jobTechs";
 import { sortJobs, isJobOverdue, etDateKey } from "@/lib/utils/jobSort";
 import { splitActive } from "@/lib/jobWindows";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -295,7 +296,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold truncate">{job.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{[job.customer_name, techsLabel(job)].filter(Boolean).join(" · ")}</p>
                         {job.estimated_duration && <p className="text-xs text-primary/70 mt-0.5">Est. {job.estimated_duration}h</p>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -367,7 +368,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground truncate">{job.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{job.customer_name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{[job.customer_name, techsLabel(job)].filter(Boolean).join(" · ")}</p>
                         <p className={`text-xs mt-0.5 ${isJobOverdue(job) ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
                           {job.scheduled_date ? jobDateTimeLabel(job, use24h) : "No date set"}
                         </p>

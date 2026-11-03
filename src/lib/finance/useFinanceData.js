@@ -19,7 +19,7 @@ export const warrantyClaimsQuery = () => ({
 export const financeQueries = {
   invoices: { queryKey: ["finance", "invoices"], queryFn: select("invoices", "id,status,job_id,customer_id,customer_name,invoice_number,total,tax_amount,surcharge_amount,payment_method,paid_date,created_at,line_items") },
   expenses: { queryKey: ["expenses"], queryFn: () => db.Expense.list("-date") },
-  jobs: { queryKey: ["finance", "jobs"], queryFn: select("jobs", "id,job_type,status,assigned_to_name,completed_date,customer_id,created_at") },
+  jobs: { queryKey: ["finance", "jobs"], queryFn: select("jobs", "id,job_type,status,assigned_to_name,assigned_techs,completed_date,customer_id,created_at") },
   jobParts: { queryKey: ["finance", "job-parts"], queryFn: select("job_parts", "job_id,cost,quantity,total_cost") },
   customers: { queryKey: ["finance", "customers"], queryFn: select("customers", "id,created_at,membership_signed,membership_start,membership_expiry"), staleTime: REFERENCE_STALE_MS },
   warrantyClaims: warrantyClaimsQuery(),

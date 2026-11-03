@@ -9,6 +9,7 @@ import { MapPin, Navigation, Clock, ExternalLink } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
 import { jobTimeLabel } from "@/lib/arrivalWindow";
+import { jobIsFor, techsLabel } from "@/lib/jobTechs";
 import { usePreferences } from "@/hooks/usePreferences";
 import { sortJobs, etDateKey } from "@/lib/utils/jobSort";
 
@@ -26,7 +27,7 @@ export default function RouteMap() {
     .filter(j => {
       if (etDateKey(j.scheduled_date) !== selectedDate) return false;
       if (!["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)) return false;
-      if (techView !== "all" && j.assigned_to_name && j.assigned_to_name !== techView) return false;
+      if (techView !== "all" && !jobIsFor(j, techView)) return false;
       return true;
     }));
 
@@ -110,7 +111,7 @@ export default function RouteMap() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">{job.title}</p>
-                          <p className="text-xs text-primary font-medium">{job.customer_name}</p>
+                          <p className="text-xs text-primary font-medium">{[job.customer_name, techsLabel(job)].filter(Boolean).join(" · ")}</p>
                         </div>
                         <span className="text-xs text-muted-foreground shrink-0 font-medium">
                           {jobTimeLabel(job, use24h)}

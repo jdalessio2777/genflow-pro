@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { sortJobs, isJobOverdue } from "@/lib/utils/jobSort";
 import { splitActive, UPCOMING_AFTER_DAYS } from "@/lib/jobWindows";
 import { jobTimeLabel } from "@/lib/arrivalWindow";
+import { jobTechs, jobIsFor, techsLabel } from "@/lib/jobTechs";
 
 function formatJobDate(job, use24h = false) {
   if (!job?.scheduled_date) return null;
@@ -102,7 +103,7 @@ export default function Jobs() {
       : sortJobs(filtered);
 
   const techFiltered = techFilter === "mine"
-    ? sortedFiltered.filter(j => !j.assigned_to_name || j.assigned_to_name === getUserDisplayName(user)?.split(" ")[0])
+    ? sortedFiltered.filter(j => jobIsFor(j, getUserDisplayName(user)))
     : sortedFiltered;
 
   const completedCount = jobs.filter(j => j.status === "completed" || j.status === "invoiced").length;
@@ -342,10 +343,10 @@ export default function Jobs() {
                           {/* An approved-but-unscheduled job shows only "Not scheduled", not also "Scheduled". */}
                           {!(job.status === "scheduled" && !job.scheduled_date) && <StatusBadge status={job.status} />}
                           <StatusBadge status={job.job_type} />
-                          {job.assigned_to_name && (
+                          {jobTechs(job).length > 0 && (
                             <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
-                              <span className={`w-1.5 h-1.5 rounded-full ${TECH_COLORS[job.assigned_to_name] || "bg-gray-400"}`} />
-                              {job.assigned_to_name}
+                              {jobTechs(job).map(t => <span key={t} className={`w-1.5 h-1.5 rounded-full ${TECH_COLORS[t] || "bg-gray-400"}`} />)}
+                              {techsLabel(job)}
                             </span>
                           )}
                           {job.calendar_event_id && (

@@ -7,6 +7,7 @@ import { escapeHtml, multilineHtml, safeImageSrc } from './utils/escapeHtml.js'
 import { formatEstimate, estimateMinutes } from './jobDuration.js'
 import { SERVICE_TYPES } from './jobTypes.js'
 import { generatorLine } from './generatorInfo.js'
+import { techsLabel, isSharedJob } from './jobTechs.js'
 import { windowLabel, hasArrivalWindow } from './arrivalWindow.js'
 export { escapeHtml, multilineHtml, safeImageSrc }
 
@@ -305,7 +306,7 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
 </html>`
 }
 
-export function confirmationEmailHTML({ customer, job, techFirstName, use24h = false }) {
+export function confirmationEmailHTML({ customer, job, use24h = false }) {
   customer = customer || {}
   job = job || {}
   const visitDate = fmtDate(job.scheduled_date)
@@ -313,7 +314,8 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
   const arrivalWindow = windowLabel(job, use24h)
   const serviceType = fmtJobType(job.job_type)
   const generatorInfo = escapeHtml(generatorLine(customer, job))
-  const techName = String(techFirstName ?? '').trim() || 'our technician'
+  const techNames = techsLabel(job)
+  const techName = techNames || 'our technician'
   const estimateLine = `<span style="color:#6b7280;font-size:12px;" data-estimate="1">Estimated time on site: ${escapeHtml(formatEstimate(estimateMinutes(job)))}.</span>`
   // Service Type row only for a real service type. The generator always has its
   // own row: it used to sit inside the Service Type cell (A3).
@@ -390,7 +392,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
               <td style="padding:12px 20px;font-size:13px;color:#374151;">${escapeHtml(customer.address)}</td>
             </tr>` : ''}
             <tr>
-              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">👷 Your Technician</td>
+              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">👷 ${isSharedJob(job) ? 'Your Technicians' : 'Your Technician'}</td>
               <td style="padding:12px 20px;font-size:13px;color:#374151;">
                 <strong>${escapeHtml(techName)}</strong><br>
                 <span style="color:#6b7280;font-size:12px;">Generac Air-Cooled &amp; Liquid-Cooled Certified</span>

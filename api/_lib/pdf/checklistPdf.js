@@ -59,6 +59,7 @@ export async function buildChecklistPdf({ doc, customer, job }) {
     // Customer-facing job description only — never job notes.
     ['Description of Work', job?.customer_description],
     ['Completed', completedStr],
+    ['Edited', doc?.edited_at ? fmtDateLong(doc.edited_at) : ''],
   ]);
 
   const fields = Array.isArray(doc?.field_definitions) ? doc.field_definitions : [];
