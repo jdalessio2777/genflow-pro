@@ -16,6 +16,9 @@
 //    email already said PAID). Stripe webhook never sends — the UI paths call
 //    this after marking paid and the claim makes concurrent calls a no-op.
 //  - resend:     explicit manual resend from the UI (same content as completion).
+//  - confirmation: the appointment confirmation for a job made through the Claude
+//    connector, which has no browser to render it in. Same template as the app;
+//    once per job (jobs.confirmation_sent_at) unless the job is rescheduled.
 import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from './_lib/sendEmail.js';
@@ -23,6 +26,7 @@ import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './_lib/jobSummary.js';
 import { surchargeConfig, SURCHARGE_SETTING_KEYS } from '../src/lib/utils/surcharge.js';
 import { requireStaff } from './_lib/staffAuth.js';
 import { invoiceTotalCents } from '../src/lib/utils/invoiceTotals.js';
+import { confirmationEmailHTML } from '../src/lib/emailTemplates.js';
 
 // Dates in the email body render in the business's timezone, same as the
 // browser-rendered emails did before (Vercel functions run in UTC).
@@ -30,7 +34,7 @@ process.env.TZ = 'America/New_York';
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
-const KINDS = new Set(['completion', 'receipt', 'resend']);
+const KINDS = new Set(['completion', 'receipt', 'resend', 'confirmation']);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function readJsonBody(req) {
@@ -136,6 +140,25 @@ export default async function handler(req, res) {
     const agreement = selection.includeAgreement ? agreementRow : null;
 
     if (!customer?.email) return res.status(200).json({ ok: true, skipped: 'no_email' });
+
+    if (kind === 'confirmation') {
+      if (!job.scheduled_date) return res.status(200).json({ ok: true, skipped: 'not_scheduled' });
+      if (job.confirmation_sent_at) return res.status(200).json({ ok: true, skipped: 'already_sent' });
+      try {
+        const sent = await sendEmail({
+          to: customer.email,
+          subject: 'Appointment Confirmed — GenShield Generator Service',
+          html: confirmationEmailHTML({ customer, job }),
+          idempotencyKey: `job-confirmation-${job.id}-${new Date(job.scheduled_date).getTime()}`,
+        });
+        await db.from('jobs').update({ confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false }).eq('id', job.id).then(() => {}, () => {});
+        return res.status(200).json({ ok: true, id: sent?.id, kind, to: customer.email });
+      } catch (e) {
+        await db.from('jobs').update({ confirmation_send_failed: true }).eq('id', job.id).then(() => {}, () => {});
+        console.error('[send-job-summary] confirmation failed', job.id, e.message);
+        return res.status(502).json({ error: e.message });
+      }
+    }
 
     // ── eligibility + claim ────────────────────────────────────────────────
     let claimed = null; // [table, id, column] to release on failure

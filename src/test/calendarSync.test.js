@@ -246,3 +246,51 @@ describe('googleTokenStore', () => {
     expect(JSON.parse(localStorage.getItem('genflow_google_tokens_v1')).refreshToken).toBe('1//r')
   })
 })
+
+describe('jobs made through the Claude connector (calendar_sync_pending)', () => {
+  const pending = { ...job, id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', calendar_sync_pending: true }
+  it('adds the event with a fixed id, then clears the flag', async () => {
+    await load(); const g = fakeGoogle(); global.fetch = g.fn
+    dbJobFilter.mockResolvedValue([pending])
+    expect(await cs.syncPendingCalendarJobs()).toBe(1)
+    expect(dbJobFilter).toHaveBeenCalledWith({ calendar_sync_pending: true })
+    const post = g.writes().find(c => c.method === 'POST')
+    expect(post.body.id).toBe('gfaaaaaaaabbbb4ccc8dddeeeeeeeeeeee')
+    expect(post.body.summary).toContain('Maintenance')
+    expect(dbJobUpdate).toHaveBeenCalledWith(pending.id, { calendar_sync_pending: false })
+  })
+  it('a second phone got there first: Google says 409, treated as done, flag cleared', async () => {
+    await load(); const g = fakeGoogle(); const inner = g.fn
+    global.fetch = vi.fn(async (url, opts = {}) => (opts.method === 'POST' && String(url).includes('/events?')
+      ? { ok: false, status: 409, json: async () => ({ error: { message: 'dup' } }) }
+      : opts.method === 'PATCH' ? { ok: true, status: 200, json: async () => ({ id: 'gfx' }) } : inner(url, opts)))
+    dbJobFilter.mockResolvedValue([pending])
+    expect(await cs.syncPendingCalendarJobs()).toBe(1)
+    expect(dbJobUpdate).toHaveBeenCalledWith(pending.id, { calendar_sync_pending: false })
+  })
+  it('no Google on this device: leaves it for another device, never reads jobs', async () => {
+    await load({ token: null })
+    expect(await cs.syncPendingCalendarJobs()).toBe(0)
+    expect(dbJobFilter).not.toHaveBeenCalled()
+  })
+  it('Google failing: stays pending', async () => {
+    await load(); const g = fakeGoogle({ failWith: 500 }); global.fetch = g.fn
+    dbJobFilter.mockResolvedValue([pending])
+    expect(await cs.syncPendingCalendarJobs()).toBe(0)
+    expect(dbJobUpdate).not.toHaveBeenCalledWith(pending.id, { calendar_sync_pending: false })
+  })
+  it('checks at most once a minute', async () => {
+    await load(); global.fetch = fakeGoogle().fn
+    await cs.syncPendingCalendarJobs({ now: 1000000 })
+    dbJobFilter.mockClear()
+    await cs.syncPendingCalendarJobs({ now: 1000000 + 30000 })
+    expect(dbJobFilter).not.toHaveBeenCalled()
+    await cs.syncPendingCalendarJobs({ now: 1000000 + 61000 })
+    expect(dbJobFilter).toHaveBeenCalled()
+  })
+  it('a job made in the app inserts as before, no fixed id', async () => {
+    await load(); const g = fakeGoogle(); global.fetch = g.fn
+    await cs.syncJobToCalendar({ job, customer })
+    expect(g.writes()[0].body.id).toBeUndefined()
+  })
+})

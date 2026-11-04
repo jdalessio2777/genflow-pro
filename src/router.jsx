@@ -16,6 +16,7 @@ import { lazyRoute, hasPage, preloadLikelyPages } from "@/lib/lazyPages";
 import { loaderFor, shouldRevalidate, setLoadersReady } from "@/lib/routeLoaders";
 import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
+import OAuthConsent from "@/pages/OAuthConsent";
 
 function RootLayout() {
   // Warm the likely next screens' code while the phone is idle.
@@ -82,6 +83,7 @@ export const routes = [
     children: [
       { path: "/login", element: <Login /> },
       { path: "/auth/callback", element: <AuthCallback /> },
+      { path: "/oauth/consent", element: <OAuthConsent /> },
       {
         element: <AuthGate />,
         children: [
