@@ -47,7 +47,7 @@ const { formatEstimate, minutesFromHoursInput, estimateLabel, jobWithEstimate, e
 const { withEstimate, hasEstimateColumn, __setEstimateColumnForTests } = await import("../lib/jobEstimateColumn.js");
 const { confirmationEmailHTML } = await import("../lib/emailTemplates.js");
 const { jobLinesFromQuote } = await import("../lib/quoteToJob.js");
-const { appointmentIso } = await import("../components/jobs/ScheduleJobSheet.jsx");
+const { etIso } = await import("../lib/arrivalWindow.js");
 const { default: QuoteDetail } = await import("../pages/QuoteDetail.jsx");
 
 function seedQuote(over = {}) {
@@ -127,10 +127,6 @@ describe("B1 quote lines -> job rows", () => {
     expect(parts).toEqual([expect.objectContaining({ id: "P", job_id: "j1", name: "Starter", quantity: 2, price: 45, total_price: 90 })]);
   });
 
-  it("appointmentIso joins date + time", () => {
-    expect(appointmentIso("2026-11-03", "09:30")).toBe(new Date("2026-11-03T09:30").toISOString());
-    expect(appointmentIso("", "09:30")).toBeNull();
-  });
 });
 
 describe("B1 approve -> Schedule this job", () => {
@@ -162,13 +158,13 @@ describe("B1 approve -> Schedule this job", () => {
     fireEvent.change(screen.getByTestId("schedule-sheet-title"), { target: { value: "Starter replacement" } });
     fireEvent.change(screen.getByLabelText("Job Description (customer-facing)"), { target: { value: "Replace starter" } });
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-11-03" } });
-    fireEvent.change(screen.getByLabelText("Arrival time"), { target: { value: "10:00" } });
+    fireEvent.click(screen.getByTestId("window-10-12"));
     fireEvent.click(screen.getByRole("button", { name: "Alex" }));
     fireEvent.click(screen.getByRole("button", { name: "3 hr" }));
     fireEvent.click(screen.getByRole("button", { name: /Create & Skip Notification/ }));
     await waitFor(() => expect(sync).toHaveBeenCalled());
     const [, patch] = jobUpdate.mock.calls.find(([, p]) => p.scheduled_date);
-    expect(patch).toMatchObject({ scheduled_date: new Date("2026-11-03T10:00").toISOString(), title: "Starter replacement", assigned_to_name: "Alex", customer_description: "Replace starter", job_type: "diagnostic_repair" });
+    expect(patch).toMatchObject({ scheduled_date: etIso("2026-11-03", "10:00"), arrival_window_end: etIso("2026-11-03", "12:00"), title: "Starter replacement", assigned_to_name: "Alex", customer_description: "Replace starter", job_type: "diagnostic_repair" });
     expect(patch).not.toHaveProperty("estimated_minutes"); // column missing -> not sent
     expect(sync.mock.calls[0][0].job).toMatchObject({ estimated_minutes: 180, estimated_duration: 3 });
     expect(sendEmail).not.toHaveBeenCalled();
@@ -183,6 +179,7 @@ describe("B1 approve -> Schedule this job", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Mark Approved/ }));
     await screen.findByText("Schedule this job", { selector: "h2" });
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-11-03" } });
+    fireEvent.click(screen.getByTestId("window-10-12"));
     fireEvent.click(screen.getByRole("button", { name: "3 hr" }));
     await waitFor(() => expect(screen.getByRole("button", { name: /Create & Send Confirmation/ })).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", { name: /Create & Send Confirmation/ }));
@@ -191,6 +188,7 @@ describe("B1 approve -> Schedule this job", () => {
     expect(patch.estimated_minutes).toBe(180);
     expect(sendEmail.mock.calls[0][0].to).toBe("pat@example.com");
     expect(sendEmail.mock.calls[0][0].html).toContain("Estimated time on site: about 3 hours.");
+    expect(sendEmail.mock.calls[0][0].html).toContain("Arrival window: 10 AM – 12 PM");
     expect(sendEmail.mock.calls[0][0].html).toContain("Diagnostic Repair");
     expect(sendEmail.mock.calls[0][0].html).not.toMatch(/>\s*Quote\s*</);
   });

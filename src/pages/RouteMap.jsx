@@ -1,14 +1,15 @@
+import DateField from "@/components/ui/DateField";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { customersListQuery, jobsListQuery } from "@/lib/queries";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { MapPin, Navigation, Clock, ExternalLink } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import PageHeader from "@/components/layout/PageHeader";
-import { formatTime } from "@/lib/formatTime";
+import { jobTimeLabel } from "@/lib/arrivalWindow";
+import { jobIsFor, techsLabel } from "@/lib/jobTechs";
 import { usePreferences } from "@/hooks/usePreferences";
 import { sortJobs, etDateKey } from "@/lib/utils/jobSort";
 
@@ -26,7 +27,7 @@ export default function RouteMap() {
     .filter(j => {
       if (etDateKey(j.scheduled_date) !== selectedDate) return false;
       if (!["scheduled", "dispatched", "on_site", "in_progress"].includes(j.status)) return false;
-      if (techView !== "all" && j.assigned_to_name && j.assigned_to_name !== techView) return false;
+      if (techView !== "all" && !jobIsFor(j, techView)) return false;
       return true;
     }));
 
@@ -71,12 +72,12 @@ export default function RouteMap() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Input
-            type="date"
+          <DateField
             aria-label="Route date"
             value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            className="flex-1 bg-background"
+            onChange={setSelectedDate}
+            wrapperClassName="flex-1 min-w-0"
+            className="bg-background"
           />
           <Button variant="outline" size="sm" className="rounded-xl h-11 shrink-0"
             onClick={() => setSelectedDate(etDateKey(new Date()))}>
@@ -110,10 +111,10 @@ export default function RouteMap() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">{job.title}</p>
-                          <p className="text-xs text-primary font-medium">{job.customer_name}</p>
+                          <p className="text-xs text-primary font-medium">{[job.customer_name, techsLabel(job)].filter(Boolean).join(" · ")}</p>
                         </div>
                         <span className="text-xs text-muted-foreground shrink-0 font-medium">
-                          {formatTime(job.scheduled_date, use24h)}
+                          {jobTimeLabel(job, use24h)}
                         </span>
                       </div>
                       {cust?.address && (

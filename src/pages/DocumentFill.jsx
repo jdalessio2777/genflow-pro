@@ -16,6 +16,13 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { toast } from "sonner";
 import { debounce } from "lodash";
 import { useAuth } from "@/lib/AuthContext";
+import DateField from "@/components/ui/DateField";
+import { formatDate } from "@/lib/utils/format";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  generatorFor, generatorsOf, generatorSummary, generatorFieldValue, generatorChanges, generatorPatch,
+  GENERATOR_FIELD_IDS, MAIN_GENERATOR_ID,
+} from "@/lib/generatorInfo";
 
 // ── Style constants ────────────────────────────────────────────────────────────
 
@@ -137,6 +144,9 @@ export default function DocumentFill() {
   // ── State ──────────────────────────────────────────────────────────────────
 
   const [values, setValues] = useState({});
+  // Correcting a completed checklist: nothing changes until Edit is tapped.
+  const [editing, setEditing] = useState(false);
+  const [showSent, setShowSent] = useState(false);
   const initialized = useRef(false);
   const [valuesReady, setValuesReady] = useState(false); // notes drafts restore after the saved values are in
   const preFilledFields = useRef(new Set());
@@ -153,9 +163,12 @@ export default function DocumentFill() {
     }
   }, [doc]);
 
-  // Auto-fill from customer/job — non-destructive (never overwrites existing values)
+  // Auto-fill from customer/job — non-destructive (never overwrites existing
+  // values). A completed checklist is a record of what it showed: never touched.
+  const isDone = doc?.status === "completed";
+  const jobGenerator = generatorFor(customer, job);
   useEffect(() => {
-    if (!initialized.current || !doc || !job || !customer) return;
+    if (!initialized.current || !doc || !job || !customer || isDone) return;
 
     const fillMap = {
       // New template field IDs
@@ -163,21 +176,19 @@ export default function DocumentFill() {
       customer_address:       customer.address,
       customer_phone:         customer.phone,
       customer_email:         customer.email,
-      generator_brand:        customer.generator_brand,
-      generator_kw:           customer.generator_kw != null ? String(customer.generator_kw) : undefined,
-      generator_model:        customer.generator_model,
-      generator_serial:       customer.generator_serial,
-      generator_install_date: customer.generator_install_date,
       date_of_service:        new Date().toISOString().split("T")[0],
       // Legacy field IDs (old templates)
       service_address:        customer.address,
-      gen_model:              customer.generator_model,
-      gen_serial:             customer.generator_serial,
-      gen_install_date:       customer.generator_install_date,
       service_date:           job.scheduled_date
         ? job.scheduled_date.split("T")[0]
         : new Date().toISOString().split("T")[0],
     };
+    // Generator boxes on this checklist, from the record of the generator this
+    // visit is for (A4).
+    for (const f of doc.field_definitions || []) {
+      const key = GENERATOR_FIELD_IDS[f.id];
+      if (key) fillMap[f.id] = generatorFieldValue(jobGenerator, key);
+    }
 
     setValues(prev => {
       const next = { ...prev };
@@ -191,11 +202,11 @@ export default function DocumentFill() {
       }
       return changed ? next : prev;
     });
-  }, [job, customer, doc]);
+  }, [job, customer, doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-fill exercise_datetime from previous completed doc
   useEffect(() => {
-    if (!initialized.current || !prevExerciseTime) return;
+    if (!initialized.current || !prevExerciseTime || isDone) return;
     setValues(prev => {
       if (prev.exercise_datetime) return prev;
       preFilledFields.current.add("exercise_datetime");
@@ -205,7 +216,7 @@ export default function DocumentFill() {
 
   // Auto-fill tech name
   useEffect(() => {
-    if (!user?.full_name) return;
+    if (!user?.full_name || isDone) return;
     setValues(prev => {
       if (prev.tech_name) return prev;
       preFilledFields.current.add("tech_name");
@@ -230,7 +241,7 @@ export default function DocumentFill() {
     preFilledFields.current.delete(fieldId);
     setValues(prev => {
       const next = { ...prev, [fieldId]: value };
-      debouncedSave(next);
+      if (doc?.status !== "completed") debouncedSave(next); // a correction saves only on Save Changes
       return next;
     });
   };
@@ -247,37 +258,134 @@ export default function DocumentFill() {
     });
   };
 
-  // Reverse sync: write generator fields back to the customer record if currently empty
-  const syncToCustomer = (savedValues) => {
-    if (!customer) return;
-    const SYNC_MAP = {
-      generator_brand:        "generator_brand",
-      generator_kw:           "generator_kw",
-      generator_model:        "generator_model",
-      generator_serial:       "generator_serial",
-      generator_install_date: "generator_install_date",
-    };
-    const updates = {};
-    for (const [fieldId, col] of Object.entries(SYNC_MAP)) {
-      const formVal = savedValues[fieldId];
-      if (formVal && !customer[col]) updates[col] = formVal;
+  // ── Saving back to the customer's generator record (A4) ──────────────────
+  // An empty saved field is filled silently; a different saved value is asked
+  // about first, one question at a time, and the checklist is finished after the
+  // last answer. Only the generator fields are in the map (generatorChanges), so
+  // run hours, voltages and notes stay on this visit's checklist.
+  const [question, setQuestion] = useState(null); // { conflicts, index, customer, generator, finish }
+
+  const writeGenerator = async (customerRow, generatorId, updates) => {
+    if (!Object.keys(updates).length) return customerRow;
+    const saved = await db.Customer.update(customerRow.id, generatorPatch(customerRow, generatorId, updates));
+    queryClient.invalidateQueries({ queryKey: ["doc-customer", customerRow.id] });
+    queryClient.invalidateQueries({ queryKey: ["customer", customerRow.id] });
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
+    return saved || customerRow;
+  };
+
+  // The checklist's values with the generator boxes run through `finish` once
+  // every question has an answer.
+  const syncThenFinish = async (savedValues, finish) => {
+    if (!customer) { finish(savedValues); return; }
+    try {
+      // Fresh copy: another tech may have corrected the record since this opened.
+      const rows = await db.Customer.filter({ id: customer.id });
+      const fresh = rows[0] || customer;
+      const generator = generatorFor(fresh, job);
+      // Correcting an old checklist: only what was changed now counts. An old value
+      // left alone must not look like a correction to today's record.
+      const relevant = (doc.field_definitions || []).filter(f => !isDone || savedValues[f.id] !== doc.field_values?.[f.id]);
+      const { fills, conflicts } = generatorChanges(relevant, savedValues, generator);
+      const updated = await writeGenerator(fresh, generator.id, fills);
+      if (Object.keys(fills).length) toast.success("Customer record updated");
+      if (conflicts.length) {
+        setQuestion({ conflicts, index: 0, customer: updated, generatorId: generator.id, values: savedValues, finish });
+        return;
+      }
+    } catch (e) {
+      toast.error(`Checklist saved, but the customer record wasn't updated: ${e.message}`);
     }
-    if (Object.keys(updates).length > 0) {
-      db.Customer.update(customer.id, updates)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["doc-customer", customer.id] });
-          toast.success("Customer record updated");
-        })
-        .catch(e => console.warn("[DocumentFill] Customer sync failed:", e.message));
+    finish(savedValues);
+  };
+
+  const answerQuestion = async (update) => {
+    const { conflicts, index, generatorId, finish } = question;
+    const conflict = conflicts[index];
+    let { customer: customerRow, values: current } = question;
+    if (update) {
+      try {
+        customerRow = await writeGenerator(customerRow, generatorId, {
+          [conflict.key]: conflict.key === "kw" ? Number(conflict.to) : conflict.to,
+        });
+        toast.success("Customer record updated");
+      } catch (e) {
+        toast.error(`Customer record NOT updated: ${e.message}`);
+      }
+    } else {
+      // Keep saved: the saved value is the right one, so the checklist shows it too.
+      current = { ...current };
+      for (const fid of conflict.fieldIds) current[fid] = conflict.from;
+      setValues(current);
     }
+    if (index + 1 < conflicts.length) {
+      setQuestion({ ...question, index: index + 1, customer: customerRow, values: current });
+      return;
+    }
+    setQuestion(null);
+    finish(current);
+  };
+
+  // A customer with more than one generator: which one this visit is for. The
+  // boxes the tech hasn't touched follow the choice.
+  const pickGenerator = async (generatorId) => {
+    const nextId = generatorId === MAIN_GENERATOR_ID ? null : generatorId;
+    try {
+      await db.Job.update(job.id, { generator_id: nextId });
+    } catch (e) {
+      toast.error(`Generator not changed: ${e.message}`);
+      return;
+    }
+    queryClient.setQueryData(["doc-job", doc.job_id], { ...job, generator_id: nextId });
+    queryClient.invalidateQueries({ queryKey: ["job", job.id] });
+    const picked = generatorFor(customer, { generator_id: nextId });
+    setValues(prev => {
+      const next = { ...prev };
+      for (const f of doc.field_definitions || []) {
+        const key = GENERATOR_FIELD_IDS[f.id];
+        if (key && (preFilledFields.current.has(f.id) || !next[f.id])) {
+          next[f.id] = generatorFieldValue(picked, key);
+          preFilledFields.current.add(f.id);
+        }
+      }
+      debouncedSave(next);
+      return next;
+    });
   };
 
   const handleSave = () => {
     debouncedSave.cancel();
-    saveMutation.mutate({ field_values: values });
-    syncToCustomer(values);
-    toast.success("Checklist saved");
-    goBack();
+    syncThenFinish(values, (finalValues) => {
+      saveMutation.mutate({ field_values: finalValues });
+      toast.success("Checklist saved");
+      goBack();
+    });
+  };
+
+  // Save a correction. The version the customer was sent stays as it was (the
+  // first edit of an older checklist keeps its values as that version), the
+  // checklist is marked Edited, and nothing is emailed.
+  const handleSaveEdit = () => {
+    const fields = doc.field_definitions || [];
+    const missing = fields.filter(f => f.required && f.type !== "section_header" && !values[f.id]);
+    if (missing.length > 0) {
+      toast.error(`Fill required fields: ${missing.map(f => f.label).join(", ")}`);
+      return;
+    }
+    syncThenFinish(values, (finalValues) => {
+      saveMutation.mutate({
+        field_values: finalValues,
+        edited_at: new Date().toISOString(),
+        ...(doc.emailed_field_values ? {} : { emailed_field_values: doc.field_values || {} }),
+      });
+      setEditing(false);
+      toast.success("Changes saved. Nothing was emailed.");
+    });
+  };
+
+  const cancelEdit = () => {
+    setValues(doc.field_values || {});
+    setEditing(false);
   };
 
   const handleComplete = () => {
@@ -288,10 +396,11 @@ export default function DocumentFill() {
       return;
     }
     debouncedSave.cancel();
-    saveMutation.mutate({ field_values: values, status: "completed", completed_date: new Date().toISOString() });
-    syncToCustomer(values);
-    toast.success("Document completed");
-    goBack();
+    syncThenFinish(values, (finalValues) => {
+      saveMutation.mutate({ field_values: finalValues, status: "completed", completed_date: new Date().toISOString() });
+      toast.success("Document completed");
+      goBack();
+    });
   };
 
   // ── Early returns ──────────────────────────────────────────────────────────
@@ -304,7 +413,9 @@ export default function DocumentFill() {
   if (!doc) return <div className="p-4 text-center">Document not found</div>;
 
   const fields = doc.field_definitions || [];
-  const filling = doc.status !== "completed";
+  const filling = !isDone;
+  const locked = isDone && !editing;
+  const allGenerators = generatorsOf(customer);
   const isPreFilled = (fieldId) => preFilledFields.current.has(fieldId);
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -333,7 +444,7 @@ export default function DocumentFill() {
             guard={false}
             title={field.label}
             rows={5}
-            disabled={doc.status === "completed"}
+            disabled={locked}
             placeholder={field.placeholder || ""}
           />
         </div>
@@ -349,7 +460,7 @@ export default function DocumentFill() {
           {values[field.id] ? (
             <div className="space-y-1">
               <img src={values[field.id]} alt="Upload" className="w-full max-h-32 object-cover rounded-xl" />
-              <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>
+              {!locked && <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -386,18 +497,41 @@ export default function DocumentFill() {
       );
     }
 
-    if (field.type === "dropdown") {
+    if (field.type === "date" || field.type === "time") {
       return (
         <div key={field.id} style={{ marginBottom: 12 }}>
           <label style={S.label}>
             {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
           </label>
-          <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)}>
-            <SelectTrigger className="rounded-xl h-10 text-sm" style={inputStyle(field.id)}>
+          <DateField
+            type={field.type}
+            value={values[field.id] || ""}
+            onChange={v => updateValue(field.id, v)}
+            clearable={!field.required && !locked}
+            disabled={locked}
+            data-testid={`field-${field.id}`}
+            className="rounded-xl h-10 text-base"
+            style={inputStyle(field.id)}
+          />
+        </div>
+      );
+    }
+
+    if (field.type === "dropdown") {
+      // A saved value that isn't one of the options (typed on an older
+      // checklist) still shows and stays selected.
+      const savedOption = values[field.id] && !field.options?.includes(values[field.id]) ? [values[field.id]] : [];
+      return (
+        <div key={field.id} style={{ marginBottom: 12 }}>
+          <label style={S.label}>
+            {field.label}{field.required && <span style={{ color: "#CC2200", marginLeft: 2 }}>*</span>}
+          </label>
+          <Select value={values[field.id] || ""} onValueChange={v => updateValue(field.id, v)} disabled={locked}>
+            <SelectTrigger className="rounded-xl h-10 text-sm" style={inputStyle(field.id)} data-testid={`field-${field.id}`}>
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+              {[...savedOption, ...(field.options || [])].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -416,6 +550,8 @@ export default function DocumentFill() {
             value={values[field.id] || ""}
             onChange={e => updateValue(field.id, e.target.value)}
             placeholder={field.placeholder}
+            disabled={locked}
+            data-testid={`field-${field.id}`}
             className="rounded-xl h-10 text-base flex-1"
             style={inputStyle(field.id)}
           />
@@ -428,7 +564,7 @@ export default function DocumentFill() {
   const renderCheckboxRow = (field) => {
     const checked = !!values[field.id];
     return (
-      <div key={field.id} style={S.checkRow(checked)} onClick={() => updateValue(field.id, !checked)}>
+      <div key={field.id} style={S.checkRow(checked)} onClick={() => { if (!locked) updateValue(field.id, !checked); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           {checked
             ? <CheckCircle2 style={{ width: 20, height: 20, color: "#16a34a", flexShrink: 0 }} />
@@ -463,13 +599,13 @@ export default function DocumentFill() {
             <div key={field.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 8, marginBottom: 12 }}>
               <div>
                 <label style={S.label}>{field.label}</label>
-                <Input type="text" value={values[field.id] || ""}
+                <Input type="text" disabled={locked} value={values[field.id] || ""}
                   onChange={e => updateValue(field.id, e.target.value)}
                   placeholder="Part #" className="rounded-xl h-10 text-sm" style={S.input} />
               </div>
               <div>
                 <label style={S.label}>{descField.label}</label>
-                <Input type="text" value={values[descId] || ""}
+                <Input type="text" disabled={locked} value={values[descId] || ""}
                   onChange={e => updateValue(descId, e.target.value)}
                   placeholder="Description" className="rounded-xl h-10 text-sm" style={S.input} />
               </div>
@@ -625,6 +761,27 @@ export default function DocumentFill() {
 
       {/* Form body */}
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px 0" }}>
+        {doc.edited_at && (
+          <div className="no-print flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 mb-3 text-xs text-amber-900" data-testid="doc-edited-banner">
+            <span>Edited {formatDate(doc.edited_at)}</span>
+            {doc.emailed_field_values && (
+              <button type="button" className="min-h-11 px-1 font-medium underline underline-offset-2" data-testid="doc-show-sent" onClick={() => setShowSent(true)}>
+                View original version
+              </button>
+            )}
+          </div>
+        )}
+        {filling && allGenerators.length > 1 && job && (
+          <div className="no-print" style={{ marginBottom: 12 }} data-testid="doc-generator-picker">
+            <label style={S.label}>Which generator is this visit for?</label>
+            <Select value={jobGenerator.id} onValueChange={pickGenerator}>
+              <SelectTrigger className="rounded-xl h-10 text-sm" style={S.input}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {allGenerators.map(g => <SelectItem key={g.id} value={g.id}>{[g.label, generatorSummary(g)].filter(Boolean).join(" — ")}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {saveMutation.isPending && (
           <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 py-1 no-print">
             <Loader2 className="w-3 h-3 animate-spin" /> Saving...
@@ -634,6 +791,44 @@ export default function DocumentFill() {
           {renderSections()}
         </div>
       </div>
+
+      {/* Saved generator info differs from what was entered: ask first (A4). */}
+      <Dialog open={!!question} onOpenChange={(open) => { if (!open) answerQuestion(false); }}>
+        <DialogContent className="max-w-sm" data-testid="generator-update-dialog">
+          {question && (() => {
+            const c = question.conflicts[question.index];
+            return (
+              <>
+                <DialogHeader className="text-left">
+                  <DialogTitle>Update customer record?</DialogTitle>
+                  <DialogDescription data-testid="generator-update-question">
+                    Update this customer's {c.label} from {c.from} to {c.to}?
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" className="flex-1 rounded-xl h-11" data-testid="generator-keep" onClick={() => answerQuestion(false)}>Keep saved</Button>
+                  <Button type="button" className="flex-1 rounded-xl h-11" data-testid="generator-update" onClick={() => answerQuestion(true)}>Update</Button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* The version from before any correction: read-only. */}
+      <Dialog open={showSent} onOpenChange={setShowSent}>
+        <DialogContent variant="sheet" data-testid="doc-sent-version">
+          <DialogHeader className="text-left">
+            <DialogTitle>Original version</DialogTitle>
+            <DialogDescription>What this checklist said before it was edited. Corrections never change it.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1 text-sm">
+            {fields.filter(f => f.type !== "section_header" && f.type !== "photo" && doc.emailed_field_values?.[f.id]).map(f => (
+              <p key={f.id}><span className="text-muted-foreground">{f.label}:</span> {f.type === "checkbox" ? "Yes" : String(doc.emailed_field_values[f.id])}</p>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Sticky footer */}
       <div data-fixed-bottom="" className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border safe-bottom z-50 no-print">
@@ -650,11 +845,19 @@ export default function DocumentFill() {
               <CheckCircle2 className="w-4 h-4 mr-1 shrink-0" /> Submit & Complete
             </Button>
           </div>
+        ) : editing ? (
+          <div className="flex gap-2 max-w-lg mx-auto">
+            <Button type="button" variant="ghost" className="flex-1 min-w-0 rounded-xl h-12" onClick={cancelEdit} data-testid="doc-edit-cancel">Cancel</Button>
+            <Button type="button" className="flex-1 min-w-0 rounded-xl h-12" onClick={handleSaveEdit} disabled={saveMutation.isPending} data-testid="doc-edit-save">Save Changes</Button>
+          </div>
         ) : (
           <div className="flex gap-2 max-w-lg mx-auto">
             <Button type="button" variant="outline" className="flex-1 rounded-xl h-12"
               onClick={goBack}>
               Back to Job
+            </Button>
+            <Button type="button" variant="outline" className="rounded-xl h-12 px-4" onClick={() => setEditing(true)} data-testid="doc-edit">
+              Edit
             </Button>
             <Button type="button" variant="outline" className="rounded-xl h-12 px-4"
               onClick={() => window.print()}>

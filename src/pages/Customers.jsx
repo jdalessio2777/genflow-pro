@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { generatorLine, generatorSummary } from "@/lib/generatorInfo";
 import { customersListQuery } from "@/lib/queries";
 import { deleteCustomerCascade } from "@/lib/deleteRecords";
 import { isActiveMember } from "@/lib/utils/membership";
@@ -87,8 +88,8 @@ function CustomerCard({ customer }) {
             <p className="text-sm font-semibold text-foreground">{customer.name}</p>
             <RewardBadge show={customer.pending_reward} />
           </div>
-          <p className={`text-xs mt-0.5 ${customer.generator_model ? "text-muted-foreground" : "text-muted-foreground/50"}`}>
-            {customer.generator_model || "Generator not specified"}
+          <p className={`text-xs mt-0.5 ${generatorSummary(customer) ? "text-muted-foreground" : "text-muted-foreground/50"}`}>
+            {generatorSummary(customer) || "Generator not specified"}
           </p>
           <div className="flex items-center justify-between mt-1.5 gap-2">
             <p className={`text-xs ${customer.last_service_date ? "text-muted-foreground" : "text-amber-600 font-medium"}`}>
@@ -167,8 +168,8 @@ function CallListCard({ customer, category }) {
       <div className="flex items-start justify-between gap-2">
         <Link to={`/customers/${customer.id}`} className="min-w-0 flex-1">
           <p className="font-semibold text-sm">{customer.name}</p>
-          {customer.generator_model && (
-            <p className="text-xs text-muted-foreground mt-0.5">{customer.generator_model}</p>
+          {generatorSummary(customer) && (
+            <p className="text-xs text-muted-foreground mt-0.5">{generatorSummary(customer)}</p>
           )}
           {customer.address && (
             <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
@@ -204,7 +205,7 @@ export default function Customers() {
   const filtered = customers.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
     c.address?.toLowerCase().includes(search.toLowerCase()) ||
-    c.generator_model?.toLowerCase().includes(search.toLowerCase())
+    generatorLine(c).toLowerCase().includes(search.toLowerCase())
   );
 
   const callListCustomers = customers

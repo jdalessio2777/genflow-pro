@@ -13,6 +13,8 @@ import { notifyTeam, buildTable, buildRow, buildEventBadge } from "@/lib/notifyT
 import { syncJobToCalendar } from "@/lib/calendarSync";
 import { createOnce } from "@/lib/saveSafety";
 import { formatEstimate, estimateMinutes } from "@/lib/jobDuration";
+import { jobDateTimeLabel } from "@/lib/arrivalWindow";
+import { techsLabel } from "@/lib/jobTechs";
 import { toast } from "sonner";
 
 export async function ensureDraftInvoice(job, invoiceId) {
@@ -43,8 +45,8 @@ export function notifyNewJob({ job, customer, triggeredBy }) {
         buildRow("Customer", customer?.name || job.customer_name),
         buildRow("Job", job.title),
         buildRow("Type", job.job_type),
-        buildRow("Assigned To", job.assigned_to_name || "Unassigned"),
-        buildRow("Scheduled", job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""),
+        buildRow("Assigned To", techsLabel(job) || "Unassigned"),
+        buildRow("Scheduled", jobDateTimeLabel(job)),
         buildRow("Est. time on site", formatEstimate(estimateMinutes(job))),
       ])}
     `,
@@ -60,11 +62,10 @@ export async function sendConfirmation({ job, customer, use24h }) {
     return false;
   }
   try {
-    const techFirstName = (job.assigned_to_name || "").split(" ")[0] || "our technician";
     await integrationsCore.SendEmailWithRetry({
       to: customer.email,
       subject: `Appointment Confirmed — GenShield Generator Service`,
-      html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
+      html: confirmationEmailHTML({ customer, job, use24h }),
     });
     await db.Job.update(job.id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
     toast.success(`Confirmation sent to ${customer.name}`);

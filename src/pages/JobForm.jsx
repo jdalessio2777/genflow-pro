@@ -4,9 +4,12 @@ import { goBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { usePreferences } from "@/hooks/usePreferences";
-import { toDatetimeLocalValue } from "@/lib/formatTime";
+import ArrivalWindowPicker from "@/components/jobs/ArrivalWindowPicker";
+import { emptyPicker, pickerFromJob, appointmentFromPicker } from "@/lib/arrivalWindow";
 import { useAuth } from "@/lib/AuthContext";
-import { getUserDisplayName, getUserColor } from "@/lib/userColors";
+import { getUserDisplayName } from "@/lib/userColors";
+import TechPicker from "@/components/jobs/TechPicker";
+import { TECHS, jobTechs, techsPatch } from "@/lib/jobTechs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LongTextField from "@/components/ui/LongTextField";
@@ -55,12 +58,18 @@ export default function JobForm() {
     requires_document: false,
     assigned_to: "",
     assigned_to_name: "",
+    assigned_techs: [],
   });
+
+  // The appointment is edited here and only turned into scheduled_date +
+  // arrival_window_end when saving (A2).
+  const [picker, setPicker] = useState(emptyPicker);
 
   useEffect(() => {
     if (!isEdit && user) {
       const name = getUserDisplayName(user);
-      setForm(prev => ({ ...prev, assigned_to: user.email, assigned_to_name: name }));
+      const first = name.split(" ")[0];
+      setForm(prev => ({ ...prev, assigned_to: user.email, ...techsPatch(TECHS.includes(first) ? [first] : []) }));
     }
   }, [user, isEdit]);
 
@@ -81,7 +90,8 @@ export default function JobForm() {
   useEffect(() => {
     if (!isEdit || formLoaded.current || !savedJobRow) return;
     formLoaded.current = true;
-    setForm(prev => ({ ...prev, ...savedJobRow, estimated_minutes: Number(savedJobRow.estimated_minutes) > 0 ? Number(savedJobRow.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES }));
+    setForm(prev => ({ ...prev, ...savedJobRow, ...techsPatch(jobTechs(savedJobRow)), estimated_minutes: Number(savedJobRow.estimated_minutes) > 0 ? Number(savedJobRow.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES }));
+    setPicker(pickerFromJob(savedJobRow));
     setFormFilled(true);
   }, [isEdit, savedJobRow]);
 
@@ -99,10 +109,10 @@ export default function JobForm() {
 
   const JOB_FIELDS = new Set([
     'customer_id', 'customer_name', 'title', 'job_type', 'status',
-    'scheduled_date', 'notes', 'customer_description', 'generator_notes', 'quote_notes',
-    'requires_document', 'assigned_to_name', 'calendar_event_id', 'last_synced_at',
+    'scheduled_date', 'arrival_window_end', 'notes', 'customer_description', 'generator_notes', 'quote_notes',
+    'requires_document', 'assigned_to_name', 'assigned_techs', 'calendar_event_id', 'last_synced_at',
   ]);
-  const nullableFields = ['scheduled_date', 'last_synced_at'];
+  const nullableFields = ['scheduled_date', 'arrival_window_end', 'last_synced_at'];
   const cleanPayload = (data) =>
     Object.fromEntries(
       Object.entries(data)
@@ -198,19 +208,23 @@ export default function JobForm() {
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
     if (typeMissing()) return;
-    submit({ data: form, sendConfirmation: false });
+    const appointment = appointmentFromPicker(picker);
+    if (appointment.error) { haptics.error(); toast.error(appointment.error); return; }
+    submit({ data: { ...form, ...appointment }, sendConfirmation: false });
   };
 
   const handleCreate = (sendConfirmation) => {
     if (!form.customer_id) { haptics.error(); toast.error("Select a customer"); return; }
     if (!form.title.trim()) { haptics.error(); toast.error("Title is required"); return; }
     if (typeMissing()) return;
-    if (sendConfirmation && !form.scheduled_date) {
+    const appointment = appointmentFromPicker(picker);
+    if (appointment.error) { haptics.error(); toast.error(appointment.error); return; }
+    if (sendConfirmation && !appointment.scheduled_date) {
       haptics.error();
-      toast.error('Set a scheduled date/time first, or use "Create & Skip Notification"');
+      toast.error('Set a date and arrival window first, or use "Create & Skip Notification"');
       return;
     }
-    submit({ data: form, sendConfirmation });
+    submit({ data: { ...form, ...appointment }, sendConfirmation });
   };
 
   if (loadingJob || !formFilled) return <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" /></div>;
@@ -245,25 +259,7 @@ export default function JobForm() {
           </div>
           <div>
             <Label className="text-xs">Assigned To</Label>
-            <div className="grid grid-cols-4 gap-2 mt-1">
-              {["Jeremy", "Alex", "Derek", "Sean"].map(name => {
-                const color = getUserColor(name);
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => update("assigned_to_name", name)}
-                    className={`p-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                      form.assigned_to_name === name
-                        ? `${color.border} ${color.bg} ${color.text}`
-                        : "border-border text-muted-foreground hover:bg-muted/50"
-                    }`}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
-            </div>
+            <TechPicker value={jobTechs(form)} onChange={names => setForm(prev => ({ ...prev, ...techsPatch(names) }))} />
           </div>
           {isEdit && (
             <div>
@@ -278,15 +274,7 @@ export default function JobForm() {
               </Select>
             </div>
           )}
-          <div>
-            <Label className="text-xs">Scheduled Date/Time</Label>
-            <Input
-              type="datetime-local"
-              value={toDatetimeLocalValue(form.scheduled_date)}
-              onChange={e => update("scheduled_date", e.target.value ? new Date(e.target.value).toISOString() : "")}
-              className="rounded-xl mt-1"
-            />
-          </div>
+          <ArrivalWindowPicker value={picker} onChange={setPicker} clearable idPrefix="job" />
           <EstimatedLengthPicker value={form.estimated_minutes} onChange={m => update("estimated_minutes", m)} />
           <div>
             <Label className="text-xs">Job Description (customer-facing)</Label>
@@ -351,6 +339,9 @@ export default function JobForm() {
           </Button>
         ) : (
           <div className="space-y-2">
+            {customers.find(c => c.id === form.customer_id)?.email && (
+              <p className="text-xs text-muted-foreground" data-testid="job-form-recipient">Confirmation goes to <span className="font-medium text-foreground">{customers.find(c => c.id === form.customer_id).email}</span></p>
+            )}
             <Button type="button" className="w-full rounded-xl gap-2 h-12" disabled={mutation.isPending} onClick={() => handleCreate(true)}>
               {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Create & Send Confirmation

@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/utils/format";
 import { PRESETS, rangeFor, previousRange, computeFinance, computeSeries, change, todayET, addDays } from "@/lib/finance/core";
@@ -120,8 +119,8 @@ export default function InsightsTab({ financeData }) {
         </div>
         {preset === "custom" && (
           <div className="grid grid-cols-2 gap-2 mt-2 form-row">
-            <div><Label className="text-xs" htmlFor="ins-from">From</Label><Input id="ins-from" type="date" value={custom.from} max={custom.to} onChange={e => e.target.value && setCustom(c => ({ ...c, from: e.target.value }))} className="mt-1" /></div>
-            <div><Label className="text-xs" htmlFor="ins-to">To</Label><Input id="ins-to" type="date" value={custom.to} min={custom.from} onChange={e => e.target.value && setCustom(c => ({ ...c, to: e.target.value }))} className="mt-1" /></div>
+            <div><Label className="text-xs" htmlFor="ins-from">From</Label><DateField id="ins-from" value={custom.from} max={custom.to} onChange={from => setCustom(c => ({ ...c, from }))} className="mt-1" /></div>
+            <div><Label className="text-xs" htmlFor="ins-to">To</Label><DateField id="ins-to" value={custom.to} min={custom.from} onChange={to => setCustom(c => ({ ...c, to }))} className="mt-1" /></div>
           </div>
         )}
         <p className="text-[11px] text-muted-foreground mt-1.5" data-testid="insights-range">

@@ -26,7 +26,10 @@ import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { jobHeaderStatus } from "@/lib/jobStatus";
 import { TAX_RATE, computeJobFinancials, partChargeTotal } from "@/lib/utils/jobFinancials";
-import { formatTime, toDatetimeLocalValue } from "@/lib/formatTime";
+import ArrivalWindowPicker from "@/components/jobs/ArrivalWindowPicker";
+import { techsLabel } from "@/lib/jobTechs";
+import { appointmentFromPicker, hasArrivalWindow, jobTimeLabel, windowLabel, emptyPicker, etParts } from "@/lib/arrivalWindow";
+import { generatorFor, generatorsOf, generatorSummary, hasGeneratorInfo, installDateLabel, MAIN_GENERATOR_ID } from "@/lib/generatorInfo";
 import { sortJobs } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
@@ -187,7 +190,7 @@ export default function JobDetail() {
   const [generatorNotes, setGeneratorNotes] = useState("");
   const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false); // B1
-  const [nextDate, setNextDate] = useState("");
+  const [nextPicker, setNextPicker] = useState(emptyPicker);
   const notesInitialized = useRef(false);
   const [notesReady, setNotesReady] = useState(false); // drafts restore only after the saved notes are in the boxes
   const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
@@ -245,6 +248,8 @@ export default function JobDetail() {
 
   // Customer + their jobs ride on the job's one request (B4, lib/jobBundle).
   const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), queryFn: () => jobSlice(id, "customer", jobCustomerQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
+  const customerGenerators = generatorsOf(customer);
+  const jobGenerator = generatorFor(customer, job);
 
   const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), queryFn: () => jobSlice(id, "customerHistory", customerHistoryQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
   const previousJobs = sortJobs(customerHistory
@@ -469,7 +474,7 @@ export default function JobDetail() {
     const intervalMonths = customer?.service_interval === "6_months" ? 6 : customer?.service_interval === "24_months" ? 24 : 12;
     const suggested = new Date();
     suggested.setMonth(suggested.getMonth() + intervalMonths);
-    setNextDate(toDatetimeLocalValue(suggested));
+    setNextPicker({ ...emptyPicker(), date: etParts(suggested).date });
     setScheduleNextOpen(true);
   };
 
@@ -522,15 +527,15 @@ export default function JobDetail() {
     }
     const triggeredBy = getUserDisplayName(user);
     if (newStatus === "dispatched") {
-      notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned")])}`, triggeredBy });
+      notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned")])}`, triggeredBy });
     }
     if (newStatus === "on_site") {
-      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", job.assigned_to_name || "Unassigned"), buildRow("Arrived", formatTime(new Date(), use24h))])}`, triggeredBy });
+      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned"), buildRow("Arrived", formatTime(new Date(), use24h))])}`, triggeredBy });
     }
     if (newStatus === "completed") {
       const { partsPrice, laborPrice } = getJobTotals();
       const total = partsPrice + laborPrice;
-      notifyTeam({ subject: `Job Completed — ${job.title} · ${job.customer_name}${total > 0 ? ` · $${total.toFixed(2)}` : ""}`, body: `${buildEventBadge("Job Completed", "green")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Type", job.job_type), buildRow("Tech", job.assigned_to_name || "Unassigned"), buildRow("Total", total > 0 ? `$${total.toFixed(2)}` : "TBD")])}`, triggeredBy });
+      notifyTeam({ subject: `Job Completed — ${job.title} · ${job.customer_name}${total > 0 ? ` · $${total.toFixed(2)}` : ""}`, body: `${buildEventBadge("Job Completed", "green")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Type", job.job_type), buildRow("Tech", techsLabel(job) || "Unassigned"), buildRow("Total", total > 0 ? `$${total.toFixed(2)}` : "TBD")])}`, triggeredBy });
     }
     if (newStatus === "canceled") {
       notifyTeam({ subject: `Job Canceled — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Job Canceled", "red")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Job", job.title), buildRow("Reason", cancelReason || "No reason given")])}`, triggeredBy });
@@ -597,11 +602,10 @@ export default function JobDetail() {
     if (!customer?.email) return;
     setResendingConfirmation(true);
     try {
-      const techFirstName = (job.assigned_to_name || '').split(' ')[0] || 'our technician';
       await integrationsCore.SendEmailWithRetry({
         to: customer.email,
         subject: `Appointment Confirmed — GenShield Generator Service`,
-        html: confirmationEmailHTML({ customer, job, techFirstName, use24h }),
+        html: confirmationEmailHTML({ customer, job, use24h }),
       });
       await db.Job.update(id, { confirmation_sent_at: new Date().toISOString(), confirmation_send_failed: false });
       queryClient.invalidateQueries({ queryKey: ['job', id] });
@@ -1082,7 +1086,7 @@ export default function JobDetail() {
                 {job.title}
               </p>
               <div className="flex items-center gap-1.5 min-w-0">
-                <p className="text-white text-xs truncate min-w-0">{job.customer_name}{job.assigned_to_name ? ` · ${job.assigned_to_name}` : ""}</p>
+                <p className="text-white text-xs truncate min-w-0">{job.customer_name}{techsLabel(job) ? ` · ${techsLabel(job)}` : ""}</p>
                 <RewardBadge show={customer?.pending_reward} />
               </div>
             </div>
@@ -1159,7 +1163,7 @@ export default function JobDetail() {
                 <div className="mx-3.5 mb-3.5 rounded-xl border border-border px-3 py-2.5" data-testid="job-appointment">
                   {job.scheduled_date ? (
                     <p className="text-xs text-foreground">
-                      <span className="font-semibold">{formatDate(job.scheduled_date)} · {formatTime(job.scheduled_date, use24h)}</span>
+                      <span className="font-semibold" data-testid="job-appointment-time">{formatDate(job.scheduled_date)} · {hasArrivalWindow(job) ? `Arrival window ${windowLabel(job, use24h)}` : jobTimeLabel(job, use24h)}</span>
                     </p>
                   ) : (
                     <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" data-testid="not-scheduled-badge">Not scheduled</span>
@@ -1221,15 +1225,31 @@ export default function JobDetail() {
 
                 {customerExpanded && (
                   <div className="border-t border-border px-3.5 pb-3.5 pt-3 space-y-2.5">
-                    {(customer?.generator_model || customer?.generator_serial) && (
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 dark:bg-blue-900/20 dark:border-blue-700">
-                        <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider mb-1">Generator</p>
-                        {customer.generator_model && (
-                          <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">{customer.generator_model}</p>
+                    {hasGeneratorInfo(jobGenerator) && (
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 dark:bg-blue-900/20 dark:border-blue-700" data-testid="job-generator">
+                        <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider mb-1">{customerGenerators.length > 1 ? jobGenerator.label : "Generator"}</p>
+                        {generatorSummary(jobGenerator) && (
+                          <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">{generatorSummary(jobGenerator)}</p>
                         )}
-                        {customer.generator_serial && (
-                          <p className="text-xs text-blue-600 dark:text-blue-400">S/N {customer.generator_serial}</p>
+                        {jobGenerator.serial && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">S/N {jobGenerator.serial}</p>
                         )}
+                        {(jobGenerator.cooling || jobGenerator.install_date) && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">{[jobGenerator.cooling, jobGenerator.install_date && `Installed ${installDateLabel(jobGenerator.install_date)}`].filter(Boolean).join(" · ")}</p>
+                        )}
+                      </div>
+                    )}
+                    {/* More than one generator: this visit picks which one (A4). */}
+                    {customerGenerators.length > 1 && (
+                      <div data-testid="job-generator-picker">
+                        <Label className="text-xs">Generator for this visit</Label>
+                        <Select value={jobGenerator.id} disabled={isClosed}
+                          onValueChange={v => updateJob.mutate({ generator_id: v === MAIN_GENERATOR_ID ? null : v })}>
+                          <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {customerGenerators.map(g => <SelectItem key={g.id} value={g.id}>{[g.label, generatorSummary(g)].filter(Boolean).join(" — ")}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                     {customer?.repeat_note && (
@@ -1411,6 +1431,7 @@ export default function JobDetail() {
                       {job.confirmation_send_failed ? "Confirmation email failed to send" : "Confirmation email never sent"}
                     </span>
                   </div>
+                  <p className="text-xs text-red-800 dark:text-red-200" data-testid="confirmation-recipient">Goes to {customer.email}</p>
                   <Button size="sm" variant="outline" className="w-full rounded-xl gap-1.5 mt-2 border-red-300 dark:border-red-600 text-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
                     disabled={resendingConfirmation}
                     onClick={resendConfirmation}>
@@ -1885,7 +1906,7 @@ export default function JobDetail() {
                         <p className="text-sm font-semibold truncate">{prevJob.title}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(prevJob.completed_date || prevJob.created_date)}
-                          {prevJob.assigned_to_name ? ` · ${prevJob.assigned_to_name}` : ""}
+                          {techsLabel(prevJob) ? ` · ${techsLabel(prevJob)}` : ""}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -2268,20 +2289,20 @@ export default function JobDetail() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Schedule Next Service?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Would you like to pre-schedule {job.customer_name}'s next maintenance visit?</p>
-          <div>
-            <Label className="text-xs">Next Service Date</Label>
-            <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="rounded-xl mt-1" />
-          </div>
+          <ArrivalWindowPicker value={nextPicker} onChange={setNextPicker} idPrefix="next" />
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setScheduleNextOpen(false); goBack(navigate, location, "/jobs"); }}>Skip</Button>
             <Button className="flex-1 rounded-xl" disabled={scheduleNextGuard.busy} onClick={() => scheduleNextGuard.run(async function scheduleIt() {
-              if (!nextDate) return;
+              const nextAppointment = appointmentFromPicker(nextPicker);
+              if (nextAppointment.error) { haptics.error(); toast.error(nextAppointment.error); return; }
+              if (!nextAppointment.scheduled_date) { haptics.error(); toast.error("Pick the next service date"); return; }
+              let nextJob;
               try {
                 // Fixed id: a double tap or a Retry can't create a second job (A-05).
-                const nextJob = await createOnce(db.Job, scheduleNextId.current, {
+                nextJob = await createOnce(db.Job, scheduleNextId.current, {
                   customer_id: job.customer_id, customer_name: job.customer_name,
                   title: job.title, job_type: "maintenance", status: "scheduled",
-                  scheduled_date: new Date(nextDate).toISOString(),
+                  ...nextAppointment,
                   notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
                 });
               } catch (e) {

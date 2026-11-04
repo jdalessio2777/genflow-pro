@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { generatorsOf, generatorSummary, hasGeneratorInfo, installDateLabel, MAIN_GENERATOR_ID } from "@/lib/generatorInfo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customerQuery, customerJobsQuery, customerInvoicesQuery } from "@/lib/queries";
 import { DetailSkeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,7 @@ export default function CustomerDetail() {
   });
 
   const { data: customer, isLoading } = useQuery(customerQuery(id));
+  const generators = generatorsOf(customer);
 
   const { data: jobs = [] } = useQuery(customerJobsQuery(id));
 
@@ -73,7 +75,7 @@ export default function CustomerDetail() {
             <RewardBadge show={customer.pending_reward} compact />
           </span>
         }
-        subtitle={customer.generator_model || "No generator info"}
+        subtitle={generatorSummary(customer) || "No generator info"}
         back
         actions={
           <div className="flex items-center gap-1.5">
@@ -246,14 +248,17 @@ export default function CustomerDetail() {
         </div>
 
         {/* Generator info */}
-        {customer.generator_model && (
-          <Card className="p-4">
-            <h3 className="text-sm font-semibold mb-2">Generator</h3>
+        {generators.map(gen => hasGeneratorInfo(gen) && (
+          <Card key={gen.id} className="p-4" data-testid="customer-generator">
+            <h3 className="text-sm font-semibold mb-2">{generators.length > 1 ? gen.label : "Generator"}</h3>
             <div className="space-y-1 text-sm">
-              <p><span className="text-muted-foreground">Model:</span> {customer.generator_model}</p>
-              {customer.generator_serial && <p><span className="text-muted-foreground">Serial:</span> {customer.generator_serial}</p>}
-              {customer.generator_install_date && <p><span className="text-muted-foreground">Installed:</span> {formatDate(customer.generator_install_date)}</p>}
-              {customer.service_interval && (customer.last_service_date || customer.generator_install_date) && (() => {
+              {gen.brand && <p><span className="text-muted-foreground">Brand:</span> {gen.brand}</p>}
+              {gen.kw && <p><span className="text-muted-foreground">kW:</span> {gen.kw}</p>}
+              {gen.model && <p><span className="text-muted-foreground">Model #:</span> {gen.model}</p>}
+              {gen.serial && <p><span className="text-muted-foreground">Serial #:</span> {gen.serial}</p>}
+              {gen.install_date && <p><span className="text-muted-foreground">Installed:</span> {installDateLabel(gen.install_date)}</p>}
+              {gen.cooling && <p><span className="text-muted-foreground">Cooling:</span> {gen.cooling}</p>}
+              {gen.id === MAIN_GENERATOR_ID && customer.service_interval && (customer.last_service_date || customer.generator_install_date) && (() => {
                 const intervalMonths = customer.service_interval === "6_months" ? 6 : customer.service_interval === "24_months" ? 24 : 12;
                 const lastDate = new Date(customer.last_service_date || customer.generator_install_date);
                 const dueDate = new Date(lastDate);
@@ -271,7 +276,7 @@ export default function CustomerDetail() {
               })()}
             </div>
           </Card>
-        )}
+        ))}
 
         {customer.referred_by && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground -mt-2 px-1">

@@ -209,6 +209,12 @@ export default async function handler(req, res) {
 
     const now = new Date().toISOString();
     if (kind !== 'receipt') {
+      // Keep the checklist exactly as first sent: later corrections never change it.
+      for (const d of selectedDocs) {
+        if (!d.emailed_field_values) {
+          await db.from('job_documents').update({ emailed_field_values: d.field_values || {} }).eq('id', d.id).then(() => {}, () => {});
+        }
+      }
       await db.from('jobs').update({ completion_send_failed: false }).eq('id', job.id).then(() => {}, () => {});
       if (invoice) await db.from('invoices').update({ emailed_at: now, emailed_to: customer.email }).eq('id', invoice.id).then(() => {}, () => {});
     }

@@ -18,6 +18,7 @@
 //   "Other". Warranty reimbursements count as "Warranty". Types with jobs but
 //   $0 revenue (no-charge visits) are listed too.
 import { JOB_TYPES, isServiceType, inferServiceType } from "../jobTypes.js";
+import { techShares } from "../jobTechs.js";
 
 export const TZ = "America/New_York";
 const DAY = 86400000;
@@ -172,7 +173,14 @@ export function computeFinance(data, range) {
 
   // by tech (the job's assigned tech; warranty reimbursements are not a tech's)
   const techs = new Map();
-  for (const i of paid) { const t = jobById.get(i.job_id)?.assigned_to_name || "Unassigned"; const o = techs.get(t) || { tech: t, revenue: 0, count: 0 }; o.revenue += num(i.total); o.count++; techs.set(t, o); }
+  // A shared job: an equal share of the revenue to each tech and one job each, so
+  // the techs still add up to the company total (techShares).
+  for (const i of paid) {
+    for (const { tech: t, amount } of techShares(jobById.get(i.job_id), num(i.total))) {
+      const o = techs.get(t) || { tech: t, revenue: 0, count: 0 };
+      o.revenue += amount; o.count++; techs.set(t, o);
+    }
+  }
   const byTech = [...techs.values()].map(o => ({ ...o, revenue: round2(o.revenue) })).sort((a, b) => b.revenue - a.revenue);
 
   // payments by method (+ warranty by how Generac/the distributor paid)

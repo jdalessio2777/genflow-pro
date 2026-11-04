@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom";
+import { generatorFor, generatorLine, generatorSummary } from "@/lib/generatorInfo";
 import ApplyMemberPricingDialog from "@/components/jobs/ApplyMemberPricingDialog";
 import { memberDiscountRateFor } from "@/lib/utils/membership";
 import { useBack } from "@/hooks/useBack";
@@ -125,7 +126,7 @@ export default function MembershipAgreement() {
         signed_by: user?.email ?? null,
         snapshot: {
           customer: { name: customer.name, address: customer.address || null, email: customer.email || null, phone: customer.phone || null },
-          generator: { model: customer.generator_model || null, serial: customer.generator_serial || null },
+          generator: { model: generatorSummary(customer) || null, serial: generatorFor(customer).serial || null },
           unit_type: UNIT_TYPE_LABEL,
           plan: { key: selectedPlan, name: plan.name, price: plan.price, billingLabel: plan.billingLabel, includes: plan.includes },
           terms: TERMS,
@@ -169,7 +170,7 @@ export default function MembershipAgreement() {
         ${buildTable([
           buildRow("Customer", customer.name),
           buildRow("Plan", planName),
-          buildRow("Generator", customer.generator_model),
+          buildRow("Generator", generatorLine(customer)),
           buildRow("Address", customer.address),
           buildRow("Expires", expiry.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })),
         ])}
@@ -313,8 +314,8 @@ export default function MembershipAgreement() {
               <div className="grid grid-cols-2 gap-y-1.5 text-xs">
                 <span className="text-muted-foreground">Customer</span><span className="font-medium">{customer.name}</span>
                 <span className="text-muted-foreground">Address</span><span className="font-medium">{customer.address || "—"}</span>
-                <span className="text-muted-foreground">Generator</span><span className="font-medium">{customer.generator_model || "—"}</span>
-                <span className="text-muted-foreground">Serial No.</span><span className="font-medium font-mono">{customer.generator_serial || "—"}</span>
+                <span className="text-muted-foreground">Generator</span><span className="font-medium">{generatorSummary(customer) || "—"}</span>
+                <span className="text-muted-foreground">Serial No.</span><span className="font-medium font-mono">{generatorFor(customer).serial || "—"}</span>
                 <span className="text-muted-foreground">Unit Type</span><span className="font-medium">Air-cooled, 26kW or less</span>
                 <span className="text-muted-foreground">Plan</span><span className="font-medium">{plan.name}</span>
                 <span className="text-muted-foreground">Amount</span><span className="font-bold">{plan.billingLabel}</span>

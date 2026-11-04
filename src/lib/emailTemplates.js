@@ -6,6 +6,9 @@ import { SURCHARGE_DEFAULTS, surchargeLabel } from './utils/surcharge.js'
 import { escapeHtml, multilineHtml, safeImageSrc } from './utils/escapeHtml.js'
 import { formatEstimate, estimateMinutes } from './jobDuration.js'
 import { SERVICE_TYPES } from './jobTypes.js'
+import { generatorLine } from './generatorInfo.js'
+import { techsLabel, isSharedJob } from './jobTechs.js'
+import { windowLabel, hasArrivalWindow } from './arrivalWindow.js'
 export { escapeHtml, multilineHtml, safeImageSrc }
 
 // Customer copy never prints a "—" placeholder, "undefined", "null", "NaN" or
@@ -172,7 +175,7 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
-  const generatorInfo = escapeHtml([customer.generator_model, customer.generator_serial].filter(Boolean).join(' · '))
+  const generatorInfo = escapeHtml(generatorLine(customer, job))
 
   const lineRows = lineItems.map((item, i) => `
     <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fafafa'};">
@@ -303,31 +306,28 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
 </html>`
 }
 
-export function confirmationEmailHTML({ customer, job, techFirstName, use24h = false }) {
+export function confirmationEmailHTML({ customer, job, use24h = false }) {
   customer = customer || {}
   job = job || {}
   const visitDate = fmtDate(job.scheduled_date)
   const arrivalTime = fmtTime(job.scheduled_date, use24h)
+  const arrivalWindow = windowLabel(job, use24h)
   const serviceType = fmtJobType(job.job_type)
-  const generatorInfo = escapeHtml([customer.generator_model, customer.generator_serial].filter(Boolean).join(' · '))
-  const techName = String(techFirstName ?? '').trim() || 'our technician'
+  const generatorInfo = escapeHtml(generatorLine(customer, job))
+  const techNames = techsLabel(job)
+  const techName = techNames || 'our technician'
   const estimateLine = `<span style="color:#6b7280;font-size:12px;" data-estimate="1">Estimated time on site: ${escapeHtml(formatEstimate(estimateMinutes(job)))}.</span>`
-  // Service Type row only for a real service type; the generator line moves
-  // to its own row when there is no service type to sit under.
-  const serviceRow = serviceType
-    ? `<tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">🔧 Service Type</td>
-              <td style="padding:12px 20px;font-size:13px;color:#374151;">
-                ${serviceType}
-                ${generatorInfo ? `<br><span style="color:#6b7280;font-size:12px;">${generatorInfo}</span>` : ''}
-              </td>
-            </tr>`
-    : generatorInfo
-      ? `<tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">🔧 Generator</td>
-              <td style="padding:12px 20px;font-size:13px;color:#374151;">${generatorInfo}</td>
-            </tr>`
-      : ''
+  // Service Type row only for a real service type. The generator always has its
+  // own row: it used to sit inside the Service Type cell (A3).
+  const rowLabel = 'padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;'
+  const rowValue = 'padding:12px 20px;font-size:13px;color:#374151;'
+  const serviceRow = (serviceType ? `<tr style="border-bottom:1px solid #f0f0f0;">
+              <td style="${rowLabel}">🔧 Service Type</td>
+              <td style="${rowValue}">${serviceType}</td>
+            </tr>` : '') + (generatorInfo ? `<tr style="border-bottom:1px solid #f0f0f0;">
+              <td style="${rowLabel}">⚡ Generator</td>
+              <td style="${rowValue}">${generatorInfo}</td>
+            </tr>` : '')
   const customerDescription = job.customer_description?.trim()
     ? `<!-- About Your Service -->
         <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
@@ -363,7 +363,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
         <p style="font-size:15px;color:#374151;margin:0 0 8px;">Hi ${escapeHtml(greetingName(customer))},</p>
         <p style="font-size:14px;color:#6b7280;margin:0 0 24px;line-height:1.7;">
           Great news — your service appointment is confirmed and on our schedule.
-          Our certified technician will arrive at the time below.
+          ${hasArrivalWindow(job) ? 'Our certified technician will arrive during the window below.' : 'Our certified technician will arrive at the time below.'}
           You don't need to do anything — just make sure the generator is accessible.
         </p>
         ${divider()}
@@ -380,7 +380,9 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
               <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:140px;vertical-align:top;">${visitDate ? '📆 Date &amp; Time' : '⏱ Time on Site'}</td>
               <td style="padding:12px 20px;font-size:13px;color:#374151;">
                 ${visitDate ? `<strong>${visitDate}</strong><br>` : ''}
-                ${arrivalTime ? `<span style="color:#6b7280;font-size:12px;">Arrival time: ${arrivalTime}</span><br>` : ''}
+                ${arrivalWindow
+                  ? `<span style="color:#6b7280;font-size:12px;">Arrival window: ${escapeHtml(arrivalWindow)}</span><br>`
+                  : arrivalTime ? `<span style="color:#6b7280;font-size:12px;">Arrival time: ${arrivalTime}</span><br>` : ''}
                 ${estimateLine}
               </td>
             </tr>
@@ -390,7 +392,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
               <td style="padding:12px 20px;font-size:13px;color:#374151;">${escapeHtml(customer.address)}</td>
             </tr>` : ''}
             <tr>
-              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">👷 Your Technician</td>
+              <td style="padding:12px 20px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;vertical-align:top;">👷 ${isSharedJob(job) ? 'Your Technicians' : 'Your Technician'}</td>
               <td style="padding:12px 20px;font-size:13px;color:#374151;">
                 <strong>${escapeHtml(techName)}</strong><br>
                 <span style="color:#6b7280;font-size:12px;">Generac Air-Cooled &amp; Liquid-Cooled Certified</span>
@@ -435,7 +437,7 @@ export function confirmationEmailHTML({ customer, job, techFirstName, use24h = f
 export function completionEmailHTML({ customer, job, parts = [], labor = [], documents = [], includeChecklist = true }) {
   customer = customer || {}
   job = job || {}
-  const generatorInfo = escapeHtml([customer.generator_model, customer.generator_serial].filter(Boolean).join(' · '))
+  const generatorInfo = escapeHtml(generatorLine(customer, job))
   const jobTitle = String(job.title ?? '').trim()
   const jobDesc = String(job.customer_description ?? '').trim()
   const completedOn = fmtDate(job.completed_date || new Date().toISOString())
@@ -639,9 +641,8 @@ export function invoiceSummaryHTML({ invoice, customer, job = null, surchargeCon
         </td>
         <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">
           <div style="background:#f8f9fa;border-radius:8px;padding:14px;">
-            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">${customer?.generator_model || customer?.generator_serial ? "GENERATOR" : "PAYMENT"}</p>
-            ${customer?.generator_model ? `<p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${escapeHtml(customer.generator_model)}</p>` : ""}
-            ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0 0 6px 0;">S/N: ${escapeHtml(customer.generator_serial)}</p>` : ""}
+            <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">${generatorLine(customer, job) ? "GENERATOR" : "PAYMENT"}</p>
+            ${generatorLine(customer, job) ? `<p style="font-size:13px;font-weight:600;margin:0 0 6px 0;">${escapeHtml(generatorLine(customer, job))}</p>` : ""}
             <p style="font-size:12px;font-weight:bold;margin:0;color:${invoice.paid_date ? "#16a34a" : "#d97706"};">
               ${paymentLine}
             </p>
@@ -828,10 +829,9 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer, job = null }) {
           </div>
         </td>
         <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">
-          ${customer?.generator_model || customer?.generator_serial ? `<div style="background:#f8f9fa;border-radius:8px;padding:14px;">
+          ${generatorLine(customer, job) ? `<div style="background:#f8f9fa;border-radius:8px;padding:14px;">
             <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">GENERATOR</p>
-            ${customer?.generator_model ? `<p style="font-size:13px;font-weight:600;margin:0 0 3px 0;">${escapeHtml(customer.generator_model)}</p>` : ""}
-            ${customer?.generator_serial ? `<p style="font-size:12px;color:#555;margin:0;">S/N: ${escapeHtml(customer.generator_serial)}</p>` : ""}
+            <p style="font-size:13px;font-weight:600;margin:0;">${escapeHtml(generatorLine(customer, job))}</p>
           </div>` : ""}
         </td>
       </tr>
@@ -983,7 +983,7 @@ export function membershipWelcomeEmailHTML({ customer, planName, includes = [], 
                 ${plan ? `<p style="margin:0 0 6px 0;font-size:13px;"><strong>Plan:</strong> ${escapeHtml(plan)}</p>` : ""}
                 ${startStr ? `<p style="margin:0 0 6px 0;font-size:13px;"><strong>Start Date:</strong> ${startStr}</p>` : ""}
                 ${expiryStr ? `<p style="margin:0 0 6px 0;font-size:13px;"><strong>Expiration:</strong> ${expiryStr}</p>` : ""}
-                <p style="margin:0 0 8px 0;font-size:13px;"><strong>Generator:</strong> ${escapeHtml(customer?.generator_model || "Your generator")}${customer?.generator_serial ? ` (S/N: ${escapeHtml(customer.generator_serial)})` : ""}</p>
+                <p style="margin:0 0 8px 0;font-size:13px;"><strong>Generator:</strong> ${escapeHtml(generatorLine(customer) || "Your generator")}</p>
                 ${items.length ? `<p style="margin:0 0 4px 0;font-size:13px;font-weight:bold;">What's included:</p>
                 <ul style="margin:0;padding-left:18px;font-size:13px;color:#444;">${items.map(i => `<li style="margin-bottom:3px;">${escapeHtml(i)}</li>`).join("")}</ul>` : ""}
               </div>

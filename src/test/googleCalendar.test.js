@@ -28,13 +28,19 @@ describe('buildEvent', () => {
     expect(e.end.dateTime).toBe('2026-11-03T16:00:00.000Z')
     expect(e.start.timeZone).toBe('America/New_York')
   })
+  it('a window job blocks window start to (window end + estimate) and names the window', () => {
+    const w = buildEvent({ ...job, scheduled_date: '2026-11-03T15:00:00.000Z', arrival_window_end: '2026-11-03T17:00:00.000Z', estimated_minutes: 90 }, customer)
+    expect(w.start.dateTime).toBe('2026-11-03T15:00:00.000Z')
+    expect(w.end.dateTime).toBe('2026-11-03T18:30:00.000Z')
+    expect(w.description).toContain('Arrival window: 10 AM – 12 PM')
+  })
   it('uses the job estimate when set (estimated_minutes)', () => {
     expect(buildEvent({ ...job, estimated_minutes: 90 }, customer).end.dateTime).toBe('2026-11-03T15:30:00.000Z')
   })
   it('location = service address; description has service, generator, notes, phone, production link, marker', () => {
     expect(e.location).toBe('58 Druid Hill Rd, Summit NJ')
     expect(e.description).toContain('Service: Annual maintenance')
-    expect(e.description).toContain('Generator: Generac Guardian 22kW')
+    expect(e.description).toContain('Generator: Generac 22kW · Model Guardian')
     expect(e.description).toContain('Notes: Gate code 1234')
     expect(e.description).toContain('Customer phone: 973-555-1234')
     expect(e.description).toContain('Open in GenFlow: https://genflow-pro.vercel.app/jobs/job-uuid-abc')

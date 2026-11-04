@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, FileCheck, FileText, Trash2 } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { formatDateTime } from "@/lib/utils/format";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -104,6 +104,9 @@ export default function JobDocsTab({ jobId, documents, customerId }) {
                         <p className="text-sm font-medium truncate">{doc.template_name}</p>
                         {doc.completed_date && (
                           <p className="text-xs text-muted-foreground">Completed {formatDateTime(doc.completed_date)}</p>
+                        )}
+                        {doc.edited_at && (
+                          <p className="text-xs text-amber-700" data-testid="doc-edited-tag">Edited {formatDate(doc.edited_at)}</p>
                         )}
                       </div>
                     </div>

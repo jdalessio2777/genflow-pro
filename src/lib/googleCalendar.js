@@ -9,6 +9,9 @@
 // ADOPTED only when they're for the same customer on the same date; anything
 // else (a generic task, another job's event) is never modified or deleted.
 import { estimateMinutes } from "@/lib/jobDuration";
+import { calendarEndMs, windowLabel } from "@/lib/arrivalWindow";
+import { generatorLine } from "@/lib/generatorInfo";
+import { techsLabel, jobTechs, isSharedJob } from "@/lib/jobTechs";
 
 export const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 export const TIME_ZONE = "America/New_York";
@@ -35,13 +38,16 @@ export function serviceTypeLabel(jobType) {
   return JOB_TYPE_LABELS[jobType] || String(jobType).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// "Jeremy", "Jeremy & Alex"; "Unassigned" when nobody is on it.
 export function techFirstName(job) {
-  return String(job?.assigned_to_name || "").trim().split(/\s+/)[0] || "Unassigned";
+  return techsLabel(job) || "Unassigned";
 }
 
-// Jeremy = Blueberry (9), Alex = Basil (10), anyone else = Graphite (8).
+// Jeremy = Blueberry (9), Alex = Basil (10), a shared job = Tangerine (6, stands
+// apart from both), anyone else = Graphite (8).
 export function techColorId(job) {
-  const t = techFirstName(job).toLowerCase();
+  if (isSharedJob(job)) return "6";
+  const t = (jobTechs(job)[0] || "").toLowerCase();
   if (t === "jeremy") return "9";
   if (t === "alex") return "10";
   return "8";
@@ -49,22 +55,18 @@ export function techColorId(job) {
 
 export function jobLink(jobId) { return `${APP_ORIGIN}/jobs/${jobId}`; }
 
-function generatorText(customer) {
-  if (!customer) return "";
-  const kw = customer.generator_kw ? `${String(customer.generator_kw).replace(/\s*kw$/i, "")}kW` : "";
-  return [customer.generator_brand, customer.generator_model, kw].filter(Boolean).join(" ")
-    + (customer.generator_serial ? ` (S/N ${customer.generator_serial})` : "");
-}
-
 export function buildEvent(job, customer) {
   const start = new Date(job.scheduled_date);
-  const end = new Date(start.getTime() + estimateMinutes(job) * 60 * 1000);
+  // Window start to (window end + estimated time on site): see arrivalWindow.js.
+  const end = new Date(calendarEndMs(job, estimateMinutes(job)));
   const customerName = customer?.name || job.customer_name || "Customer";
   const type = serviceTypeLabel(job.job_type);
   const service = [job.title, job.customer_description].filter(Boolean).join(" — ") || type;
+  const arrival = windowLabel(job);
   const description = [
+    ...(arrival ? [`Arrival window: ${arrival}`] : []),
     `Service: ${service}`,
-    `Generator: ${[generatorText(customer), job.generator_notes].filter(Boolean).join(" — ") || "—"}`,
+    `Generator: ${[generatorLine(customer, job), job.generator_notes].filter(Boolean).join(" — ") || "—"}`,
     `Notes: ${job.notes || "—"}`,
     `Customer phone: ${customer?.phone || "—"}`,
     `Open in GenFlow: ${jobLink(job.id)}`,

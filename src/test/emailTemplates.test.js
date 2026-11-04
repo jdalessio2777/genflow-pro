@@ -135,7 +135,7 @@ describe('confirmationEmailHTML', () => {
   const baseArgs = {
     customer: mockCustomer,
     job: mockJob,
-    techFirstName: 'Jeremy',
+    
   }
 
   it('returns an HTML string', () => {
@@ -150,7 +150,7 @@ describe('confirmationEmailHTML', () => {
   })
 
   it('contains the technician first name', () => {
-    const html = confirmationEmailHTML(baseArgs)
+    const html = confirmationEmailHTML({ ...baseArgs, job: { ...baseArgs.job, assigned_to_name: 'Jeremy D' } })
     expect(html).toContain('Jeremy')
   })
 
@@ -186,8 +186,8 @@ describe('confirmationEmailHTML', () => {
     expect(html).toContain('Generac 17kW')
   })
 
-  it('uses fallback tech name when techFirstName is empty', () => {
-    const html = confirmationEmailHTML({ ...baseArgs, techFirstName: '' })
+  it('uses fallback tech name when nobody is assigned', () => {
+    const html = confirmationEmailHTML({ ...baseArgs, })
     expect(html).toContain('our technician')
   })
 

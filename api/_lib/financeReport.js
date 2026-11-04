@@ -24,7 +24,7 @@ export async function fetchReportData(supabase) {
   const [inv, exp, jobs, parts, cust, claims] = await Promise.all([
     q('invoices', 'id,status,job_id,customer_id,customer_name,invoice_number,total,tax_amount,surcharge_amount,payment_method,paid_date,created_at,parts_total,labor_total,line_items'),
     q('expenses', 'date,amount,category,description'),
-    q('jobs', 'id,job_type,status,assigned_to_name,completed_date,customer_id,created_at'),
+    q('jobs', 'id,job_type,status,assigned_to_name,assigned_techs,completed_date,customer_id,created_at'),
     q('job_parts', 'job_id,cost,quantity,total_cost'),
     q('customers', 'id,membership_signed,membership_start,membership_expiry'),
     q('warranty_claims', 'id,customer_name,claim_number,description,amount_paid,date_paid,paid_via'),

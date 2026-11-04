@@ -9,10 +9,14 @@ import LongTextField from "@/components/ui/LongTextField";
 import { markDraftsSaved } from "@/lib/textDrafts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Send, BellOff, Clock } from "lucide-react";
+import ArrivalWindowPicker from "@/components/jobs/ArrivalWindowPicker";
+import { emptyPicker, appointmentFromPicker } from "@/lib/arrivalWindow";
 import EstimatedLengthPicker from "@/components/jobs/EstimatedLengthPicker";
 import { useAuth } from "@/lib/AuthContext";
 import { usePreferences } from "@/hooks/usePreferences";
-import { getUserDisplayName, getUserColor } from "@/lib/userColors";
+import { getUserDisplayName } from "@/lib/userColors";
+import TechPicker from "@/components/jobs/TechPicker";
+import { TECHS, jobTechs, techsPatch } from "@/lib/jobTechs";
 import { formatCurrency } from "@/lib/utils/format";
 import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
 import { withEstimate } from "@/lib/jobEstimateColumn";
@@ -23,22 +27,13 @@ import { newRequestId, showSaveError, dismissSaveError, useSaveGuard } from "@/l
 import { haptics } from "@/lib/haptics";
 import { toast } from "sonner";
 
-const TECHS = ["Jeremy", "Alex", "Derek", "Sean"];
-
-// "YYYY-MM-DD" + "HH:MM" (device time, the business is ET) -> ISO, or null.
-export function appointmentIso(date, time) {
-  if (!date || !time) return null;
-  const d = new Date(`${date}T${time}`);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
 /**
  * "Schedule this job" (B1). Opens right after a quote is approved, and from
  * the job screen of an approved job that isn't scheduled yet. The job row
  * already exists (created at Approve, with the quote's lines); this sheet
  * gives it its title (starts as the quote's title, Run 9 A4), a short
  * customer-facing description (starts blank, A2), service type, date,
- * arrival time, tech and estimated time on site, so opening it twice or
+ * arrival window, tech and estimated time on site, so opening it twice or
  * tapping twice never makes a second job.
  *
  * onDone("scheduled" | "later", job) — the caller closes the sheet / moves on.
@@ -52,9 +47,8 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
   const invoiceId = useRef(newRequestId());
 
   const me = getUserDisplayName(user).split(" ")[0];
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("09:00");
-  const [tech, setTech] = useState("");
+  const [picker, setPicker] = useState(emptyPicker);
+  const [techs, setTechs] = useState([]);
   const [estimate, setEstimate] = useState(DEFAULT_ESTIMATE_MINUTES);
   const [description, setDescription] = useState("");
   const [title, setTitle] = useState("");
@@ -69,9 +63,8 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     if (!open || !job?.id) { if (!open) { filledFor.current = null; setFilledId(null); } return; }
     if (filledFor.current === job.id) return;
     filledFor.current = job.id;
-    setDate("");
-    setTime("09:00");
-    setTech(job.assigned_to_name || (TECHS.includes(me) ? me : ""));
+    setPicker(emptyPicker());
+    setTechs(jobTechs(job).length ? jobTechs(job) : (TECHS.includes(me) ? [me] : []));
     setEstimate(Number(job.estimated_minutes) > 0 ? Number(job.estimated_minutes) : DEFAULT_ESTIMATE_MINUTES);
     setDescription(job.customer_description || "");
     titleTouched.current = false;
@@ -121,10 +114,11 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
   }, [open, job?.title, lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = (sendConfirmation) => guard.run(async function scheduleIt() {
-    const scheduled_date = appointmentIso(date, time);
+    const appointment = appointmentFromPicker(picker);
     if (!title.trim()) { haptics.error(); toast.error("Give the job a title"); return; }
     if (!serviceType) { haptics.error(); toast.error("Pick the service type"); return; }
-    if (!scheduled_date) { haptics.error(); toast.error("Pick a date and arrival time"); return; }
+    if (appointment.error) { haptics.error(); toast.error(appointment.error); return; }
+    if (!appointment.scheduled_date) { haptics.error(); toast.error("Pick a date and arrival window"); return; }
     if (sendConfirmation && !customer?.email) {
       haptics.error();
       toast.error(`No email on file for ${customer?.name || "this customer"} — use "${from === "job" ? "Schedule" : "Create"} & Skip Notification"`);
@@ -133,10 +127,10 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
     let saved;
     try {
       const payload = await withEstimate({
-        scheduled_date,
+        ...appointment,
         title: title.trim(),
         job_type: serviceType,
-        assigned_to_name: tech || null,
+        ...techsPatch(techs),
         customer_description: description.trim() || null,
       }, estimate);
       saved = await db.Job.update(job.id, payload);
@@ -210,30 +204,11 @@ export default function ScheduleJobSheet({ open, onOpenChange, job, customer: cu
           </Select>
         </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 form-row">
-          <div className="min-w-0">
-            <Label className="text-xs" htmlFor="sched-date">Date</Label>
-            <Input id="sched-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="rounded-xl mt-1 min-w-0" />
-          </div>
-          <div className="min-w-0">
-            <Label className="text-xs" htmlFor="sched-time">Arrival time</Label>
-            <Input id="sched-time" type="time" value={time} onChange={e => setTime(e.target.value)} className="rounded-xl mt-1 min-w-0" />
-          </div>
-        </div>
+        <ArrivalWindowPicker value={picker} onChange={setPicker} idPrefix="sched" />
 
         <div>
           <Label className="text-xs">Tech</Label>
-          <div className="grid grid-cols-4 gap-2 mt-1">
-            {TECHS.map(name => {
-              const color = getUserColor(name);
-              return (
-                <button key={name} type="button" aria-pressed={tech === name} onClick={() => setTech(name)}
-                  className={`h-10 rounded-xl border text-sm font-medium transition-colors ${tech === name ? `${color.border} ${color.bg} ${color.text}` : "border-border text-muted-foreground"}`}>
-                  {name}
-                </button>
-              );
-            })}
-          </div>
+          <TechPicker key={`${job?.id}-${open}`} value={techs} onChange={setTechs} />
         </div>
 
         <EstimatedLengthPicker key={`${job?.id}-${open}`} value={estimate} onChange={setEstimate} />

@@ -1,3 +1,4 @@
+import DateField from "@/components/ui/DateField";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -351,7 +352,7 @@ function ExpensesTab({ expenses }) {
           <div className="grid grid-cols-2 gap-2 form-row">
             <div>
               <Label className="text-xs">Date</Label>
-              <Input type="date" value={form.date} onChange={e => setForm(f => ({...f, date: e.target.value}))} className="mt-1" />
+              <DateField value={form.date} onChange={date => setForm(f => ({...f, date}))} className="mt-1" />
             </div>
             <div>
               <Label className="text-xs">Amount ($)</Label>
@@ -654,7 +655,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
               <div className="grid grid-cols-2 gap-2 form-row">
                 <div>
                   <Label className="text-xs">Date</Label>
-                  <Input type="date" value={tripDate} onChange={e => setTripDate(e.target.value)} className="mt-1" />
+                  <DateField value={tripDate} onChange={setTripDate} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs">Vehicle</Label>
@@ -734,7 +735,7 @@ function MileageTab({ mileage, vehicles, customers, homeAddress, googleApiKey })
               <div className="grid grid-cols-2 gap-2 form-row">
                 <div>
                   <Label className="text-xs">Date</Label>
-                  <Input type="date" value={manualForm.date} onChange={e => setManualForm(f => ({...f, date: e.target.value}))} className="mt-1" />
+                  <DateField value={manualForm.date} onChange={date => setManualForm(f => ({...f, date}))} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs">Miles</Label>
