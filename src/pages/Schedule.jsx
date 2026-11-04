@@ -190,7 +190,9 @@ export default function Schedule() {
 
   const getJobsForDate = (date) => {
     const dayKey = localDateKey(date);
-    return sortJobs(scheduledJobs.filter(j => etDateKey(j.scheduled_date) === dayKey));
+    const day = sortJobs(scheduledJobs.filter(j => etDateKey(j.scheduled_date) === dayKey));
+    // My Jobs applies to the calendar's dots too, not just the day's list.
+    return techFilter === "mine" ? day.filter(j => jobIsFor(j, getUserDisplayName(user))) : day;
   };
 
   const isToday = (date) => date.toDateString() === new Date().toDateString();
@@ -199,10 +201,7 @@ export default function Schedule() {
   const weekDays = getWeekDays();
   const weekLabel = `${weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekDays[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
-  const rawSelectedJobs = selectedDate ? getJobsForDate(selectedDate) : [];
-  const selectedJobs = techFilter === "mine"
-    ? rawSelectedJobs.filter(j => jobIsFor(j, getUserDisplayName(user)))
-    : rawSelectedJobs;
+  const selectedJobs = selectedDate ? getJobsForDate(selectedDate) : [];
 
   return (
     <div>
@@ -343,15 +342,16 @@ export default function Schedule() {
                           <div className="min-w-0">
                             <p className="text-sm font-semibold truncate">{job.title}</p>
                             <p className="text-xs text-muted-foreground">{[job.customer_name, techsLabel(job)].filter(Boolean).join(" · ")}</p>
+                            {/* On its own line: an arrival window is too wide to share a row with the title on a phone. */}
+                            <p className="flex items-center gap-1.5 mt-0.5 text-xs text-primary font-medium" data-testid="schedule-job-time">
+                              {job.calendar_event_id && (
+                                <CalendarCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                              )}
+                              {jobTimeLabel(job, use24h)}
+                            </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          {job.calendar_event_id && (
-                            <CalendarCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                          )}
-                          <span className="text-xs text-primary font-medium">
-                            {jobTimeLabel(job, use24h)}
-                          </span>
+                        <div className="shrink-0 ml-2">
                           <StatusBadge status={job.status} />
                         </div>
                       </div>
