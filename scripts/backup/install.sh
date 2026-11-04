@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copies the backup scripts to where the scheduled job runs them, and optionally loads the schedule.
 # Usage: scripts/backup/install.sh            copy the scripts only
-#        scripts/backup/install.sh --schedule copy the scripts and load the 3:00 AM launchd job
+#        scripts/backup/install.sh --schedule copy the scripts and load the launchd job (3 AM, plus catch-up times)
 # The runner program is NOT rebuilt here: Full Disk Access is tied to that exact binary.
 set +x
 set -eu
@@ -28,7 +28,13 @@ echo "Scripts installed to $APP"
   <key>ProgramArguments</key>
   <array><string>$APP/genflow-backup-runner</string></array>
   <key>StartCalendarInterval</key>
-  <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+  <array>
+    <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
   <key>RunAtLoad</key><false/>
   <key>StandardOutPath</key><string>$APP/logs/launchd.out.log</string>
   <key>StandardErrorPath</key><string>$APP/logs/launchd.err.log</string>
