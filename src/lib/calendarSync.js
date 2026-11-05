@@ -191,7 +191,7 @@ async function doSync(job, customer) {
       }
       const saved = found
         ? await patchEvent(token, found.calendarId, found.event.id, body)
-        : job.calendar_sync_pending ? await insertPendingEvent(token, target.id, job, body) : await insertEvent(token, target.id, body);
+        : await insertEvent(token, target.id, body);
       const calendarId = found ? found.calendarId : target.id;
       await saveLink(job, saved?.id || found?.event.id, calendarId);
       return { eventId: saved?.id || found?.event.id, calendarId, action: found ? (found.adopted ? "adopted" : "updated") : "created" };
@@ -280,49 +280,6 @@ export function removeJobFromCalendar({ job } = {}) {
   } catch (e) {
     return Promise.resolve({ status: "failed", reason: e?.message });
   }
-}
-
-// A job made through the Claude connector (no browser, so no Google access) waits
-// with calendar_sync_pending. Two phones can open at once, so it inserts with a
-// fixed event id: Google refuses the second copy (409), which just means "done".
-export const stableEventId = (jobId) => `gf${String(jobId).replace(/-/g, "").toLowerCase()}`;
-async function insertPendingEvent(token, calendarId, job, body) {
-  const id = stableEventId(job.id);
-  try {
-    return await insertEvent(token, calendarId, { ...body, id });
-  } catch (e) {
-    if (e?.status !== 409) throw e;
-    return patchEvent(token, calendarId, id, { ...body, status: "confirmed" });
-  }
-}
-
-const PENDING_THROTTLE_MS = 60 * 1000;
-let pendingCheckedAt = 0;
-let pendingRun = null;
-export function __resetPendingCheckForTests() { pendingCheckedAt = 0; pendingRun = null; }
-
-// Runs when the app opens and when it comes back to the foreground. Quiet: with
-// no Google access on this device it does nothing and another device will do it.
-export function syncPendingCalendarJobs({ now = Date.now() } = {}) {
-  if (pendingRun) return pendingRun;
-  if (now - pendingCheckedAt < PENDING_THROTTLE_MS) return Promise.resolve(0);
-  pendingCheckedAt = now;
-  pendingRun = (async () => {
-    const { token } = await getAccessToken();
-    if (!token) return 0;
-    const jobs = await db.Job.filter({ calendar_sync_pending: true });
-    let done = 0;
-    for (const job of jobs) {
-      const r = await syncJobToCalendar({ job });
-      // "still syncing" and failures stay pending for the next try.
-      if (["synced", "removed"].includes(r.status) || (r.status === "skipped" && r.reason === "not scheduled")) {
-        await db.Job.update(job.id, { calendar_sync_pending: false });
-        done++;
-      } else if (r.code) break; // no Google access after all
-    }
-    return done;
-  })().catch(e => { console.warn("[calendar] pending sync:", e?.message); return 0; }).finally(() => { pendingRun = null; });
-  return pendingRun;
 }
 
 // Retries everything queued on this device (after a reconnect, or Retry).

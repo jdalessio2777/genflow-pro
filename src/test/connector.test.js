@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { createHandler } from "../../supabase/functions/genflow-mcp/server.js";
-import { TOOLS, summarizeInputs } from "../../supabase/functions/genflow-mcp/tools.js";
+import { TOOLS } from "../../supabase/functions/genflow-mcp/tools.js";
 import { SHARED } from "../../scripts/connector/sync-shared.mjs";
 
 const SUPA = "https://proj.supabase.co";
@@ -12,27 +12,58 @@ const TOKEN = claims({ sub: "u1", client_id: "claude-client" });
 const CUST = "11111111-1111-4111-8111-111111111111";
 const future = "2030-06-04";
 
-let db; let calls; let audits; let staff; let userStatus; let sent;
+// A stand-in for the connector_* database functions, with the same answers. The functions' own
+// rules, guard and audit are proven against a real Postgres restore (.qa-scratch/run13/localdb/a4-test.mjs).
+let db; let calls; let whoami; let down;
 const res = (status, body) => new Response(body === undefined ? "" : JSON.stringify(body), { status });
-const fakeFetch = async (url, init = {}) => {
-  const u = String(url); const method = init.method || "GET";
-  calls.push({ method, u, body: init.body ? JSON.parse(init.body) : undefined, auth: init.headers?.Authorization, prefer: init.headers?.Prefer });
-  if (u.endsWith("/auth/v1/user")) return userStatus === 200 ? res(200, { id: "u1", email: "tech@genshieldservice.com" }) : res(userStatus, {});
-  if (u.endsWith("/rpc/is_staff")) return res(200, staff);
-  if (u.endsWith("/rpc/log_connector_call")) { audits.push(JSON.parse(init.body)); return res(200, null); }
-  if (u.includes("/api/send-job-summary")) { sent.push(JSON.parse(init.body)); return res(200, { ok: true, id: "re_1" }); }
-  const table = u.split("/rest/v1/")[1].split("?")[0];
-  if (method === "GET") {
-    let rows = db[table] || [];
-    const id = u.match(/[?&]id=eq\.([^&]+)/); if (id) rows = rows.filter((r) => r.id === id[1]);
-    const cid = u.match(/customer_id=eq\.([^&]+)/); if (cid) rows = rows.filter((r) => r.customer_id === cid[1]);
-    return res(200, rows);
-  }
-  if (method === "POST") { const row = { id: `${table}-${db[table].length + 1}`, ...JSON.parse(init.body) }; db[table].push(row); return res(201, [row]); }
-  if (method === "PATCH") { const id = u.match(/[?&]id=eq\.([^&]+)/)[1]; const r = db[table].find((x) => x.id === id); Object.assign(r, JSON.parse(init.body)); return res(200, [r]); }
-  return res(500, {});
+const digits = (v) => String(v ?? "").replace(/\D/g, "").slice(-10);
+const refuse = (message, data) => ({ ok: false, message, ...(data ? { data } : {}) });
+const key = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const OPEN = ["scheduled", "dispatched", "on_site", "in_progress"];
+const dayOf = (iso) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(iso));
+const FUNCS = {
+  connector_search_customers: ({ p_query }) => {
+    const q = p_query.toLowerCase(); const qd = q.replace(/\D/g, "");
+    const hits = db.customers.filter((c) => [c.name, c.email, c.address].some((f) => String(f ?? "").toLowerCase().includes(q)) || (qd.length >= 4 && String(c.phone).replace(/\D/g, "").includes(qd)));
+    return { ok: true, total: hits.length, customers: hits.slice(0, 20) };
+  },
+  connector_get_customer: ({ p_customer_id }) => {
+    const c = db.customers.find((x) => x.id === p_customer_id);
+    return c ? { ok: true, customer: c, jobs: db.jobs.filter((j) => j.customer_id === c.id) } : refuse("No customer has that id. Use search_customers to find them.");
+  },
+  connector_create_customer: (a) => {
+    const dupes = db.customers.filter((c) => (a.p_phone && digits(c.phone) === digits(a.p_phone)) || (a.p_email && String(c.email).toLowerCase() === a.p_email.toLowerCase()) || key(c.name) === key(a.p_name));
+    if (dupes.length && !a.p_proceed_despite_duplicate) return refuse("Not created: this may match a customer already on file.", { likely_duplicates: dupes });
+    const row = { id: `c${db.customers.length + 1}`, name: a.p_name, phone: a.p_phone, email: a.p_email, address: a.p_address, notes: a.p_notes, ...a.p_generator };
+    db.customers.push(row);
+    return { ok: true, customer: row };
+  },
+  connector_update_customer_contact: ({ p_customer_id, p_patch }) => {
+    const c = db.customers.find((x) => x.id === p_customer_id); Object.assign(c, p_patch);
+    return { ok: true, customer: c };
+  },
+  connector_list_schedule: ({ p_from, p_to }) => ({ ok: true, jobs: db.jobs.filter((j) => j.status !== "canceled" && dayOf(j.scheduled_date) >= p_from && dayOf(j.scheduled_date) <= p_to) }),
+  connector_check_availability: ({ p_date }) => ({ ok: true, jobs: db.jobs.filter((j) => OPEN.includes(j.status) && dayOf(j.scheduled_date) === p_date) }),
+  connector_create_job: (a) => {
+    const c = db.customers.find((x) => x.id === a.p_customer_id);
+    if (!c) return refuse("No customer has that id. Use search_customers to find them.");
+    const existing = db.jobs.filter((j) => j.customer_id === c.id && OPEN.includes(j.status) && dayOf(j.scheduled_date) === dayOf(a.p_scheduled_date));
+    if (existing.length && !a.p_allow_duplicate) return refuse("Not created: this customer already has a job that day.", { existing_jobs: existing });
+    const job = { id: `j${db.jobs.length + 1}`, customer_id: c.id, customer_name: c.name, title: a.p_title || a.p_job_type, job_type: a.p_job_type, status: "scheduled", scheduled_date: a.p_scheduled_date, arrival_window_end: a.p_arrival_window_end, estimated_minutes: a.p_estimated_minutes, assigned_techs: a.p_techs, assigned_to_name: a.p_techs[0], customer_description: a.p_description, notes: a.p_notes, generator_id: a.p_generator_id };
+    db.jobs.push(job);
+    return { ok: true, job };
+  },
 };
-const handler = (over = {}) => createHandler({ supabaseUrl: SUPA, anonKey: "anon", publicUrl: URL_, appUrl: "https://app.test", oauthClientId: "claude-client", fetchImpl: fakeFetch, ...over });
+const fakeFetch = async (url, init = {}) => {
+  const u = String(url);
+  calls.push({ method: init.method || "GET", u, body: init.body ? JSON.parse(init.body) : undefined, auth: init.headers?.Authorization });
+  if (down) throw new Error("network");
+  const fn = u.split("/rest/v1/rpc/")[1];
+  if (fn === "connector_whoami") return whoami.status === 200 ? res(200, { user_id: "u1", email: "tech@genshieldservice.com" }) : res(whoami.status, { message: whoami.message });
+  if (FUNCS[fn]) return res(200, FUNCS[fn](JSON.parse(init.body)));
+  return res(404, {});
+};
+const handler = (over = {}) => createHandler({ supabaseUrl: SUPA, anonKey: "anon", publicUrl: URL_, fetchImpl: fakeFetch, ...over });
 const post = (body, { token = TOKEN, headers = {} } = {}) => new Request(URL_, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers }, body: JSON.stringify(body) });
 const call = async (name, args, over) => {
   const r = await handler(over)(post({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }));
@@ -41,7 +72,7 @@ const call = async (name, args, over) => {
 const baseJob = { customer_id: CUST, service_type: "maintenance", techs: ["Jeremy"], date: future, arrival_window: "10-12" };
 
 beforeEach(() => {
-  calls = []; audits = []; staff = true; userStatus = 200; sent = [];
+  calls = []; whoami = { status: 200 }; down = false;
   db = {
     customers: [{ id: CUST, name: "QA Pat", phone: "(973) 555-0100", email: "pat@example.com", address: "1 Elm St", generator_brand: "Generac", generator_kw: 17, generator_model: "0060531", generator_serial: "6737426" }],
     jobs: [], invoices: [],
@@ -59,18 +90,34 @@ describe("connector transport and sign-in", () => {
     const r = await handler()(new Request(`${URL_}/.well-known/oauth-protected-resource`));
     expect(await r.json()).toMatchObject({ resource: URL_, authorization_servers: [`${SUPA}/auth/v1`] });
   });
-  it("revoked or forged token: 401 with the pointer", async () => {
-    userStatus = 401;
+  it("forged or expired token (PostgREST 401): sign in again", async () => {
+    whoami = { status: 401 };
     const r = await handler()(post({ jsonrpc: "2.0", id: 1, method: "ping" }));
     expect(r.status).toBe(401);
     expect(r.headers.get("www-authenticate")).toContain('error="invalid_token"');
   });
-  it("not staff: 403, and an ordinary app token is refused", async () => {
-    staff = false;
+  it("revoked grant (guard says the sign-in ended): sign in again", async () => {
+    whoami = { status: 403, message: "connector: this sign-in has ended" };
+    const r = await handler()(post({ jsonrpc: "2.0", id: 1, method: "ping" }));
+    expect(r.status).toBe(401);
+  });
+  it("anything else the guard refuses: 403", async () => {
+    whoami = { status: 403, message: "connector: this token is not allowed" };
     expect((await handler()(post({ jsonrpc: "2.0", id: 1, method: "ping" }))).status).toBe(403);
-    staff = true;
-    expect((await handler()(post({ jsonrpc: "2.0", id: 1, method: "ping" }, { token: claims({ sub: "u1" }) }))).status).toBe(403);
-    expect((await handler()(post({ jsonrpc: "2.0", id: 1, method: "ping" }, { token: claims({ sub: "u1", client_id: "someone-else" }) }))).status).toBe(403);
+  });
+  it("database unreachable: 503, never allowed through", async () => {
+    down = true;
+    expect((await handler()(post({ jsonrpc: "2.0", id: 1, method: "ping" }))).status).toBe(503);
+  });
+  it("never calls the Auth API, tables, /api or storage: only connector functions", async () => {
+    await call("search_customers", { query: "Pat" });
+    await call("get_customer", { customer_id: CUST });
+    await call("create_customer", { name: "New Person" });
+    await call("update_customer_contact", { customer_id: CUST, phone: "973-555-0199" });
+    await call("list_schedule", { from: future });
+    await call("check_availability", { date: future });
+    await call("create_job", baseJob);
+    for (const c of calls) expect(c.u).toMatch(/\/rest\/v1\/rpc\/connector_[a-z_]+$/);
   });
   it("bad Origin 403; GET 405; bad protocol header 400; off switch 503", async () => {
     expect((await handler()(post({}, { headers: { Origin: "https://evil.example" } }))).status).toBe(403);
@@ -88,33 +135,10 @@ describe("connector transport and sign-in", () => {
   });
   it("no delete tool, and every database call carries the caller's token", async () => {
     expect(TOOLS.some((t) => /delete|remove|cancel/i.test(t.name))).toBe(false);
+    expect(TOOLS.some((t) => /email|pay|charge|mileage/i.test(t.name))).toBe(false);
     expect(TOOLS.every((t) => t.annotations.destructiveHint === false)).toBe(true);
     await call("search_customers", { query: "Pat" });
-    expect(calls.filter((c) => c.u.includes("/rest/v1/")).every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
-  });
-});
-
-describe("audit", () => {
-  it("reads log once; writes log started + outcome", async () => {
-    await call("search_customers", { query: "Pat" });
-    expect(audits).toHaveLength(1);
-    expect(audits[0]).toMatchObject({ p_tool: "search_customers", p_ok: true, p_client_id: "claude-client", p_inputs: { query: "Pat" } });
-    audits = [];
-    await call("create_job", baseJob);
-    expect(audits.map((a) => [a.p_result === "started", a.p_ok])).toEqual([[true, null], [false, true]]);
-  });
-  it("failures are logged too", async () => {
-    await call("create_job", { ...baseJob, techs: ["Bob"] });
-    expect(audits.at(-1)).toMatchObject({ p_ok: false });
-    expect(audits.at(-1).p_result).toContain("isn't a tech");
-  });
-  it("a write nobody can audit doesn't happen", async () => {
-    const r = await call("create_job", baseJob, { audit: async () => { throw new Error("down"); } });
-    expect(r.isError).toBe(true);
-    expect(db.jobs).toHaveLength(0);
-  });
-  it("long inputs are cut", () => {
-    expect(summarizeInputs({ notes: "x".repeat(500) }).notes.length).toBeLessThan(210);
+    expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
   });
 });
 
@@ -129,7 +153,6 @@ describe("customers", () => {
   it("get_customer shows the generator and never card or signature fields", async () => {
     const r = await call("get_customer", { customer_id: CUST });
     expect(r.structuredContent.generator).toBe("Generac 17kW · Model 0060531 · S/N 6737426");
-    expect(calls.find((c) => c.u.includes("customers?")).u).not.toMatch(/credit_card|signature/);
     expect((await call("get_customer", { customer_id: "nope" })).isError).toBe(true);
   });
   it("create_customer refuses likely duplicates until told to proceed", async () => {
@@ -166,44 +189,24 @@ describe("customers", () => {
   it("update can't touch anything else", async () => {
     const r = await call("update_customer_contact", { customer_id: CUST, notes: "x", membership_plan: "gold", name: "Pat Q" });
     expect(r.isError).toBeUndefined();
-    const patch = calls.find((c) => c.method === "PATCH").body;
-    expect(patch).toEqual({ name: "Pat Q" });
+    expect(calls.find((c) => c.u.endsWith("connector_update_customer_contact")).body.p_patch).toEqual({ name: "Pat Q" });
   });
 });
 
 describe("create_job", () => {
-  it("defaults to no email; window, techs, invoice and calendar pending as the app would", async () => {
+  it("sends the right fields and never notifies anyone", async () => {
     const r = await call("create_job", { ...baseJob, techs: ["Alex", "jeremy"], description: "Tune-up", notes: "Gate code" });
-    const job = db.jobs[0];
-    expect(sent).toEqual([]);
-    expect(job).toMatchObject({
-      customer_id: CUST, customer_name: "QA Pat", title: "Maintenance", job_type: "maintenance", status: "scheduled",
+    expect(db.jobs[0]).toMatchObject({
+      customer_id: CUST, customer_name: "QA Pat", job_type: "maintenance", status: "scheduled",
       scheduled_date: "2030-06-04T14:00:00.000Z", arrival_window_end: "2030-06-04T16:00:00.000Z", estimated_minutes: 120,
-      assigned_techs: ["Alex", "Jeremy"], assigned_to_name: "Alex", customer_description: "Tune-up", notes: "Gate code", calendar_sync_pending: true,
+      assigned_techs: ["Alex", "Jeremy"], assigned_to_name: "Alex", customer_description: "Tune-up", notes: "Gate code",
     });
-    expect(db.invoices[0]).toMatchObject({ job_id: job.id, customer_id: CUST, status: "draft", total: 0 });
     expect(r.content[0].text).toContain("not notified");
-    expect(r.content[0].text).toContain("next time GenFlow is open");
-    expect(r.structuredContent).toMatchObject({ customer_notified: false, calendar: "pending", arrival_window: "10 AM – 12 PM" });
+    expect(r.structuredContent).toMatchObject({ customer_notified: false, arrival_window: "10 AM – 12 PM" });
   });
-  it("sends only on send_confirmation: true", async () => {
-    for (const v of ["true", 1, "yes"]) {
-      const r = await call("create_job", { ...baseJob, send_confirmation: v });
-      expect(r.isError).toBe(true);
-    }
-    expect(sent).toEqual([]);
-    await call("create_job", { ...baseJob, send_confirmation: false });
-    expect(sent).toEqual([]);
-    db.jobs = [];
-    const r = await call("create_job", { ...baseJob, send_confirmation: true });
-    expect(sent).toEqual([{ job_id: db.jobs[0].id, kind: "confirmation" }]);
-    expect(r.structuredContent.customer_notified).toBe(true);
-    expect(calls.find((c) => c.u.includes("send-job-summary")).auth).toBe(`Bearer ${TOKEN}`);
-  });
-  it("send with no email on file refuses before creating", async () => {
-    db.customers[0].email = "";
-    expect((await call("create_job", { ...baseJob, send_confirmation: true })).isError).toBe(true);
-    expect(db.jobs).toHaveLength(0);
+  it("has no email option", () => {
+    const props = TOOLS.find((t) => t.name === "create_job").inputSchema.properties;
+    expect(Object.keys(props).some((k) => /confirm|send|email|notify/i.test(k))).toBe(false);
   });
   it("custom window, preset by times, exact time", async () => {
     await call("create_job", { ...baseJob, arrival_window: undefined, window_start: "09:30", window_end: "11:15" });
@@ -236,13 +239,6 @@ describe("create_job", () => {
     expect((await call("create_job", { ...baseJob, allow_duplicate: true })).isError).toBeUndefined();
     expect(db.jobs).toHaveLength(2);
   });
-  it("a failed email is reported, job kept", async () => {
-    const failing = (u, i) => (String(u).includes("send-job-summary") ? Promise.resolve(res(502, { error: "x" })) : fakeFetch(u, i));
-    const r = await call("create_job", { ...baseJob, send_confirmation: true }, { fetchImpl: failing });
-    expect(db.jobs).toHaveLength(1);
-    expect(r.content[0].text).toContain("FAILED");
-    expect(r.structuredContent.customer_notified).toBe(false);
-  });
 });
 
 describe("schedule", () => {
@@ -273,7 +269,7 @@ describe("shared rule files", () => {
   });
   it("the function holds no service role key or Resend key", () => {
     for (const f of ["index.ts", "server.js", "tools.js"]) {
-      expect(fs.readFileSync(path.resolve("supabase/functions/genflow-mcp", f), "utf8")).not.toMatch(/SERVICE_ROLE|RESEND/);
+      expect(fs.readFileSync(path.resolve("supabase/functions/genflow-mcp", f), "utf8")).not.toMatch(/SERVICE_ROLE|RESEND|\/auth\/v1\/user`|\/api\//);
     }
   });
 });

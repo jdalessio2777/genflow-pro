@@ -1,7 +1,9 @@
-// The connector's tools (Run 12, B2). No delete tool, on purpose. Same rules as the
-// app, through the shared rule files. Every message here may be read out by Claude.
+// The connector's tools. No delete, email, payment or mileage tool, on purpose. Input checks
+// and friendly messages live here; the rules that matter are repeated in the database, in one
+// connector_* function per tool (Run 13, A3), which is the only thing this token can reach.
+// Every message here may be read out by Claude.
 import {
-  etIso, etParts, jobTimeLabel, windowLabel, hasArrivalWindow, calendarEndMs, appointmentFromPicker, WINDOW_PRESETS, MODE_CUSTOM, MODE_EXACT,
+  etParts, jobTimeLabel, windowLabel, hasArrivalWindow, calendarEndMs, appointmentFromPicker, WINDOW_PRESETS, MODE_CUSTOM, MODE_EXACT,
 } from './shared/arrivalWindow.js';
 import {
   generatorsOf, generatorFor, generatorLine, generatorChanges, generatorPatch, normalizeBrand, normalizeKw, normalizeCooling,
@@ -19,11 +21,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const OPEN = ['scheduled', 'dispatched', 'on_site', 'in_progress'];
 const MAX_RANGE_DAYS = 62;
 const clean = (v) => String(v ?? '').trim();
 const digits = (v) => clean(v).replace(/\D/g, '').slice(-10);
-const nameKey = (v) => clean(v).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const todayEt = () => etParts(new Date().toISOString()).date;
 
 function text(args, key, { required = false, max = 200 } = {}) {
@@ -108,9 +108,6 @@ function contactArg(args, { nameRequired = false } = {}) {
   return out;
 }
 
-const CUSTOMER_FIELDS = 'id,name,phone,email,address,generator_brand,generator_kw,generator_model,generator_serial,generator_install_date,generator_cooling,extra_generators,property_notes,notes,repeat_note,membership_plan,membership_expiry,last_service_date,service_interval';
-const JOB_FIELDS = 'id,customer_id,customer_name,title,job_type,status,scheduled_date,arrival_window_end,estimated_minutes,assigned_techs,assigned_to_name,customer_description,notes,generator_id,calendar_event_id,confirmation_sent_at';
-
 const customerSummary = (c) => ({ id: c.id, name: clean(c.name), phone: c.phone || null, email: c.email || null, address: c.address || null, generator: generatorLine(c) || null });
 const generatorOut = ({ id, label, brand, kw, model, serial, install_date, cooling }) => ({ id, label, brand: brand || null, kw: kw ?? null, model: model || null, serial: serial || null, install_date: install_date || null, cooling: cooling || null });
 
@@ -123,28 +120,14 @@ function jobOut(j) {
   };
 }
 
-async function getCustomerRow(ctx, id) {
-  const rows = await ctx.rest(`customers?id=eq.${id}&select=${CUSTOMER_FIELDS}`);
-  if (!rows?.length) throw new ToolError('No customer has that id. Use search_customers to find them.');
-  return rows[0];
+// One database function per tool. A refusal comes back as { ok: false }, already audited there.
+async function db(ctx, fn, args) {
+  const out = await ctx.rpc(fn, args);
+  if (!out?.ok) throw new ToolError(out?.message || 'GenFlow refused that.', out?.data);
+  return out;
 }
+const getCustomerRow = (ctx, id) => db(ctx, 'connector_get_customer', { p_customer_id: id });
 
-function likelyDuplicates(all, { name, phone, email }) {
-  const p = phone ? digits(phone) : ''; const e = clean(email).toLowerCase(); const n = nameKey(name);
-  return all.filter((c) =>
-    (p.length >= 7 && digits(c.phone) === p) || (e && clean(c.email).toLowerCase() === e) || (n && nameKey(c.name) === n));
-}
-
-const dayRange = (from, to) => [etIso(from, '00:00'), etIso(addDays(to, 1), '00:00')];
-function addDays(key, n) {
-  const [y, m, d] = key.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
-}
-async function jobsBetween(ctx, from, to, { openOnly = false } = {}) {
-  const [a, b] = dayRange(from, to);
-  const status = openOnly ? `&status=in.(${OPEN.join(',')})` : '&status=neq.canceled';
-  return ctx.rest(`jobs?scheduled_date=gte.${encodeURIComponent(a)}&scheduled_date=lt.${encodeURIComponent(b)}${status}&order=scheduled_date.asc&select=${JOB_FIELDS}`);
-}
 // The time a job holds a tech: start to (window end + time on site), as the calendar shows it.
 function jobBlock(j) {
   return { start: new Date(j.scheduled_date).getTime(), end: calendarEndMs(j, estimateMinutes(j)) };
@@ -198,14 +181,10 @@ export const TOOLS = [
     description: 'Find GenFlow customers by name, phone, email or address. Use before creating a customer or a job.',
     inputSchema: { type: 'object', required: ['query'], additionalProperties: false, properties: { query: { type: 'string', description: 'Part of a name, phone, email or address' } } },
     async run(ctx, args) {
-      const q = text(args, 'query', { required: true, max: 120 }).toLowerCase();
+      const q = text(args, 'query', { required: true, max: 120 });
       if (q.length < 2) throw new ToolError('query needs at least 2 characters.');
-      const qDigits = q.replace(/\D/g, '');
-      const all = await ctx.rest(`customers?select=${CUSTOMER_FIELDS}&order=name.asc&limit=2000`);
-      const hits = all.filter((c) => [c.name, c.email, c.address].some((f) => clean(f).toLowerCase().includes(q))
-        || (qDigits.length >= 4 && clean(c.phone).replace(/\D/g, '').includes(qDigits)));
-      const customers = hits.slice(0, 20).map(customerSummary);
-      return { text: hits.length ? `Found ${hits.length} customer${hits.length === 1 ? '' : 's'}.` : `No customer matches "${q}".`, data: { customers, more: hits.length > 20 } };
+      const { total, customers } = await db(ctx, 'connector_search_customers', { p_query: q });
+      return { text: total ? `Found ${total} customer${total === 1 ? '' : 's'}.` : `No customer matches "${q}".`, data: { customers: customers.map(customerSummary), more: total > customers.length } };
     },
   },
   {
@@ -213,8 +192,7 @@ export const TOOLS = [
     description: 'One customer with contact details, generator info and their 10 most recent jobs.',
     inputSchema: { type: 'object', required: ['customer_id'], additionalProperties: false, properties: { customer_id: { type: 'string' } } },
     async run(ctx, args) {
-      const c = await getCustomerRow(ctx, uuid(args, 'customer_id'));
-      const jobs = await ctx.rest(`jobs?customer_id=eq.${c.id}&order=scheduled_date.desc.nullslast&limit=10&select=${JOB_FIELDS}`);
+      const { customer: c, jobs } = await getCustomerRow(ctx, uuid(args, 'customer_id'));
       return {
         text: `${clean(c.name)}${generatorLine(c) ? `: ${generatorLine(c)}` : ''}.`,
         data: { ...customerSummary(c), notes: c.notes || null, property_notes: c.property_notes || null, always_show_note: c.repeat_note || null, membership_plan: c.membership_plan || null, membership_expiry: c.membership_expiry || null, generators: generatorsOf(c).map(generatorOut), recent_jobs: jobs.map(jobOut) },
@@ -232,13 +210,16 @@ export const TOOLS = [
       const contact = contactArg(args, { nameRequired: true });
       const gen = generatorArg(args.generator);
       const notes = text(args, 'notes', { max: 4000 });
-      const all = await ctx.rest('customers?select=id,name,phone,email,address,generator_brand,generator_kw,generator_model,generator_serial&limit=2000');
-      const dupes = likelyDuplicates(all, contact);
-      if (dupes.length && args.proceed_despite_duplicate !== true) {
-        throw new ToolError(`Not created: ${dupes.length === 1 ? 'a customer' : `${dupes.length} customers`} may already match. Ask whether this is the same person. To add anyway, set proceed_despite_duplicate.`, { likely_duplicates: dupes.map(customerSummary) });
+      let saved;
+      try {
+        ({ customer: saved } = await db(ctx, 'connector_create_customer', {
+          p_name: contact.name, p_phone: contact.phone ?? null, p_email: contact.email ?? null, p_address: contact.address ?? null, p_notes: notes ?? null,
+          p_generator: generatorPatch(null, MAIN_GENERATOR_ID, gen), p_proceed_despite_duplicate: args.proceed_despite_duplicate === true,
+        }));
+      } catch (e) {
+        if (e.data?.likely_duplicates) e.data = { likely_duplicates: e.data.likely_duplicates.map(customerSummary) };
+        throw e;
       }
-      const row = { ...contact, ...(notes ? { notes } : {}), ...generatorPatch(null, MAIN_GENERATOR_ID, gen) };
-      const [saved] = await ctx.rest('customers?select=id,name,phone,email,address,generator_brand,generator_kw,generator_model,generator_serial', { method: 'POST', body: row, prefer: 'return=representation' });
       return { text: `Created customer ${clean(saved.name)}.`, data: customerSummary(saved) };
     },
   },
@@ -250,7 +231,7 @@ export const TOOLS = [
       properties: { customer_id: { type: 'string' }, ...contactSchema, generator: generatorSchema, generator_id: { type: 'string', description: 'Only when the customer has more than one generator; from get_customer' }, confirm_generator_changes: { type: 'boolean' } },
     },
     async run(ctx, args) {
-      const c = await getCustomerRow(ctx, uuid(args, 'customer_id'));
+      const { customer: c } = await getCustomerRow(ctx, uuid(args, 'customer_id'));
       const contact = contactArg(args);
       const gen = generatorArg(args.generator);
       if (!Object.keys(contact).length && !Object.keys(gen).length) throw new ToolError('Nothing to change: give a contact or generator field.');
@@ -268,7 +249,7 @@ export const TOOLS = [
       for (const x of conflicts) updates[x.key] = x.key === 'kw' ? Number(x.to) : x.to;
       const patch = { ...contact, ...(Object.keys(updates).length ? generatorPatch(c, generatorId, updates) : {}) };
       if (!Object.keys(patch).length) return { text: `No change needed; ${clean(c.name)} already has those values.`, data: customerSummary(c) };
-      const [saved] = await ctx.rest(`customers?id=eq.${c.id}&select=${CUSTOMER_FIELDS}`, { method: 'PATCH', body: patch, prefer: 'return=representation' });
+      const { customer: saved } = await db(ctx, 'connector_update_customer_contact', { p_customer_id: c.id, p_patch: patch });
       return { text: `Updated ${clean(saved.name)}: ${Object.keys(patch).map((k) => k.replace(/^generator_/, 'generator ')).join(', ')}.`, data: customerSummary(saved) };
     },
   },
@@ -285,7 +266,8 @@ export const TOOLS = [
       if (to < from) throw new ToolError('to is before from.');
       if ((Date.parse(to) - Date.parse(from)) / 86400000 > MAX_RANGE_DAYS) throw new ToolError(`That range is too long; the limit is ${MAX_RANGE_DAYS} days.`);
       const [tech] = techList(args.tech) || [];
-      const jobs = (await jobsBetween(ctx, from, to)).filter((j) => !tech || jobTechs(j).includes(tech));
+      const { jobs: all } = await db(ctx, 'connector_list_schedule', { p_from: from, p_to: to });
+      const jobs = all.filter((j) => !tech || jobTechs(j).includes(tech));
       return { text: `${jobs.length} job${jobs.length === 1 ? '' : 's'} from ${from} to ${to}${tech ? ` for ${tech}` : ''}.`, data: { jobs: jobs.map(jobOut) } };
     },
   },
@@ -307,7 +289,7 @@ export const TOOLS = [
       const want = wants ? appointmentArg(args) : null;
       const minutes = estimateArg(args);
       const proposed = want ? { start: new Date(want.scheduled_date).getTime(), end: calendarEndMs(want, minutes) } : null;
-      const jobs = await jobsBetween(ctx, date, date, { openOnly: true });
+      const { jobs } = await db(ctx, 'connector_check_availability', { p_date: date });
       const byTech = techs.map((tech) => {
         const mine = jobs.filter((j) => jobTechs(j).includes(tech));
         const clashes = proposed ? mine.filter((j) => { const b = jobBlock(j); return b.start < proposed.end && proposed.start < b.end; }) : [];
@@ -325,7 +307,7 @@ export const TOOLS = [
   },
   {
     name: 'create_job', title: 'Create job', annotations: WRITE,
-    description: 'Schedule a job for a customer: service type, one or more techs, an arrival window, notes and description. Emails the customer ONLY if send_confirmation is true; by default nobody is notified. Refuses a likely duplicate (same customer, same day) unless allow_duplicate is true.',
+    description: 'Schedule a job for a customer: service type, one or more techs, an arrival window, notes and description. Never emails the customer; the tech sends any confirmation from the job screen in GenFlow. Refuses a likely duplicate (same customer, same day) unless allow_duplicate is true.',
     inputSchema: {
       type: 'object', required: ['customer_id', 'service_type', 'techs', 'date'], additionalProperties: false,
       properties: {
@@ -338,63 +320,36 @@ export const TOOLS = [
         window_end: { type: 'string', description: 'Custom window end, HH:MM 24-hour Eastern' },
         exact_time: { type: 'string', description: 'Emergencies only: exact time instead of a window, HH:MM' },
         title: { type: 'string', description: 'Short job title; defaults to the service type' },
-        description: { type: 'string', description: 'Customer-facing: appears in the confirmation email' },
+        description: { type: 'string', description: 'Customer-facing: appears in the confirmation email if the tech sends one' },
         notes: { type: 'string', description: 'Internal notes, never shown to the customer' },
         estimated_minutes: { type: 'integer', description: `Time on site; defaults to ${DEFAULT_ESTIMATE_MINUTES}` },
         generator_id: { type: 'string', description: 'Only when the customer has more than one generator' },
-        send_confirmation: { type: 'boolean', description: 'true only when the person asked to email the customer now' },
         allow_duplicate: { type: 'boolean' },
       },
     },
     async run(ctx, args) {
-      const customer = await getCustomerRow(ctx, uuid(args, 'customer_id'));
+      const customerId = uuid(args, 'customer_id');
       const type = text(args, 'service_type', { required: true, max: 40 });
       if (!isServiceType(type)) throw new ToolError(`service_type must be one of ${SERVICE_TYPES.map((t) => t.value).join(', ')}.`);
       const techs = techList(args.techs, { required: true });
       const { date, scheduled_date, arrival_window_end } = appointmentArg(args);
       if (date < todayEt()) throw new ToolError(`${date} is in the past.`);
-      const minutes = estimateArg(args);
-      const send = args.send_confirmation === true; // never a truthy string or number
-      if (args.send_confirmation !== undefined && typeof args.send_confirmation !== 'boolean') throw new ToolError('send_confirmation must be true or false.');
-      if (send && !customer.email) throw new ToolError(`Not created: ${clean(customer.name)} has no email on file, so no confirmation can be sent. Add one with update_customer_contact, or create the job without send_confirmation.`);
       const generatorId = text(args, 'generator_id', { max: 60 });
-      if (generatorId && !generatorsOf(customer).some((g) => g.id === generatorId)) throw new ToolError('That customer has no generator with that id.');
-      const dupes = (await jobsBetween(ctx, date, date, { openOnly: true })).filter((j) => j.customer_id === customer.id);
-      if (dupes.length && args.allow_duplicate !== true) {
-        throw new ToolError(`Not created: ${clean(customer.name)} already has a job on ${date}. Ask whether this is a second visit. To add anyway, set allow_duplicate.`, { existing_jobs: dupes.map(jobOut) });
-      }
-      const label = SERVICE_TYPES.find((t) => t.value === type).label;
-      const row = {
-        customer_id: customer.id, customer_name: customer.name, title: text(args, 'title', { max: 200 }) || label, job_type: type, status: 'scheduled',
-        scheduled_date, arrival_window_end, estimated_minutes: minutes, ...techsPatch(techs),
-        customer_description: text(args, 'description', { max: 4000 }) || null, notes: text(args, 'notes', { max: 4000 }) || '',
-        ...(generatorId && generatorId !== MAIN_GENERATOR_ID ? { generator_id: generatorId } : {}),
-        // The app on a staff phone adds the Google Calendar event (see connector-design.md).
-        ...(ctx.calendarPending ? { calendar_sync_pending: true } : {}),
-      };
-      const [job] = await ctx.rest(`jobs?select=${JOB_FIELDS}`, { method: 'POST', body: row, prefer: 'return=representation' });
-      const warnings = [];
-      // Same draft invoice as the app.
+      let job;
       try {
-        await ctx.rest('invoices', { method: 'POST', prefer: 'return=minimal', body: {
-          job_id: job.id, customer_id: customer.id, customer_name: customer.name, invoice_number: `INV-${Date.now().toString(36).toUpperCase()}`,
-          parts_total: 0, labor_total: 0, total: 0, line_items: [], notes: '', status: 'draft',
-        } });
-      } catch { warnings.push('Its draft invoice was not created yet; Collect Payment will create it.'); }
-      let emailed = false;
-      if (send) {
-        try {
-          const r = await ctx.sendConfirmation(job.id);
-          emailed = !r.skipped;
-          if (r.skipped) warnings.push(`The confirmation was not sent (${r.skipped}).`);
-        } catch { warnings.push('The confirmation email FAILED. The job screen has a Resend button.'); }
+        ({ job } = await db(ctx, 'connector_create_job', {
+          p_customer_id: customerId, p_job_type: type, p_techs: techs, p_scheduled_date: scheduled_date, p_arrival_window_end: arrival_window_end ?? null,
+          p_estimated_minutes: estimateArg(args), p_title: text(args, 'title', { max: 200 }) ?? null, p_description: text(args, 'description', { max: 4000 }) ?? null,
+          p_notes: text(args, 'notes', { max: 4000 }) ?? null, p_generator_id: generatorId && generatorId !== MAIN_GENERATOR_ID ? generatorId : null, p_allow_duplicate: args.allow_duplicate === true,
+        }));
+      } catch (e) {
+        if (e.data?.existing_jobs) e.data = { existing_jobs: e.data.existing_jobs.map(jobOut) };
+        throw e;
       }
       const when = `${date}, ${hasArrivalWindow(job) ? `arrival window ${windowLabel(job)}` : jobTimeLabel(job)}`;
-      const email = emailed ? `Confirmation emailed to ${customer.email}.` : 'The customer was not notified.';
-      const calendar = 'It will appear on Google Calendar the next time GenFlow is open on a staff phone.';
       return {
-        text: [`Created "${clean(job.title)}" for ${clean(customer.name)}: ${when}, ${techsLabel(job)}.`, email, calendar, ...warnings].join(' '),
-        data: { ...jobOut(job), customer_notified: emailed, calendar: 'pending', generator: generatorLine(customer, job) || null, warnings },
+        text: `Created "${clean(job.title)}" for ${clean(job.customer_name)}: ${when}, ${techsLabel(job)}. The customer was not notified. Google Calendar updates within a minute.`,
+        data: { ...jobOut(job), customer_notified: false },
       };
     },
   },
@@ -405,15 +360,4 @@ function estimateArg(args) {
   if (v === undefined || v === null) return DEFAULT_ESTIMATE_MINUTES;
   if (!Number.isInteger(v) || v <= 0 || v > 1440) throw new ToolError('estimated_minutes must be a whole number from 1 to 1440.');
   return v;
-}
-
-// What the audit row keeps: the inputs, each value cut short.
-export function summarizeInputs(args) {
-  const cut = (v) => {
-    if (typeof v === 'string') return v.length > 200 ? `${v.slice(0, 200)}…` : v;
-    if (Array.isArray(v)) return v.slice(0, 20).map(cut);
-    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).slice(0, 30).map(([k, x]) => [k, cut(x)]));
-    return v;
-  };
-  return cut(args);
 }

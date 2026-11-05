@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { CalendarX2, RefreshCw, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
-import { getCalendarStatus, onCalendarStatus, pendingCalendarOps, retryPendingCalendarSync, syncPendingCalendarJobs } from "@/lib/calendarSync";
+import { getCalendarStatus, onCalendarStatus, pendingCalendarOps, retryPendingCalendarSync } from "@/lib/calendarSync";
 
 // B3: non-blocking notice when a job's Google Calendar event couldn't be
 // written. Sits above the tab bar and publishes its height as --banner-h, so
@@ -18,13 +18,6 @@ export default function CalendarSyncBanner() {
   useEffect(() => onCalendarStatus(setStatus), []);
   // Anything left from before (e.g. after coming back from reconnecting): retry once.
   useEffect(() => { if (pendingCalendarOps().length) retryPendingCalendarSync(); }, []);
-  // Jobs made through the Claude connector get their event here.
-  useEffect(() => {
-    const check = () => { if (document.visibilityState === "visible") syncPendingCalendarJobs(); };
-    check();
-    document.addEventListener("visibilitychange", check);
-    return () => document.removeEventListener("visibilitychange", check);
-  }, []);
 
   const visible = !(status.state === "ok" || (status.at && status.at <= dismissedAt));
   const boxRef = useRef(null);
