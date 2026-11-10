@@ -21,6 +21,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import RewardBadge from "@/components/ui/RewardBadge";
 import JobPartsTab from "@/components/jobs/JobPartsTab";
 import JobItemsTab from "@/components/jobs/JobItemsTab";
+import CustomFlatRateDialog from "@/components/jobs/CustomFlatRateDialog";
 import JobDocsTab from "@/components/jobs/JobDocsTab";
 import JobPhotosTab from "@/components/jobs/JobPhotosTab";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
@@ -34,7 +35,7 @@ import { sortJobs } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { haptics } from "@/lib/haptics";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { debounce } from "lodash";
 import { useOfflineMutation } from "@/lib/useOfflineMutation";
 import { useOffline } from "@/lib/OfflineContext";
@@ -46,7 +47,7 @@ import { showSaveError, dismissSaveError, withTimeout, createOnce, newRequestId,
 import { removePartFromJob, returnPartToStock } from "@/lib/inventory";
 import { syncJobToCalendar, removeJobFromCalendar } from "@/lib/calendarSync";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
-import { buildLaborLine, groupLaborRates, memberPrice, ratePrice, descriptionAfterPriceEdit } from "@/lib/utils/laborPricing";
+import { buildLaborLine, groupLaborRates, memberPrice, ratePrice, descriptionAfterPriceEdit, isOfferedRate } from "@/lib/utils/laborPricing";
 import { memberDiscountRateFor, isActiveMember as isActiveMemberNow } from "@/lib/utils/membership";
 import { surchargeConfig, withResyncedSurcharge, balanceCentsOf } from "@/lib/utils/surcharge";
 import { useBack, goBack } from "@/hooks/useBack";
@@ -196,6 +197,7 @@ export default function JobDetail() {
   const [activeJobTab, setActiveJobTab] = useUrlState("tab", "overview");
   const [workSubTab, setWorkSubTab] = useState("parts");
   const [flatFolder, setFlatFolder] = useState(null);
+  const [customFlatOpen, setCustomFlatOpen] = useState(false);
   const [workSearch, setWorkSearch] = useState("");
   const [editingLaborPriceId, setEditingLaborPriceId] = useState(null);
   const [editingLaborPriceValue, setEditingLaborPriceValue] = useState("");
@@ -237,6 +239,9 @@ export default function JobDetail() {
   const { data: jobAgreement = null } = useQuery(jobAgreementQuery(id));
 
   const { data: catalogParts = [] } = useQuery(partsCatalogQuery());
+  // Hidden (archived) parts are never offered; member repricing still sees
+  // every catalog row so existing lines can be matched.
+  const offeredCatalogParts = useMemo(() => catalogParts.filter(p => !p.is_hidden), [catalogParts]);
 
   const { data: photos = [] } = useQuery(jobPhotosQuery(id));
 
@@ -1661,7 +1666,7 @@ export default function JobDetail() {
               <div className="p-4 space-y-2">
                 {/* Parts sub-tab */}
                 {workSubTab === "parts" && (
-                <JobPartsTab jobId={id} parts={parts} catalogParts={catalogParts} memberDiscountRate={memberDiscountRate} searchFilter={workSearch} />
+                <JobPartsTab jobId={id} parts={parts} catalogParts={offeredCatalogParts} memberDiscountRate={memberDiscountRate} searchFilter={workSearch} />
                 )}
 
                 {/* Labor sub-tab */}
@@ -1761,13 +1766,51 @@ export default function JobDetail() {
                   </div>
                 )}
 
+                <CustomFlatRateDialog open={customFlatOpen} onOpenChange={setCustomFlatOpen} jobId={id} memberDiscountRate={memberDiscountRate} />
+
                 {/* Flat Rates sub-tab */}
                 {workSubTab === "flatrates" && (
                   <div className="space-y-2">
                     {!flatFolder ? (
                       <>
+                        <Button className="w-full h-11 rounded-xl gap-1.5 font-semibold" data-testid="custom-flat-rate-btn" onClick={() => setCustomFlatOpen(true)}>
+                          <Plus className="w-4 h-4" /> Custom flat rate
+                        </Button>
+                        {workSearch.trim() && (() => {
+                          const q = workSearch.trim().toLowerCase();
+                          const hits = laborRates.filter(r => isOfferedRate(r) && r.type === "flat_rate" && r.category !== "service_agreements" && r.name?.toLowerCase().includes(q)).slice(0, 25);
+                          if (hits.length === 0) return null;
+                          return (
+                            <div className="space-y-2" data-testid="flat-rate-search-results">
+                              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Flat rates</p>
+                              {hits.map(r => {
+                                const noDiscount = r.category === "discounts";
+                                const unit = memberPrice(r.flat_price, noDiscount ? 1.0 : memberDiscountRate);
+                                return (
+                                  <Card key={r.id} className="p-3 flex items-center justify-between">
+                                    <div className="min-w-0 mr-2">
+                                      <p className="text-sm font-medium">{r.name}</p>
+                                      {r.notes && <p className="text-xs text-muted-foreground">{r.notes}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <div className="text-right">
+                                        <p className="text-sm font-bold">{formatCurrency(unit)}</p>
+                                        {isMember && !noDiscount && <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(r.flat_price)}</p>}
+                                      </div>
+                                      <Button size="icon" className="h-11 w-11 rounded-lg" aria-label={`Add ${r.name}`} disabled={laborAdd.busy}
+                                        onClick={() => laborAdd.add(buildLaborLine({ rate: r, jobId: id, memberDiscountRate, subtotal: computeJobFinancials(parts, labor).subtotal }), r.name)}>
+                                        <Plus className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  </Card>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Folders</p>
                         {[
+                          { key: "custom", icon: "✏️", label: "Custom" },
                           { key: "oil_pressure_switches", icon: "🔌", label: "Oil Pressure Switches" },
                           { key: "starters", icon: "⚡", label: "Starters" },
                           { key: "controllers", icon: "🖥️", label: "Controllers" },
@@ -1860,6 +1903,12 @@ export default function JobDetail() {
                              </Card>
                            </div>
                          )}
+
+                        {flatFolder === "custom" && (
+                          <Button variant="outline" className="w-full h-11 rounded-xl gap-1.5" onClick={() => setCustomFlatOpen(true)}>
+                            <Plus className="w-4 h-4" /> Custom flat rate
+                          </Button>
+                        )}
 
                         {/* Other flat rate folders via JobItemsTab */}
                         {flatFolder !== "service_agreements" && (

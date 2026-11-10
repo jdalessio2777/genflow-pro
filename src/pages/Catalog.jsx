@@ -8,16 +8,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Package, Clock, Zap, Trash2, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent } from "lucide-react";
+import { Plus, Package, Clock, Zap, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent, EyeOff } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
-import { usePreferences } from "@/hooks/usePreferences";
 import { firstManagedPatch, isManaged } from "@/lib/utils/partsManaged";
 import { resolveBulkCommit, stockUpdatePatch } from "@/lib/utils/stockDraft";
 import StockCountInput from "@/components/catalog/StockCountInput";
 import StockEditor from "@/components/catalog/StockEditor";
 import PriceEditor from "@/components/catalog/PriceEditor";
+import { AddItemButton, ItemEditButton, setItemHidden } from "@/components/catalog/CatalogItemDialog";
+import { isVisible } from "@/lib/utils/catalogItems";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
@@ -43,6 +42,7 @@ const PART_CATEGORIES = [
 ];
 
 const FLAT_RATE_FOLDERS = [
+  { key: "custom", label: "Custom", icon: "✏️" },
   { key: "oil_pressure_switches", label: "Oil Pressure Switches", icon: "🔧" },
   { key: "starters", label: "Starters", icon: "⚡" },
   { key: "controllers", label: "Controllers", icon: "🖥️" },
@@ -70,7 +70,7 @@ const CATALOG_PART_BROWSE_ROWS = (() => {
     byKey.set(c.key, c);
   }
   for (const f of FLAT_RATE_FOLDERS) {
-    if (f.key === "other") continue;
+    if (f.key === "other" || f.key === "custom") continue;
     if (!byKey.has(f.key)) byKey.set(f.key, f);
   }
   return [...byKey.values(), { key: "other", label: "Other", icon: "📦" }];
@@ -87,6 +87,7 @@ const TOP_FOLDERS = [
   { key: "maintenance", label: "Maintenance", icon: Wrench, color: "bg-green-100 text-green-700", description: "Maintenance packages" },
   { key: "discounts", label: "Discounts", icon: BadgePercent, color: "bg-orange-100 text-orange-700", description: "Referral, review & loyalty discounts" },
   { key: "documents", label: "Document Templates", icon: FileText, color: "bg-rose-100 text-rose-700", description: "Checklists and inspection forms" },
+  { key: "hidden", label: "Hidden Items", icon: EyeOff, color: "bg-slate-100 text-slate-700", description: "Hidden from the catalog — tap to unhide" },
 ];
 
 // Keys ("stock:<id>", "price:<id>") of editors holding an unsaved draft.
@@ -190,9 +191,6 @@ function PartsCategoryList({ parts, loading, onSelectCategory }) {
 // ─── PARTS ITEM LIST ──────────────────────────────────────────────────────────
 function PartsItemList({ category, parts }) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", part_number: "", cost: 0, default_price: 0, in_stock: 0 });
-  const { confirmDelete } = usePreferences();
   const [bulkEdit, setBulkEdit] = useState(false);
   const [bulkValues, setBulkValues] = useState({});
   // Stock and price editors whose draft differs from the DB value.
@@ -204,19 +202,10 @@ function PartsItemList({ category, parts }) {
     ? parts.filter(p => !knownKeys.includes(p.category))
     : parts.filter(p => p.category === category.key);
 
-  const createMutation = useMutation({
-    mutationFn: (data) => db.Part.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }); setOpen(false); setForm({ name: "", part_number: "", cost: 0, default_price: 0, in_stock: 0 }); toast.success("Part added"); },
-  });
   const reorderMutation = useMutation({
     mutationFn: ({ id, data }) => db.Part.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }),
   });
-  const deleteMutation = useMutation({
-    mutationFn: (id) => db.Part.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["parts-catalog"] }); toast.success("Part removed"); },
-  });
-
   const enterBulkEdit = () => {
     setBulkValues(Object.fromEntries(items.map(p => [p.id, String(p.in_stock ?? 0)])));
     setBulkEdit(true);
@@ -260,24 +249,7 @@ function PartsItemList({ category, parts }) {
             {bulkEdit ? "Done" : "Bulk Count Entry"}
           </Button>
         ) : <div />}
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="rounded-xl gap-1.5"><Plus className="w-4 h-4" /> Add Part</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>New {category.label} Part</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
-              <div><Label className="text-xs">Part Number</Label><Input value={form.part_number} onChange={e => setForm(f => ({...f, part_number: e.target.value}))} className="mt-1" /></div>
-              <div className="grid grid-cols-3 gap-2">
-                <div><Label className="text-xs">Cost</Label><Input type="number" step="0.01" value={form.cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.default_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, default_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">In Stock</Label><Input type="number" value={form.in_stock} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, in_stock: parseInt(e.target.value) || 0}))} className="mt-1" /></div>
-              </div>
-              <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, category: category.key, ...((form.default_price > 0 || form.in_stock > 0) ? { first_managed_at: new Date().toISOString() } : {}) }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Part</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <AddItemButton label="Add item" presetType="part" presetCategory={category.key} />
       </div>
       {items.length === 0 ? <EmptyState icon={Package} title={`No ${category.label} yet`} description="Tap + to add one" /> : (
         <div className="space-y-2">
@@ -305,9 +277,7 @@ function PartsItemList({ category, parts }) {
                         <span className="text-[9px] text-muted-foreground leading-none mt-0.5">{isRecount ? "RECOUNT" : isOut ? "OUT" : isLow ? "LOW" : "count"}</span>
                       </div>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${part.name}"? This cannot be undone.`)) deleteMutation.mutate(part.id); }}>
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
+                    {!bulkEdit && <ItemEditButton item={part} table="parts" />}
                   </div>
                 </div>
                 {!bulkEdit && <PriceEditor kind="part" item={part} onDirtyChange={(d) => markDirty(`price:${part.id}`, d)} />}
@@ -324,45 +294,16 @@ function PartsItemList({ category, parts }) {
 
 // ─── LABOR RATES LIST ─────────────────────────────────────────────────────────
 function LaborRatesList() {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", rate: 115, cost_rate: 0, notes: "" });
-  const { confirmDelete } = usePreferences();
   const [unsavedCount, markDirty] = useDirtyKeys();
   const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const { data: rates = [] } = useQuery(laborRatesQuery());
-  const hourly = rates.filter(r => r.type === "hourly");
-
-  const createMutation = useMutation({
-    mutationFn: (data) => db.LaborRate.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); setOpen(false); setForm({ name: "", rate: 115, cost_rate: 0, notes: "" }); toast.success("Rate saved"); },
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (id) => db.LaborRate.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); toast.success("Rate removed"); },
-  });
+  const hourly = rates.filter(r => r.type === "hourly" && isVisible(r));
 
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="rounded-xl gap-1.5"><Plus className="w-4 h-4" /> Add Rate</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>New Labor Rate</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" placeholder="e.g. Standard Hour" /></div>
-              <div className="grid grid-cols-2 gap-2 form-row">
-                <div><Label className="text-xs">Bill Rate/hr</Label><Input type="number" step="0.01" value={form.rate} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Cost Rate/hr</Label><Input type="number" step="0.01" value={form.cost_rate} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, cost_rate: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-              </div>
-              <div><Label className="text-xs">Notes</Label><Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} className="mt-1" /></div>
-              <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, type: "hourly" }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Save Rate</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <AddItemButton label="Add item" presetType="labor" presetCategory="labor" />
       </div>
       {hourly.length === 0 ? <EmptyState icon={Clock} title="No labor rates yet" description="Add hourly billing rates" /> : (
         <div className="space-y-2">
@@ -372,9 +313,7 @@ function LaborRatesList() {
                 <div><p className="text-sm font-medium">{r.name}</p>{r.notes && <p className="text-xs text-muted-foreground italic">{r.notes}</p>}</div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold">{formatCurrency(r.rate)}/hr</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
+                  <ItemEditButton item={r} table="labor_rates" />
                 </div>
               </div>
               <PriceEditor kind="hourly" item={r} onDirtyChange={(d) => markDirty(`price:${r.id}`, d)} />
@@ -390,7 +329,7 @@ function LaborRatesList() {
 // ─── FLAT RATES FOLDER LIST ───────────────────────────────────────────────────
 function FlatRatesFolderList({ onSelectFolder }) {
   const { data: rates = [] } = useQuery(laborRatesQuery());
-  const flatRates = rates.filter(r => r.type === "flat_rate");
+  const flatRates = rates.filter(r => r.type === "flat_rate" && isVisible(r));
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
 
   const countForFolder = (key) => {
@@ -422,48 +361,20 @@ function FlatRatesFolderList({ onSelectFolder }) {
 
 // ─── FLAT RATES ITEM LIST ─────────────────────────────────────────────────────
 function FlatRatesItemList({ folder }) {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
-  const { confirmDelete } = usePreferences();
   const [unsavedCount, markDirty] = useDirtyKeys();
   const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const { data: rates = [] } = useQuery(laborRatesQuery());
   const knownKeys = [...FLAT_RATE_FOLDERS.filter(f => f.key !== "other").map(f => f.key), "maintenance", "discounts"];
+  const visible = rates.filter(r => r.type === "flat_rate" && isVisible(r));
   const items = folder.key === "other"
-    ? rates.filter(r => r.type === "flat_rate" && !knownKeys.includes(r.category))
-    : rates.filter(r => r.type === "flat_rate" && r.category === folder.key);
-
-  const createMutation = useMutation({
-    mutationFn: (data) => db.LaborRate.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); setOpen(false); setForm({ name: "", flat_price: 0, flat_cost: 0, notes: "" }); toast.success("Flat rate added"); },
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (id) => db.LaborRate.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); toast.success("Removed"); },
-  });
+    ? visible.filter(r => !knownKeys.includes(r.category))
+    : visible.filter(r => r.category === folder.key);
 
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="rounded-xl gap-1.5"><Plus className="w-4 h-4" /> Add</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>New {folder.label} Rate</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
-              <div className="grid grid-cols-2 gap-2 form-row">
-                <div><Label className="text-xs">Flat Price</Label><Input type="number" step="0.01" value={form.flat_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-              </div>
-              <div><Label className="text-xs">Notes</Label><Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} className="mt-1" /></div>
-              <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, type: "flat_rate", category: folder.key }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Rate</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <AddItemButton label="Add item" presetType={folder.key === "discounts" ? "discount" : "flat_rate"} presetCategory={folder.key} />
       </div>
       {items.length === 0 ? <EmptyState icon={Zap} title={`No ${folder.label} rates yet`} description="Tap + to add one" /> : (
         <div className="space-y-2">
@@ -477,9 +388,7 @@ function FlatRatesItemList({ folder }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-sm font-semibold">{formatCurrency(r.flat_price)}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
+                  <ItemEditButton item={r} table="labor_rates" />
                 </div>
               </div>
               {folder.key !== "discounts" && <PriceEditor kind="flat" item={r} onDirtyChange={(d) => markDirty(`price:${r.id}`, d)} />}
@@ -494,67 +403,25 @@ function FlatRatesItemList({ folder }) {
 
 // ─── MAINTENANCE LIST ─────────────────────────────────────────────────────────
 function MaintenanceList() {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", flat_price: 0, flat_cost: 0, notes: "" });
-  const { confirmDelete } = usePreferences();
   const [unsavedCount, markDirty] = useDirtyKeys();
   const priceGuard = useUnsavedChangesGuard(unsavedCount > 0);
 
   const { data: rates = [] } = useQuery(laborRatesQuery());
-  const items = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
-
-  const createMutation = useMutation({
-    mutationFn: (data) => db.LaborRate.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); setOpen(false); setForm({ name: "", flat_price: 0, flat_cost: 0, notes: "" }); toast.success("Added"); },
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (id) => db.LaborRate.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["labor-rates"] }); toast.success("Removed"); },
-  });
-
-  const SEED_ITEMS = [
-    { name: "One-Time Tune-Up (Air-Cooled)", flat_price: 300, flat_cost: 27, notes: "Air filter, spark plugs, oil filter, oil (1.8 qt), inspection, test run" },
-    { name: "One-Time Oil Change (Air-Cooled)", flat_price: 200, flat_cost: 10, notes: "Oil filter + oil (1.8 qt) only — no spark plugs or air filter" },
-    { name: "One-Time Tune-Up (Liquid-Cooled)", flat_price: 350, flat_cost: 35, notes: "Full liquid-cooled maintenance service — parts cost estimate" },
-    { name: "One-Time Oil Change (Liquid-Cooled)", flat_price: 300, flat_cost: 15, notes: "Oil service only — liquid-cooled units" },
-  ];
-
-  useEffect(() => {
-    if (rates.length === 0) return;
-    const existingNames = rates.filter(r => r.category === "maintenance" && r.type === "flat_rate").map(r => r.name);
-    const toSeed = SEED_ITEMS.filter(s => !existingNames.includes(s.name));
-    if (toSeed.length === 0) return;
-    Promise.all(toSeed.map(s => db.LaborRate.create({ ...s, type: "flat_rate", category: "maintenance" })))
-      .then(() => queryClient.invalidateQueries({ queryKey: ["labor-rates"] }));
-  }, [rates.length]);
+  const items = rates.filter(r => r.type === "flat_rate" && r.category === "maintenance" && isVisible(r));
+  // The 4 starter packages used to be re-created here whenever their names
+  // were missing. Names are editable now, so that would make duplicates
+  // after a rename; the packages already exist in the catalog.
 
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="rounded-xl gap-1.5"><Plus className="w-4 h-4" /> Add Package</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>New Maintenance Package</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label className="text-xs">Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" placeholder="e.g. Full Annual Maintenance (Liquid-Cooled)" /></div>
-              <div className="grid grid-cols-2 gap-2 form-row">
-                <div><Label className="text-xs">Price</Label><Input type="number" step="0.01" value={form.flat_price} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_price: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-                <div><Label className="text-xs">Internal Cost</Label><Input type="number" step="0.01" value={form.flat_cost} onFocus={e => e.target.select()} onChange={e => setForm(f => ({...f, flat_cost: parseFloat(e.target.value) || 0}))} className="mt-1" /></div>
-              </div>
-              <div><Label className="text-xs">Notes</Label><Input value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} className="mt-1" /></div>
-              <Button onClick={() => { if (!form.name) { toast.error("Name required"); return; } createMutation.mutate({ ...form, type: "flat_rate", category: "maintenance" }); }} className="w-full rounded-xl" disabled={createMutation.isPending}>Add Package</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <AddItemButton label="Add item" presetType="maintenance" presetCategory="maintenance" />
       </div>
       {items.length === 0 ? (
         <Card className="p-6 text-center">
           <Wrench className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm font-medium text-muted-foreground">No maintenance packages yet</p>
-          <p className="text-xs text-muted-foreground mt-1">Items will seed automatically on first load</p>
+          <p className="text-xs text-muted-foreground mt-1">Tap Add item to create one</p>
         </Card>
       ) : (
         <div className="space-y-2">
@@ -573,9 +440,7 @@ function MaintenanceList() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-sm font-semibold text-green-600">{formatCurrency(r.flat_price)}</span>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (!confirmDelete || window.confirm(`Delete "${r.name}"? This cannot be undone.`)) deleteMutation.mutate(r.id); }}>
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
+                    <ItemEditButton item={r} table="labor_rates" />
                   </div>
                 </div>
                 <PriceEditor kind="flat" item={r} onDirtyChange={(d) => markDirty(`price:${r.id}`, d)} />
@@ -589,6 +454,49 @@ function MaintenanceList() {
   );
 }
 
+// ─── HIDDEN ITEMS ─────────────────────────────────────────────────────────────
+// Hidden (archived) items: never offered on jobs or quotes, but past
+// invoices that used them are untouched. Unhide puts one back.
+function HiddenItemsList({ parts, rates }) {
+  const queryClient = useQueryClient();
+  const [busyId, setBusyId] = useState(null);
+  const rows = [
+    ...parts.map(p => ({ item: p, table: "parts", kind: "Part", price: p.default_price })),
+    ...rates.map(r => ({ item: r, table: "labor_rates", kind: r.type === "hourly" ? "Labor" : r.category === "maintenance" ? "Maintenance" : r.category === "discounts" ? "Discount" : "Flat rate", price: r.type === "hourly" ? r.rate : r.flat_price })),
+  ].sort((a, b) => String(a.item.name).localeCompare(String(b.item.name)));
+  const unhide = async ({ item, table }) => {
+    setBusyId(item.id);
+    try {
+      await setItemHidden(queryClient, table, item, false);
+      toast.success(`"${item.name}" is back in the catalog`);
+    } catch (e) {
+      console.error("Unhide failed", e);
+      toast.error(`"${item.name}" not unhidden. Try again.`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+  if (rows.length === 0) return <EmptyState icon={EyeOff} title="No hidden items" description="Items you hide from the catalog show up here" />;
+  return (
+    <div className="space-y-2">
+      {rows.map(row => (
+        <Card key={row.item.id} className="p-3" data-testid="hidden-item">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{row.item.name}</p>
+              <p className="text-xs text-muted-foreground">{row.kind} · {formatCurrency(row.price || 0)}</p>
+            </div>
+            <ItemEditButton item={row.item} table={row.table} />
+            <Button size="sm" variant="outline" className="h-11 rounded-xl" disabled={busyId === row.item.id} onClick={() => unhide(row)}>
+              {busyId === row.item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unhide"}
+            </Button>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 // ─── MAIN CATALOG ─────────────────────────────────────────────────────────────
 function escapeIlikeTerm(s) {
   return String(s).replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_").replace(/,/g, "");
@@ -597,7 +505,6 @@ function escapeIlikeTerm(s) {
 export default function Catalog() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const queryClient = useQueryClient();
   const section = searchParams.get("section");
   const subKey = searchParams.get("sub");
   const subFolder = section === "flat_rates" && subKey
@@ -618,8 +525,11 @@ export default function Catalog() {
     return () => clearTimeout(t);
   }, [partsBrowseSearch]);
 
-  const { data: rates = [] } = useQuery(laborRatesQuery());
-  const { data: parts = [], isPending: partsPending } = useQuery(partsCatalogQuery());
+  const { data: allRates = [] } = useQuery(laborRatesQuery());
+  const { data: allParts = [], isPending: partsPending } = useQuery(partsCatalogQuery());
+  // Hidden items live only in the "Hidden Items" folder.
+  const rates = allRates.filter(isVisible);
+  const parts = allParts.filter(isVisible);
   const { data: docTemplates = [] } = useQuery({ queryKey: ["doc-templates"], queryFn: () => db.DocumentTemplate.list("-created_date") });
 
   const partsBrowseTrim = partsBrowseSearch.trim();
@@ -640,6 +550,7 @@ export default function Catalog() {
         .from("parts")
         .select("*")
         .or(`name.ilike.${p},part_number.ilike.${p}`)
+        .eq("is_hidden", false)
         .order("name")
         .limit(500);
       if (error) throw error;
@@ -652,22 +563,8 @@ export default function Catalog() {
     partsBrowseTrim.length > 0 &&
     (partsBrowseTrim !== debouncedPartsBrowse || (partsSearchEnabled && partsSearchFetching));
 
-  // Seed Battery 26R if missing
-  useEffect(() => {
-    if (rates.length > 0) {
-      const hasBattery = rates.some(r => r.name?.toLowerCase().includes("26r") || r.name?.toLowerCase().includes("battery 26r"));
-      if (!hasBattery) {
-        db.LaborRate.create({
-          name: "Battery 26R",
-          type: "flat_rate",
-          category: "batteries",
-          flat_price: 220,
-          flat_cost: 0,
-          notes: "Group 26R replacement battery",
-        }).then(() => queryClient.invalidateQueries({ queryKey: ["labor-rates"] }));
-      }
-    }
-  }, [rates.length]);
+  // (Battery 26R used to be re-created here whenever no rate name contained
+  // "26r". Names are editable now, so that would duplicate it after a rename.)
 
   const getTitle = () => {
     if (subFolder) return subFolder.label;
@@ -696,6 +593,9 @@ export default function Catalog() {
         {/* Top-level folder list */}
         {!section && (
           <div className="space-y-3">
+            <div className="flex justify-end">
+              <AddItemButton label="Add item" presetType="part" presetCategory="other" />
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -737,7 +637,10 @@ export default function Catalog() {
                                     <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">{part.name}{stockStatus(part.in_stock) === "recount" && <span data-testid="recount-badge" className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Recount</span>}</p>
                                     <p className="text-xs text-muted-foreground capitalize">{part.category?.replace(/_/g, " ")} · Stock: {part.in_stock ?? 0}</p>
                                   </div>
-                                  <p className="text-sm font-bold">{formatCurrency(part.default_price || 0)}</p>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <p className="text-sm font-bold">{formatCurrency(part.default_price || 0)}</p>
+                                    <ItemEditButton item={part} table="parts" />
+                                  </div>
                                 </div>
                                 <PriceEditor kind="part" item={part} onDirtyChange={(d) => markDirty(`price:${part.id}`, d)} />
                               </Card>
@@ -756,7 +659,10 @@ export default function Catalog() {
                                     <p className="text-sm font-medium">{rate.name}</p>
                                     <p className="text-xs text-muted-foreground capitalize">{rate.type?.replace(/_/g, " ")} · {rate.category?.replace(/_/g, " ")}</p>
                                   </div>
-                                  <p className="text-sm font-bold">{formatCurrency(rate.flat_price || rate.rate || 0)}</p>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <p className="text-sm font-bold">{formatCurrency(rate.flat_price || rate.rate || 0)}</p>
+                                    <ItemEditButton item={rate} table="labor_rates" />
+                                  </div>
                                 </div>
                                 {rate.category !== "discounts" && <PriceEditor kind={rate.type === "hourly" ? "hourly" : "flat"} item={rate} onDirtyChange={(d) => markDirty(`price:${rate.id}`, d)} />}
                               </Card>
@@ -867,6 +773,7 @@ export default function Catalog() {
                           <p className="text-sm font-bold text-primary">{formatCurrency(salePrice)}</p>
                           <p className="text-xs text-muted-foreground">cost {formatCurrency(part.cost)}</p>
                         </div>
+                        <ItemEditButton item={part} table="parts" />
                       </div>
                       <PriceEditor kind="part" item={part} onDirtyChange={(d) => markDirty(`price:${part.id}`, d)} />
                     </Card>
@@ -882,6 +789,7 @@ export default function Catalog() {
         {section === "flat_rates" && subFolder && <FlatRatesItemList folder={subFolder} />}
         {section === "maintenance" && <MaintenanceList />}
         {section === "discounts" && <FlatRatesItemList folder={{ key: "discounts", label: "Discounts", icon: "🏷️" }} />}
+        {section === "hidden" && <HiddenItemsList parts={allParts.filter(p => !isVisible(p))} rates={allRates.filter(r => !isVisible(r))} />}
         {section === "documents" && (
           <div className="space-y-3">
             <button

@@ -11,7 +11,7 @@ import { computeJobFinancials } from "@/lib/utils/jobFinancials";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
-import { buildLaborLine, memberPrice, isAgreementRate, isPlaceholderRate, LABOR_TAB_FLAT_CATEGORIES, descriptionAfterPriceEdit } from "@/lib/utils/laborPricing";
+import { buildLaborLine, memberPrice, isAgreementRate, isOfferedRate, LABOR_TAB_FLAT_CATEGORIES, descriptionAfterPriceEdit } from "@/lib/utils/laborPricing";
 
 const ITEM_FOLDERS = [
   { key: "labor", label: "Labor Rates", icon: Clock, color: "bg-amber-100 text-amber-700", description: "Hourly billing rates" },
@@ -20,6 +20,7 @@ const ITEM_FOLDERS = [
 ];
 
 const FLAT_RATE_FOLDERS = [
+  { key: "custom", label: "Custom", icon: "✏️" },
   { key: "oil_pressure_switches", label: "Oil Pressure Switches", icon: "🔧" },
   { key: "starters", label: "Starters", icon: "⚡" },
   { key: "controllers", label: "Controllers", icon: "🖥️" },
@@ -156,10 +157,10 @@ export default function JobItemsTab({ jobId, labor, parts = [], memberDiscountRa
     setFolder(null);
   };
 
-  // Placeholder rows ("Do not add to jobs yet") are never offered. Service
-  // agreements are added only from their own cards (signature + fixed
-  // price), never from "Other" (B-02).
-  const offered = rates.filter(r => !isPlaceholderRate(r));
+  // Placeholder rows ("Do not add to jobs yet") and items hidden from the
+  // catalog are never offered. Service agreements are added only from their
+  // own cards (signature + fixed price), never from "Other" (B-02).
+  const offered = rates.filter(isOfferedRate);
   const hourlyRates = offered.filter(r => r.type === "hourly");
   // "emergency" flat rows are offered on the Labor tab (LABOR_TAB_FLAT_CATEGORIES).
   const knownKeys = [...FLAT_RATE_FOLDERS.map(f => f.key).filter(k => k !== "other"), "maintenance", "service_agreements", ...LABOR_TAB_FLAT_CATEGORIES];
