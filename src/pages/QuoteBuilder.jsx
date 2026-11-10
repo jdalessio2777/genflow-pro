@@ -19,7 +19,7 @@ import { Search, UserPlus, X, Plus, Trash2, Send, Loader2, Package, Clock, Zap, 
 import { formatCurrency } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { memberDiscountRateFor } from "@/lib/utils/membership";
-import { isAgreementRate, isPlaceholderRate } from "@/lib/utils/laborPricing";
+import { isAgreementRate, isOfferedRate } from "@/lib/utils/laborPricing";
 import { computeQuoteTotals, priceQuoteLine, memberSavings } from "@/lib/utils/quoteTotals";
 
 const ITEM_FOLDERS = [
@@ -106,12 +106,12 @@ export default function QuoteBuilder() {
     setCustomLine({ description: "", amount: "" });
   };
 
-  const offeredRates = rates.filter(r => !isPlaceholderRate(r));
+  const offeredRates = rates.filter(isOfferedRate);
   const hourlyRates = offeredRates.filter(r => r.type === "hourly");
   const flatRates = offeredRates.filter(r => r.type === "flat_rate" && r.category !== "maintenance");
   const maintenanceRates = offeredRates.filter(r => r.type === "flat_rate" && r.category === "maintenance");
   const filteredParts = partSearch.trim()
-    ? parts.filter(p => p.name?.toLowerCase().includes(partSearch.toLowerCase()) || p.part_number?.toLowerCase().includes(partSearch.toLowerCase())).slice(0, 25)
+    ? parts.filter(p => !p.is_hidden && (p.name?.toLowerCase().includes(partSearch.toLowerCase()) || p.part_number?.toLowerCase().includes(partSearch.toLowerCase()))).slice(0, 25)
     : [];
 
   const sendMutation = useMutation({
