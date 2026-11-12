@@ -1,4 +1,4 @@
-// The connector's tools. No delete, email, payment or mileage tool, on purpose. Input checks
+// The connector's tools. No delete, email, payment, payment-link, card or mileage tool, on purpose. Input checks
 // and friendly messages live here; the rules that matter are repeated in the database, in one
 // connector_* function per tool (Run 13, A3), which is the only thing this token can reach.
 // Every message here may be read out by Claude.
@@ -12,6 +12,7 @@ import {
 import { TECHS, jobTechs, techsLabel, techsPatch } from './shared/jobTechs.js';
 import { SERVICE_TYPES, isServiceType } from './shared/jobTypes.js';
 import { DEFAULT_ESTIMATE_MINUTES, estimateMinutes } from './shared/jobDuration.js';
+import { computeFinance, round2, EXPENSE_CATEGORIES, CARD_FEES_CATEGORY } from './shared/finance/core.js';
 
 export class ToolError extends Error {
   constructor(message, data) { super(message); this.data = data; }
@@ -174,6 +175,19 @@ const generatorSchema = {
 const contactSchema = { name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, address: { type: 'string' } };
 const READ = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+
+const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+const SOURCES = ['receipt', 'manual', 'bank statement'];
+const expenseProperties = {
+  date: { type: 'string', description: 'YYYY-MM-DD, the day on the receipt or statement' },
+  amount: { type: 'number', description: 'Dollars and cents, above 0' },
+  vendor: { type: 'string', description: 'Who was paid, as printed' },
+  description: { type: 'string', description: 'What it was for' },
+  category: { type: 'string', enum: EXPENSE_CATEGORIES.filter((c) => c !== CARD_FEES_CATEGORY) },
+  job_id: { type: 'string', description: 'Optional: the job this was for, from list_schedule or get_customer' },
+  source: { type: 'string', enum: SOURCES, description: 'receipt (from a photo), manual, or bank statement' },
+  proceed_despite_duplicate: { type: 'boolean' },
+};
 
 export const TOOLS = [
   {
@@ -353,6 +367,101 @@ export const TOOLS = [
       };
     },
   },
+  {
+    name: 'finance_summary', title: 'Finance summary', annotations: READ,
+    description: 'Revenue, expenses, net, card processing fees and unpaid invoices for a date range (Eastern). Uses the same calculation as Finance and Insights in GenFlow, so the numbers match the app. Read-only.',
+    inputSchema: {
+      type: 'object', required: ['from', 'to'], additionalProperties: false,
+      properties: { from: { type: 'string', description: 'YYYY-MM-DD' }, to: { type: 'string', description: 'YYYY-MM-DD' } },
+    },
+    async run(ctx, args) {
+      const { from, to } = rangeArgs(args);
+      const rows = await db(ctx, 'connector_finance_rows', { p_from: from, p_to: to });
+      const f = computeFinance({ invoices: rows.invoices, expenses: rows.expenses, warrantyClaims: rows.warrantyClaims }, { from, to });
+      const unpaidTotal = round2(rows.unpaid.reduce((n, i) => n + (Number(i.total) || 0), 0));
+      const data = {
+        from, to,
+        revenue: f.revenue, paid_invoices: f.invoiceRevenue, paid_invoice_count: f.paidInvoices, warranty_reimbursements: f.warranty,
+        card_surcharges_in_revenue: f.surcharge, nj_tax_in_revenue: f.tax,
+        expenses: f.expenses, expense_count: f.expenseCount,
+        card_processing_fees: f.cardFees, card_processing_fee_count: f.cardFeeCount,
+        expenses_by_category: f.expensesByCategory,
+        net: f.net, margin_percent: f.margin,
+        unpaid_invoices: { count: rows.unpaid.length, total: unpaidTotal, note: 'Sent and not yet paid, as of now (not limited to the range).', invoices: rows.unpaid.slice(0, 50).map((i) => ({ invoice_number: i.invoice_number, customer_name: i.customer_name, total: Number(i.total) || 0, sent_on: i.created_at ? etParts(i.created_at).date : null })) },
+      };
+      return {
+        text: `${from} to ${to}: revenue ${money(f.revenue)}, expenses ${money(f.expenses)} (card processing fees ${money(f.cardFees)}), net ${money(f.net)}. Unpaid invoices: ${rows.unpaid.length}, ${money(unpaidTotal)}.`,
+        data,
+      };
+    },
+  },
+  {
+    name: 'list_expenses', title: 'List expenses', annotations: READ,
+    description: 'Expenses in a date range (Eastern), optionally filtered by search text (vendor, description, notes), amount range and category. Up to 200 rows, newest first, plus the total. Read-only.',
+    inputSchema: {
+      type: 'object', required: ['from', 'to'], additionalProperties: false,
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD' }, to: { type: 'string', description: 'YYYY-MM-DD' },
+        search: { type: 'string' }, min_amount: { type: 'number' }, max_amount: { type: 'number' },
+        category: { type: 'string', enum: EXPENSE_CATEGORIES },
+      },
+    },
+    async run(ctx, args) {
+      const { from, to } = rangeArgs(args);
+      const min = amountArg(args, 'min_amount', { required: false });
+      const max = amountArg(args, 'max_amount', { required: false });
+      if (min !== undefined && max !== undefined && max < min) throw new ToolError('max_amount is less than min_amount.');
+      const category = categoryArg(args, { required: false, forAdding: false });
+      const out = await db(ctx, 'connector_list_expenses', {
+        p_from: from, p_to: to, p_search: text(args, 'search', { max: 120 }) ?? null, p_min_amount: min ?? null, p_max_amount: max ?? null, p_category: category ?? null,
+      });
+      return { text: `${out.total} expense${out.total === 1 ? '' : 's'}, ${money(out.total_amount)}${out.total > out.expenses.length ? ` (showing the newest ${out.expenses.length})` : ''}.`, data: { total: out.total, total_amount: Number(out.total_amount), expenses: out.expenses } };
+    },
+  },
+  {
+    name: 'list_expense_categories', title: 'List expense categories', annotations: READ,
+    description: 'The expense categories GenFlow uses, with how many expenses each has. "Card processing fees" are recorded automatically from Stripe and can\'t be added by hand. Read-only.',
+    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+    async run(ctx) {
+      const { categories } = await db(ctx, 'connector_list_expense_categories', {});
+      return { text: `Categories: ${categories.map((c) => c.category).join(', ')}.`, data: { categories } };
+    },
+  },
+  {
+    name: 'add_expense', title: 'Add expense', annotations: WRITE,
+    description: 'Add one expense, for example from a receipt photo you read. Refuses a likely duplicate (same amount, date within 2 days, similar vendor) and lists it, unless proceed_despite_duplicate is true. Only set that after the person confirms it is a different expense.',
+    inputSchema: { type: 'object', required: ['date', 'amount', 'category', 'source'], additionalProperties: false, properties: expenseProperties },
+    async run(ctx, args) {
+      const row = expenseArg(args);
+      const { expense } = await db(ctx, 'connector_add_expense', { p_expense: row });
+      return { text: `Added ${money(expense.amount)} ${expense.category} on ${expense.date}: ${clean(expense.vendor || expense.description)}.`, data: expense };
+    },
+  },
+  {
+    name: 'add_expenses_bulk', title: 'Add expenses in bulk', annotations: WRITE,
+    description: 'Add up to 200 expenses in one call, for example the business lines of a bank statement. Each row gets the same checks and duplicate test as add_expense. Rows that fail are skipped with the reason; the rest are added. Set proceed_despite_duplicate on a row only after the person confirms it.',
+    inputSchema: {
+      type: 'object', required: ['expenses'], additionalProperties: false,
+      properties: { expenses: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object', required: ['date', 'amount', 'category', 'source'], additionalProperties: false, properties: expenseProperties } } },
+    },
+    async run(ctx, args) {
+      if (!Array.isArray(args.expenses) || !args.expenses.length || args.expenses.length > 200) throw new ToolError('expenses must be a list of 1 to 200 rows.');
+      // A row that fails our checks is skipped here with the reason; the database checks again.
+      const rows = []; const early = [];
+      args.expenses.forEach((r, i) => {
+        try { rows.push({ row: i + 1, value: expenseArg(r ?? {}) }); } catch (e) { if (!(e instanceof ToolError)) throw e; early.push({ row: i + 1, reason: e.message }); }
+      });
+      let added = []; let skipped = [];
+      if (rows.length) {
+        const out = await db(ctx, 'connector_add_expenses_bulk', { p_expenses: rows.map((r) => r.value) });
+        added = out.added.map((a) => ({ ...a, row: rows[a.row - 1].row }));
+        skipped = out.skipped.map((x) => ({ ...x, row: rows[x.row - 1].row }));
+      }
+      skipped = [...early, ...skipped].sort((a, b) => a.row - b.row);
+      const sum = round2(added.reduce((n, a) => n + Number(a.expense.amount), 0));
+      return { text: `Added ${added.length} expense${added.length === 1 ? '' : 's'} (${money(sum)}); skipped ${skipped.length}.${skipped.length ? ` Skipped rows: ${skipped.map((x) => `${x.row} (${x.reason})`).join('; ')}.` : ''}`, data: { added, skipped } };
+    },
+  },
 ];
 
 function estimateArg(args) {
@@ -360,4 +469,51 @@ function estimateArg(args) {
   if (v === undefined || v === null) return DEFAULT_ESTIMATE_MINUTES;
   if (!Number.isInteger(v) || v <= 0 || v > 1440) throw new ToolError('estimated_minutes must be a whole number from 1 to 1440.');
   return v;
+}
+
+// ── Finance helpers (Part C) ─────────────────────────────────────────────────
+const MAX_FINANCE_DAYS = 1100;
+function rangeArgs(args) {
+  const from = dateArg(args, 'from');
+  const to = dateArg(args, 'to');
+  if (to < from) throw new ToolError('to is before from.');
+  if ((Date.parse(to) - Date.parse(from)) / 86400000 > MAX_FINANCE_DAYS) throw new ToolError('That range is too long; the limit is about 3 years.');
+  return { from, to };
+}
+function amountArg(args, key, { required = true } = {}) {
+  const v = args[key];
+  if (v === undefined || v === null || v === '') {
+    if (required) throw new ToolError(`${key} is required.`);
+    return undefined;
+  }
+  const n = typeof v === 'string' ? Number(v.replace(/[$,\s]/g, '')) : v;
+  if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0 || n > 100000) throw new ToolError(`${key} must be a dollar amount above 0.`);
+  if (Math.round(n * 100) !== Math.round(n * 100 * 1000) / 1000) throw new ToolError(`${key} must be dollars and cents, like 42.17.`);
+  return Math.round(n * 100) / 100;
+}
+function categoryArg(args, { required = true, forAdding = true } = {}) {
+  const v = text(args, 'category', { required, max: 60 });
+  if (v === undefined) return v;
+  const hit = EXPENSE_CATEGORIES.find((c) => c.toLowerCase() === v.toLowerCase());
+  if (!hit) throw new ToolError(`category must be one of: ${EXPENSE_CATEGORIES.filter((c) => !forAdding || c !== CARD_FEES_CATEGORY).join(', ')}.`);
+  if (forAdding && hit === CARD_FEES_CATEGORY) throw new ToolError('Card processing fees are recorded automatically from Stripe; choose another category.');
+  return hit;
+}
+function expenseArg(args) {
+  const extra = Object.keys(args).filter((k) => !(k in expenseProperties));
+  if (extra.length) throw new ToolError(`Not an expense field: ${extra.join(', ')}.`);
+  const date = dateArg(args, 'date');
+  if (date > todayEt()) throw new ToolError(`${date} is in the future.`);
+  if (date < '2020-01-01') throw new ToolError(`${date} is too far back.`);
+  const vendor = text(args, 'vendor', { max: 120 });
+  const description = text(args, 'description', { max: 500 });
+  if (!vendor && !description) throw new ToolError('Give a vendor or a description.');
+  const source = text(args, 'source', { required: true, max: 20 });
+  if (!SOURCES.includes(source)) throw new ToolError(`source must be one of: ${SOURCES.join(', ')}.`);
+  const jobId = args.job_id === undefined || args.job_id === null || args.job_id === '' ? null : text(args, 'job_id', { max: 60 });
+  if (jobId && !UUID.test(jobId)) throw new ToolError('job_id must be a job id from list_schedule or get_customer.');
+  return {
+    date, amount: amountArg(args, 'amount'), vendor: vendor ?? null, description: description ?? null,
+    category: categoryArg(args), source, job_id: jobId, proceed_despite_duplicate: args.proceed_despite_duplicate === true,
+  };
 }

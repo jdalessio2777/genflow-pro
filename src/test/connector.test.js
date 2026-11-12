@@ -54,6 +54,30 @@ const FUNCS = {
     return { ok: true, job };
   },
 };
+const CATS = ["Parts & Supplies", "Fuel", "Tools & Equipment", "Insurance", "Marketing", "Professional Services", "Vehicle", "Software & Subscriptions", "Card processing fees", "Other"];
+const vkey = (e) => key(e.vendor || e.description);
+const similar = (a, b) => a && b && (a === b || a.includes(b) || b.includes(a) || (a.split(" ")[0] === b.split(" ")[0] && a.split(" ")[0].length >= 3));
+const dayNum = (d) => Date.parse(`${d}T12:00:00Z`) / 86400000;
+const dupesOf = (r) => db.expenses.filter((e) => e.amount === r.amount && Math.abs(dayNum(e.date) - dayNum(r.date)) <= 2 && similar(vkey(e), vkey(r)));
+const addRow = (r) => { const e = { id: `e${db.expenses.length + 1}`, ...r }; delete e.proceed_despite_duplicate; db.expenses.push(e); return e; };
+Object.assign(FUNCS, {
+  connector_finance_rows: ({ p_from, p_to }) => ({ ok: true, invoices: db.invoices.filter((i) => i.status === "paid" && dayOf(i.paid_date) >= p_from && dayOf(i.paid_date) <= p_to), unpaid: db.invoices.filter((i) => i.status === "sent"), expenses: db.expenses, warrantyClaims: [] }),
+  connector_list_expenses: ({ p_from, p_to, p_search, p_category }) => {
+    const hits = db.expenses.filter((e) => e.date >= p_from && e.date <= p_to && (!p_search || key(`${e.vendor} ${e.description}`).includes(key(p_search))) && (!p_category || e.category === p_category));
+    return { ok: true, total: hits.length, total_amount: hits.reduce((n, e) => n + e.amount, 0), expenses: hits };
+  },
+  connector_list_expense_categories: () => ({ ok: true, categories: CATS.map((c) => ({ category: c, expenses_so_far: 0, can_add: c !== "Card processing fees" })) }),
+  connector_add_expense: ({ p_expense: r }) => {
+    const d = dupesOf(r);
+    if (d.length && !r.proceed_despite_duplicate) return refuse("Not added: this looks like an expense already on file.", { likely_duplicates: d });
+    return { ok: true, expense: addRow(r) };
+  },
+  connector_add_expenses_bulk: ({ p_expenses }) => {
+    const added = []; const skipped = [];
+    p_expenses.forEach((r, i) => { if (dupesOf(r).length && !r.proceed_despite_duplicate) skipped.push({ row: i + 1, reason: "likely duplicate" }); else added.push({ row: i + 1, expense: addRow(r) }); });
+    return { ok: true, added, skipped };
+  },
+});
 const fakeFetch = async (url, init = {}) => {
   const u = String(url);
   calls.push({ method: init.method || "GET", u, body: init.body ? JSON.parse(init.body) : undefined, auth: init.headers?.Authorization });
@@ -75,7 +99,7 @@ beforeEach(() => {
   calls = []; whoami = { status: 200 }; down = false;
   db = {
     customers: [{ id: CUST, name: "QA Pat", phone: "(973) 555-0100", email: "pat@example.com", address: "1 Elm St", generator_brand: "Generac", generator_kw: 17, generator_model: "0060531", generator_serial: "6737426" }],
-    jobs: [], invoices: [],
+    jobs: [], invoices: [], expenses: [],
   };
 });
 
@@ -131,11 +155,11 @@ describe("connector transport and sign-in", () => {
     expect(init.result.protocolVersion).toBe("2025-06-18");
     expect((await handler()(post({ jsonrpc: "2.0", method: "notifications/initialized" }))).status).toBe(202);
     const list = await (await handler()(post({ jsonrpc: "2.0", id: 2, method: "tools/list" }))).json();
-    expect(list.result.tools.map((t) => t.name)).toEqual(["search_customers", "get_customer", "create_customer", "update_customer_contact", "list_schedule", "check_availability", "create_job"]);
+    expect(list.result.tools.map((t) => t.name)).toEqual(["search_customers", "get_customer", "create_customer", "update_customer_contact", "list_schedule", "check_availability", "create_job", "finance_summary", "list_expenses", "list_expense_categories", "add_expense", "add_expenses_bulk"]);
   });
   it("no delete tool, and every database call carries the caller's token", async () => {
     expect(TOOLS.some((t) => /delete|remove|cancel/i.test(t.name))).toBe(false);
-    expect(TOOLS.some((t) => /email|pay|charge|mileage/i.test(t.name))).toBe(false);
+    expect(TOOLS.some((t) => /email|pay|charge|mileage|link|card|refund/i.test(t.name))).toBe(false);
     expect(TOOLS.every((t) => t.annotations.destructiveHint === false)).toBe(true);
     await call("search_customers", { query: "Pat" });
     expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
@@ -271,5 +295,81 @@ describe("shared rule files", () => {
     for (const f of ["index.ts", "server.js", "tools.js"]) {
       expect(fs.readFileSync(path.resolve("supabase/functions/genflow-mcp", f), "utf8")).not.toMatch(/SERVICE_ROLE|RESEND|\/auth\/v1\/user`|\/api\//);
     }
+  });
+});
+
+describe("finance tools (Part C)", () => {
+  const exp = (o = {}) => ({ date: "2026-11-03", amount: 42.17, vendor: "Home Depot", category: "Parts & Supplies", source: "receipt", ...o });
+  it("finance_summary uses the app's own calculation, with card fees as their own line", async () => {
+    db.invoices = [
+      { id: "i1", status: "paid", paid_date: "2026-11-09T17:22:23Z", total: 356.2, surcharge_amount: 9.67, tax_amount: 0, line_items: [] },
+      { id: "i2", status: "paid", paid_date: "2026-10-31T12:00:00Z", total: 999, line_items: [] },
+      { id: "i3", status: "sent", total: 150, invoice_number: "INV-3", customer_name: "QA Pat", created_at: "2026-11-01T12:00:00Z" },
+    ];
+    db.expenses = [{ date: "2026-11-09", amount: 9.67, category: "Card processing fees" }, { date: "2026-11-05", amount: 40, category: "Fuel" }];
+    const r = await call("finance_summary", { from: "2026-11-01", to: "2026-11-30" });
+    expect(r.isError).toBeUndefined();
+    expect(r.structuredContent).toMatchObject({ revenue: 356.2, expenses: 49.67, card_processing_fees: 9.67, card_processing_fee_count: 1, net: 306.53, card_surcharges_in_revenue: 9.67 });
+    expect(r.structuredContent.unpaid_invoices).toMatchObject({ count: 1, total: 150 });
+    expect(r.content[0].text).toContain("card processing fees $9.67");
+  });
+  it("finance_summary refuses a bad or huge range before touching the database", async () => {
+    expect((await call("finance_summary", { from: "2026-11-30", to: "2026-11-01" })).isError).toBe(true);
+    expect((await call("finance_summary", { from: "2020-01-01", to: "2026-11-01" })).isError).toBe(true);
+    expect(calls.filter((c) => c.u.includes("finance"))).toEqual([]);
+  });
+  it("list_expenses filters and totals; list_expense_categories marks fees as automatic", async () => {
+    db.expenses = [exp(), exp({ date: "2026-11-04", amount: 10, vendor: "Shell", category: "Fuel" })];
+    const r = await call("list_expenses", { from: "2026-11-01", to: "2026-11-30", category: "Fuel" });
+    expect(r.structuredContent).toMatchObject({ total: 1, total_amount: 10 });
+    expect((await call("list_expenses", { from: "2026-11-01", to: "2026-11-30", category: "Snacks" })).isError).toBe(true);
+    const c = await call("list_expense_categories", {});
+    expect(c.structuredContent.categories.find((x) => x.category === "Card processing fees").can_add).toBe(false);
+  });
+  it("add_expense validates, refuses a likely duplicate, and proceeds only when told", async () => {
+    expect((await call("add_expense", exp({ amount: -5 }))).isError).toBe(true);
+    expect((await call("add_expense", exp({ amount: 42.175 }))).isError).toBe(true);
+    expect((await call("add_expense", exp({ category: "Card processing fees" }))).isError).toBe(true);
+    expect((await call("add_expense", exp({ source: "stripe" }))).isError).toBe(true);
+    expect((await call("add_expense", exp({ date: "2099-01-01" }))).isError).toBe(true);
+    expect((await call("add_expense", exp({ vendor: undefined, description: undefined }))).isError).toBe(true);
+    expect((await call("add_expense", exp({ receipt_url: "x" }))).isError).toBe(true);
+    expect(calls.filter((c) => c.u.endsWith("connector_add_expense"))).toEqual([]);
+    expect((await call("add_expense", exp())).isError).toBeUndefined();
+    const dupe = await call("add_expense", exp({ date: "2026-11-05", vendor: "HOME DEPOT #1234 PARSIPPANY" }));
+    expect(dupe.isError).toBe(true);
+    expect(dupe.structuredContent.likely_duplicates).toHaveLength(1);
+    expect((await call("add_expense", exp({ date: "2026-11-05", vendor: "HOME DEPOT #1234 PARSIPPANY", proceed_despite_duplicate: true }))).isError).toBeUndefined();
+    expect(db.expenses).toHaveLength(2);
+  });
+  it("add_expense accepts '$1,234.50' as an amount", async () => {
+    const r = await call("add_expense", exp({ amount: "$1,234.50" }));
+    expect(r.structuredContent.amount).toBe(1234.5);
+  });
+  it("add_expenses_bulk adds good rows and reports skipped rows with their row numbers and reasons", async () => {
+    db.expenses = [exp()];
+    const r = await call("add_expenses_bulk", { expenses: [
+      exp({ date: "2026-11-02" }),                          // 1: duplicate of the existing one
+      exp({ amount: 0 }),                                   // 2: bad amount, skipped before the database
+      exp({ amount: 19.99, vendor: "Verizon", category: "Software & Subscriptions", source: "bank statement" }), // 3: added
+      exp({ amount: 19.99, vendor: "Verizon", category: "Software & Subscriptions", source: "bank statement" }), // 4: duplicate of row 3
+    ] });
+    expect(r.isError).toBeUndefined();
+    expect(r.structuredContent.added.map((a) => a.row)).toEqual([3]);
+    expect(r.structuredContent.skipped.map((x) => [x.row, x.reason.slice(0, 16)])).toEqual([[1, "likely duplicate"], [2, "amount must be a "], [4, "likely duplicate"]].map(([n, t]) => [n, t.slice(0, 16)]));
+    expect(r.content[0].text).toContain("Added 1 expense");
+  });
+  it("add_expenses_bulk refuses an empty or oversized list", async () => {
+    expect((await call("add_expenses_bulk", { expenses: [] })).isError).toBe(true);
+    expect((await call("add_expenses_bulk", { expenses: Array.from({ length: 201 }, () => exp()) })).isError).toBe(true);
+  });
+  it("finance tools also only ever call connector functions", async () => {
+    calls = [];
+    await call("finance_summary", { from: "2026-11-01", to: "2026-11-30" });
+    await call("list_expenses", { from: "2026-11-01", to: "2026-11-30" });
+    await call("list_expense_categories", {});
+    await call("add_expense", exp());
+    await call("add_expenses_bulk", { expenses: [exp({ amount: 1 })] });
+    for (const c of calls) expect(c.u).toMatch(/\/rest\/v1\/rpc\/connector_[a-z_]+$/);
   });
 });

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DollarSign, TrendingUp, TrendingDown, Receipt, Car, Plus, Trash2, FileText, Navigation, Truck, ChevronDown, ChevronUp, Loader2, Camera, ImagePlus, X, ShieldCheck, BarChart3 } from "lucide-react";
-import { computeFinance, computeSeries, rangeFor, inRange, etDate, endOfMonth, OVERVIEW_PERIODS } from "@/lib/finance/core";
+import { computeFinance, computeSeries, rangeFor, inRange, etDate, endOfMonth, OVERVIEW_PERIODS, EXPENSE_CATEGORIES } from "@/lib/finance/core";
 import InsightsTab from "@/components/finance/InsightsTab";
 import { useFinanceData, financeQueries } from "@/lib/finance/useFinanceData";
 // Note: Truck still used in MileageTab
@@ -28,17 +28,6 @@ import { useSettings } from "@/lib/useSettings";
 
 const IRS_RATE = 0.725;
 
-const EXPENSE_CATEGORIES = [
-  "Parts & Supplies",
-  "Fuel",
-  "Tools & Equipment",
-  "Insurance",
-  "Marketing",
-  "Professional Services",
-  "Vehicle",
-  "Software & Subscriptions",
-  "Other",
-];
 
 
 // ─── OVERVIEW TAB ─────────────────────────────────────────────────────────────
@@ -91,6 +80,16 @@ function OverviewTab({ invoices, mileage, financeData }) {
           </div>
           <p className="text-2xl font-bold text-red-700 dark:text-red-300">{formatCurrency(expenseTotal)}</p>
           <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{f.expenseCount} expense{f.expenseCount !== 1 ? "s" : ""}</p>
+        </Card>
+
+        <Card className="p-3.5 col-span-2" data-testid="overview-card-fees">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-foreground">Card processing fees</p>
+              <p className="text-xs text-muted-foreground">{f.cardFeeCount} Stripe fee{f.cardFeeCount !== 1 ? "s" : ""} · included in expenses</p>
+            </div>
+            <p className="text-lg font-bold text-red-700 dark:text-red-300" data-testid="overview-card-fees-amount">{formatCurrency(f.cardFees)}</p>
+          </div>
         </Card>
 
         <Card className="p-3.5 col-span-2 border-violet-200 bg-violet-50 dark:border-violet-700 dark:bg-violet-900/20" data-testid="overview-warranty">
@@ -286,6 +285,7 @@ function ExpensesTab({ expenses }) {
       ...form,
       amount: parseFloat(form.amount),
       receipt_url: receiptUrl || null,
+      source: receiptUrl ? "receipt" : "manual",
       author_name: getUserDisplayName(user),
       author_email: user?.email || "",
     });
