@@ -12,6 +12,8 @@ export function memberPrice(amount, memberDiscountRate = 1.0) {
 export const isAgreementRate = (rate) => rate?.category === "service_agreements";
 // Catalog rows marked "PLACEHOLDER … Do not add to jobs yet" are never offered.
 export const isPlaceholderRate = (rate) => /^\s*PLACEHOLDER/i.test(rate?.notes || "");
+// Offered on jobs and quotes: not a placeholder and not hidden from the catalog.
+export const isOfferedRate = (rate) => !!rate && !isPlaceholderRate(rate) && !rate.is_hidden;
 
 export function memberLabel(memberDiscountRate) {
   return `Member ${Math.round((1 - memberDiscountRate) * 100)}% off`;
@@ -56,7 +58,7 @@ export const LABOR_GROUPS = [
 export const LABOR_TAB_FLAT_CATEGORIES = ["emergency"];
 
 export function groupLaborRates(rates) {
-  const shown = (rates || []).filter(r => !isPlaceholderRate(r) &&
+  const shown = (rates || []).filter(r => isOfferedRate(r) &&
     (r.type === "hourly" || (r.type === "flat_rate" && LABOR_TAB_FLAT_CATEGORIES.includes(r.category))));
   const known = new Set(LABOR_GROUPS.map(g => g.key));
   return LABOR_GROUPS

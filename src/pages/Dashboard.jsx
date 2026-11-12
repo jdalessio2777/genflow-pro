@@ -150,8 +150,8 @@ export default function Dashboard() {
 
   const { data: parts = [] } = useQuery(partsCatalogQuery());
   // Includes parts needing a recount (stock below 0) — see stockAlertText.
-  const lowStockParts = parts.filter(p => stockStatus(p.in_stock) === "recount" ||
-    (isManaged(p) && (["out", "low"].includes(stockStatus(p.in_stock)) || p.reorder_flagged))
+  const lowStockParts = parts.filter(p => !p.is_hidden && (stockStatus(p.in_stock) === "recount" ||
+    (isManaged(p) && (["out", "low"].includes(stockStatus(p.in_stock)) || p.reorder_flagged)))
   );
 
   function getServiceStatus(customer) {
