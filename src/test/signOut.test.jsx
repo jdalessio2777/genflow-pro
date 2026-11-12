@@ -187,7 +187,7 @@ describe('Settings → Sign out', () => {
     } finally {
       useAuthSpy.mockRestore()
     }
-  })
+  }, 20000) // first import of the Settings page can take >5 s while 70 test files run at once
 })
 
 // ─── /auth/callback reached with Back after Sign out ───────────────────────
@@ -203,5 +203,5 @@ describe('AuthCallback', () => {
       </Routes></MemoryRouter></AuthProvider>)
     })
     expect(screen.getByText('SIGN-IN SCREEN')).toBeTruthy()
-  })
+  }, 20000) // same: first import of AuthCallback under a full parallel run
 })
