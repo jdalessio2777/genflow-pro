@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StoredImage } from "@/lib/storageUrls";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
@@ -106,7 +107,7 @@ export default function JobPhotosTab({ jobId, photos, isClosed }) {
                 <div className="grid grid-cols-3 gap-2">
                   {items.map(photo => (
                     <div key={photo.id} className="relative group aspect-square rounded-xl overflow-hidden bg-muted">
-                      <img src={photo.url} alt={photo.type} className="w-full h-full object-cover" />
+                      <StoredImage src={photo.url} alt={photo.type} className="w-full h-full object-cover" />
                       {!isClosed && (
                         <button
                           onClick={() => {

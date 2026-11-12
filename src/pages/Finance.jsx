@@ -1,4 +1,5 @@
 import DateField from "@/components/ui/DateField";
+import { StoredImage, StoredFileLink } from "@/lib/storageUrls";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -412,9 +413,9 @@ function ExpensesTab({ expenses }) {
                   cards on every phone width. */}
               <div className="flex items-start gap-2.5">
                 {exp.receipt_url ? (
-                  <a href={exp.receipt_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                    <img src={exp.receipt_url} alt="Receipt" className="w-10 h-10 rounded-lg object-cover border border-border" />
-                  </a>
+                  <StoredFileLink href={exp.receipt_url} className="shrink-0">
+                    <StoredImage src={exp.receipt_url} alt="Receipt" className="w-10 h-10 rounded-lg object-cover border border-border" />
+                  </StoredFileLink>
                 ) : (
                   <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <Receipt className="w-4 h-4 text-muted-foreground" />

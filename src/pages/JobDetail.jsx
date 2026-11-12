@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { StoredImage, StoredFileLink } from "@/lib/storageUrls";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { jobSlice } from "@/lib/jobBundle";
@@ -2169,9 +2170,9 @@ export default function JobDetail() {
                       <div className="grid grid-cols-3 gap-2">
                         {photos.map(photo => (
                           <div key={photo.id} className="relative">
-                            <a href={photo.url} target="_blank" rel="noopener noreferrer">
-                              <img src={photo.url} alt="Job photo" className="w-full h-20 object-cover rounded-xl border border-border" />
-                            </a>
+                            <StoredFileLink href={photo.url}>
+                              <StoredImage src={photo.url} alt="Job photo" className="w-full h-20 object-cover rounded-xl border border-border" />
+                            </StoredFileLink>
                             <button onClick={() => {
                               if (!confirmDelete || window.confirm("Remove this photo from the job?")) {
                                 haptics.medium();

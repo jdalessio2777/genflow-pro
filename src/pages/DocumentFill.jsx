@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { StoredImage } from "@/lib/storageUrls";
 import { useParams } from "react-router-dom";
 import { useBack } from "@/hooks/useBack";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -459,7 +460,7 @@ export default function DocumentFill() {
           </label>
           {values[field.id] ? (
             <div className="space-y-1">
-              <img src={values[field.id]} alt="Upload" className="w-full max-h-32 object-cover rounded-xl" />
+              <StoredImage src={values[field.id]} alt="Upload" className="w-full max-h-32 object-cover rounded-xl" />
               {!locked && <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => updateValue(field.id, "")}>Remove</Button>}
             </div>
           ) : (
