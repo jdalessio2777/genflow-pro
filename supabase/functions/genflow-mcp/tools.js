@@ -321,7 +321,7 @@ export const TOOLS = [
   },
   {
     name: 'create_job', title: 'Create job', annotations: WRITE,
-    description: 'Schedule a job for a customer: service type, one or more techs, an arrival window, notes and description. Never emails the customer; the tech sends any confirmation from the job screen in GenFlow. Refuses a likely duplicate (same customer, same day) unless allow_duplicate is true.',
+    description: 'Schedule a job for a customer: service type, one or more techs, an arrival window, notes and description. Never emails the customer; the tech sends any confirmation from the job screen in GenFlow. Does not add a Google Calendar event: that happens when someone saves the job in GenFlow. Refuses a likely duplicate (same customer, same day) unless allow_duplicate is true.',
     inputSchema: {
       type: 'object', required: ['customer_id', 'service_type', 'techs', 'date'], additionalProperties: false,
       properties: {
@@ -362,8 +362,8 @@ export const TOOLS = [
       }
       const when = `${date}, ${hasArrivalWindow(job) ? `arrival window ${windowLabel(job)}` : jobTimeLabel(job)}`;
       return {
-        text: `Created "${clean(job.title)}" for ${clean(job.customer_name)}: ${when}, ${techsLabel(job)}. The customer was not notified. Google Calendar updates within a minute.`,
-        data: { ...jobOut(job), customer_notified: false },
+        text: `Created "${clean(job.title)}" for ${clean(job.customer_name)}: ${when}, ${techsLabel(job)}. The customer was not notified. It is NOT on Google Calendar yet: open the job in GenFlow on a phone with Google connected, tap Edit, then Save, and it's added.`,
+        data: { ...jobOut(job), customer_notified: false, on_google_calendar: false },
       };
     },
   },
