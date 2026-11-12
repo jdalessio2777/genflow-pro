@@ -56,7 +56,7 @@ psql -d "$TARGET" -c "select count(*) from public.customers"
 `auth.users` and `auth.identities` can fail to load if Supabase has since changed those tables. If so, compare the columns in `database-schema.sql` with the new project's.
 
 ## Restore the files
-1. In the new project, open **Storage** and create a bucket with the same name and public setting. Today that's `uploads`, set to public.
+1. In the new project, open **Storage** and create a bucket with the same name and public setting. Today that's `uploads`, set to private (Run 13; it was public before).
 2. Upload the contents of `storage/uploads/`, keeping the folders.
 
 Upload the files rather than restoring the `storage.objects` rows. Uploading recreates those rows correctly.

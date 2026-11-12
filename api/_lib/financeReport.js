@@ -90,6 +90,7 @@ export async function buildWorkbook(r, { generatedAt = new Date() } = {}) {
   m('NJ Tax Collected', f.tax);
   m('Card Surcharges Collected', f.surcharge);
   m('Total Expenses', f.expenses);
+  m('  Card processing fees', f.cardFees);
   m('Net Profit', f.net);
   kv('Profit Margin', f.margin == null ? '—' : `${f.margin.toFixed(1)}%`);
   s1.addRow([]);

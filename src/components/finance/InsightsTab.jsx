@@ -234,6 +234,7 @@ export default function InsightsTab({ financeData }) {
         <Kpi id="agreements" label="Agreements sold" value={cur.agreementsSold} cur={cur.agreementsSold} prev={prev.agreementsSold} goodWhenUp sub={cur.agreementRevenue ? `${money0(cur.agreementRevenue)} billed` : null} />
         <Kpi id="members" label="Active members" value={cur.activeMembers} cur={cur.activeMembers} prev={prev.activeMembers} goodWhenUp sub={`at ${range.to.slice(5).replace("-", "/")}`} />
         <Kpi id="surcharge" label="Card surcharges" value={formatCurrency(cur.surcharge)} cur={cur.surcharge} prev={prev.surcharge} goodWhenUp sub="in revenue" />
+        <Kpi id="card-fees" label="Card processing fees" value={formatCurrency(cur.cardFees)} cur={cur.cardFees} prev={prev.cardFees} sub="in expenses" />
         <Kpi id="customers" label="Customers paid" value={cur.customersServed} cur={cur.customersServed} prev={prev.customersServed} goodWhenUp sub={`${cur.returningCustomers} returning`} />
       </div>
       <p className="text-[10px] text-muted-foreground leading-relaxed">

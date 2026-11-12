@@ -13,6 +13,8 @@
 //   warranty reimbursements (warranty_claims.amount_paid, by date_paid).
 //   Two separate tables, so nothing is counted twice.
 // - Expenses = expenses.amount by expenses.date. Net = revenue - expenses.
+// - Card processing fees = the expenses in that category, also its own line
+//   (already inside expenses, never subtracted twice).
 // - Revenue by job type: the job's service type; a job with no real type
 //   (missing, or the legacy "quote") is typed from its invoice lines, else
 //   "Other". Warranty reimbursements count as "Warranty". Types with jobs but
@@ -131,7 +133,13 @@ export const PAID_VIA = [
   { value: "other", label: "Other" },
 ];
 export const paidViaLabel = (v) => PAID_VIA.find(p => p.value === v)?.label || "Other";
-export const EXPENSE_CATEGORIES = ["Parts & Supplies", "Fuel", "Tools & Equipment", "Insurance", "Marketing", "Professional Services", "Vehicle", "Software & Subscriptions", "Other"];
+// Stripe's processing fee on each card payment, recorded automatically by the
+// Stripe webhook (Run 13, Part F). Shown as its own line, and counted in expenses.
+export const CARD_FEES_CATEGORY = "Card processing fees";
+export const EXPENSE_CATEGORIES = ["Parts & Supplies", "Fuel", "Tools & Equipment", "Insurance", "Marketing", "Professional Services", "Vehicle", "Software & Subscriptions", CARD_FEES_CATEGORY, "Other"];
+// Categories a person can pick by hand. Card fees are recorded automatically from Stripe, so they are
+// left out here (no double counting) but still show in reports, filters and By Category.
+export const MANUAL_EXPENSE_CATEGORIES = EXPENSE_CATEGORIES.filter(c => c !== CARD_FEES_CATEGORY);
 
 // The service type a paid invoice's revenue counts under.
 export function revenueType(invoice, job) {
@@ -162,6 +170,8 @@ export function computeFinance(data, range) {
   const byCat = new Map();
   for (const e of exp) { const c = EXPENSE_CATEGORIES.includes(e.category) ? e.category : "Other"; const o = byCat.get(c) || { category: c, amount: 0, count: 0 }; o.amount += num(e.amount); o.count++; byCat.set(c, o); }
   const expensesByCategory = [...byCat.values()].map(o => ({ ...o, amount: round2(o.amount) })).sort((a, b) => b.amount - a.amount);
+  const feeRows = exp.filter(e => e.category === CARD_FEES_CATEGORY);
+  const cardFees = round2(feeRows.reduce((s, e) => s + num(e.amount), 0));
 
   // by job type (+ warranty reimbursements under Warranty)
   const types = new Map();
@@ -219,7 +229,7 @@ export function computeFinance(data, range) {
     range,
     revenue, invoiceRevenue, warranty, surcharge, tax,
     paidInvoices: paid.length, warrantyClaims: claimsIn.length,
-    expenses: expenseTotal, expenseCount: exp.length, expensesByCategory,
+    expenses: expenseTotal, expenseCount: exp.length, expensesByCategory, cardFees, cardFeeCount: feeRows.length,
     net: round2(revenue - expenseTotal),
     margin: revenue > 0 ? round2(((revenue - expenseTotal) / revenue) * 100) : null,
     jobsCompleted: completed.length, completedByType,
