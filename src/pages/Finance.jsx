@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DollarSign, TrendingUp, TrendingDown, Receipt, Car, Plus, Trash2, FileText, Navigation, Truck, ChevronDown, ChevronUp, Loader2, Camera, ImagePlus, X, ShieldCheck, BarChart3 } from "lucide-react";
-import { computeFinance, computeSeries, rangeFor, inRange, etDate, endOfMonth, OVERVIEW_PERIODS, EXPENSE_CATEGORIES } from "@/lib/finance/core";
+import { computeFinance, computeSeries, rangeFor, inRange, etDate, endOfMonth, OVERVIEW_PERIODS, EXPENSE_CATEGORIES, MANUAL_EXPENSE_CATEGORIES } from "@/lib/finance/core";
 import InsightsTab from "@/components/finance/InsightsTab";
 import { useFinanceData, financeQueries } from "@/lib/finance/useFinanceData";
 // Note: Truck still used in MileageTab
@@ -365,7 +365,7 @@ function ExpensesTab({ expenses }) {
             <Label className="text-xs">Category</Label>
             <Select value={form.category} onValueChange={v => setForm(f => ({...f, category: v}))}>
               <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
-              <SelectContent>{EXPENSE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <SelectContent>{MANUAL_EXPENSE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
           </div>
 

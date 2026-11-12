@@ -137,6 +137,9 @@ export const paidViaLabel = (v) => PAID_VIA.find(p => p.value === v)?.label || "
 // Stripe webhook (Run 13, Part F). Shown as its own line, and counted in expenses.
 export const CARD_FEES_CATEGORY = "Card processing fees";
 export const EXPENSE_CATEGORIES = ["Parts & Supplies", "Fuel", "Tools & Equipment", "Insurance", "Marketing", "Professional Services", "Vehicle", "Software & Subscriptions", CARD_FEES_CATEGORY, "Other"];
+// Categories a person can pick by hand. Card fees are recorded automatically from Stripe, so they are
+// left out here (no double counting) but still show in reports, filters and By Category.
+export const MANUAL_EXPENSE_CATEGORIES = EXPENSE_CATEGORIES.filter(c => c !== CARD_FEES_CATEGORY);
 
 // The service type a paid invoice's revenue counts under.
 export function revenueType(invoice, job) {

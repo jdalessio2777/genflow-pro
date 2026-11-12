@@ -143,3 +143,12 @@ describe('month labels', () => {
     expect(l[0]).toBe('Oct ’25'); expect(l[l.length - 1]).toBe('Oct ’26')
   })
 })
+
+import { EXPENSE_CATEGORIES as ALL_CATS, MANUAL_EXPENSE_CATEGORIES, CARD_FEES_CATEGORY as FEES } from '../lib/finance/core'
+describe('manual expense categories', () => {
+  it('leave out Card processing fees (recorded automatically), keep everything else in order', () => {
+    expect(MANUAL_EXPENSE_CATEGORIES).not.toContain(FEES)
+    expect(ALL_CATS).toContain(FEES)
+    expect(MANUAL_EXPENSE_CATEGORIES).toEqual(ALL_CATS.filter(c => c !== FEES))
+  })
+})
