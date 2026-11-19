@@ -6,7 +6,7 @@ import { SURCHARGE_DEFAULTS, surchargeLabel } from './utils/surcharge.js'
 import { escapeHtml, multilineHtml, safeImageSrc } from './utils/escapeHtml.js'
 import { formatEstimate, estimateMinutes } from './jobDuration.js'
 import { SERVICE_TYPES } from './jobTypes.js'
-import { generatorLine } from './generatorInfo.js'
+import { generatorLine, customerAtJobAddress } from './generatorInfo.js'
 import { techsLabel, isSharedJob } from './jobTechs.js'
 import { windowLabel, hasArrivalWindow } from './arrivalWindow.js'
 export { escapeHtml, multilineHtml, safeImageSrc }
@@ -307,8 +307,9 @@ export function quoteEmailHTML({ customer, job, lineItems = [], subtotal = 0, ta
 }
 
 export function confirmationEmailHTML({ customer, job, use24h = false }) {
-  customer = customer || {}
   job = job || {}
+  // The address printed is the job's service address (Run 14, A).
+  customer = customerAtJobAddress(customer || {}, job)
   const visitDate = fmtDate(job.scheduled_date)
   const arrivalTime = fmtTime(job.scheduled_date, use24h)
   const arrivalWindow = windowLabel(job, use24h)
@@ -435,8 +436,8 @@ export function confirmationEmailHTML({ customer, job, use24h = false }) {
 }
 
 export function completionEmailHTML({ customer, job, parts = [], labor = [], documents = [], includeChecklist = true }) {
-  customer = customer || {}
   job = job || {}
+  customer = customerAtJobAddress(customer || {}, job)
   const generatorInfo = escapeHtml(generatorLine(customer, job))
   const jobTitle = String(job.title ?? '').trim()
   const jobDesc = String(job.customer_description ?? '').trim()
@@ -580,6 +581,8 @@ export function serviceNotesHTML(notes) {
 }
 
 export function invoiceSummaryHTML({ invoice, customer, job = null, surchargeConfig = SURCHARGE_DEFAULTS }) {
+  // A job invoice prints the job's service address (Run 14, A).
+  customer = customerAtJobAddress(customer, job)
   // $0.00 invoices (exact, integer cents — see isZeroDollarInvoice) get their
   // own rendering with no paid/unpaid/payment-due language. Every invoice
   // > $0 (and every negative-total invoice) falls through to the original
@@ -785,6 +788,7 @@ export function combineEmailSections(bodyParts) {
 // totals, notes, signature) but no PAID / PAYMENT DUE line or box anywhere.
 // Line items flagged no_charge (charge_for_part:false parts) show "No charge".
 function zeroDollarInvoiceSummaryHTML({ invoice, customer, job = null }) {
+  customer = customerAtJobAddress(customer, job)
   const lineItemsHTML = (invoice.line_items || []).map((item, i) => `
     <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
       <td style="padding:9px 12px;font-size:13px;">${escapeHtml(item.description)}</td>

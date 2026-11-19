@@ -22,8 +22,10 @@ import { formatDate } from "@/lib/utils/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   generatorFor, generatorsOf, generatorSummary, generatorFieldValue, generatorChanges, generatorPatch,
-  GENERATOR_FIELD_IDS, MAIN_GENERATOR_ID,
+  GENERATOR_FIELD_IDS, MAIN_GENERATOR_ID, jobAddress, serviceAddressFor,
 } from "@/lib/generatorInfo";
+import { withServiceAddress } from "@/lib/jobEstimateColumn";
+import { syncJobToCalendar } from "@/lib/calendarSync";
 
 // ── Style constants ────────────────────────────────────────────────────────────
 
@@ -179,7 +181,7 @@ export default function DocumentFill() {
       customer_email:         customer.email,
       date_of_service:        new Date().toISOString().split("T")[0],
       // Legacy field IDs (old templates)
-      service_address:        customer.address,
+      service_address:        jobAddress(job, customer),
       service_date:           job.scheduled_date
         ? job.scheduled_date.split("T")[0]
         : new Date().toISOString().split("T")[0],
@@ -332,12 +334,14 @@ export default function DocumentFill() {
   const pickGenerator = async (generatorId) => {
     const nextId = generatorId === MAIN_GENERATOR_ID ? null : generatorId;
     try {
-      await db.Job.update(job.id, { generator_id: nextId });
+      // Re-booked at that generator's address (Run 14, A); the event follows.
+      const saved = await db.Job.update(job.id, await withServiceAddress({ generator_id: nextId }, serviceAddressFor(customer, nextId)));
+      if (saved?.calendar_event_id) syncJobToCalendar({ job: saved, customer });
+      queryClient.setQueryData(["doc-job", doc.job_id], { ...job, ...(saved || { generator_id: nextId }) });
     } catch (e) {
       toast.error(`Generator not changed: ${e.message}`);
       return;
     }
-    queryClient.setQueryData(["doc-job", doc.job_id], { ...job, generator_id: nextId });
     queryClient.invalidateQueries({ queryKey: ["job", job.id] });
     const picked = generatorFor(customer, { generator_id: nextId });
     setValues(prev => {

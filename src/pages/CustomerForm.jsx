@@ -232,6 +232,11 @@ export default function CustomerForm() {
               <Label className="text-xs">Name (shown when picking it for a visit)</Label>
               <Input value={gen.label || ""} placeholder="e.g. Pool house" onChange={e => updateExtra(gen.id, "label", e.target.value)} className="rounded-xl mt-1" />
             </div>
+            <div>
+              <Label className="text-xs">Service address (if not at the customer's address)</Label>
+              <Input value={gen.address || ""} placeholder="Blank = customer's address" onChange={e => updateExtra(gen.id, "address", e.target.value)} className="rounded-xl mt-1" data-testid={`gen${i + 2}-address`} />
+              <p className="text-xs text-muted-foreground mt-1">New jobs for this generator go here. Jobs already booked keep their address.</p>
+            </div>
             <GeneratorFields value={gen} onChange={(key, v) => updateExtra(gen.id, key, v)} testPrefix={`gen${i + 2}`} />
           </Card>
         ))}

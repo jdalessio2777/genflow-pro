@@ -4,8 +4,11 @@
 //
 // The customer row's generator_* columns are the MAIN generator. A customer with
 // more than one has the others in customers.extra_generators (JSON array of
-// { id, label, brand, kw, model, serial, install_date, cooling }). A job says
-// which one the visit is for in jobs.generator_id (empty = main).
+// { id, label, brand, kw, model, serial, install_date, cooling, address }). A job
+// says which one the visit is for in jobs.generator_id (empty = main).
+// An extra generator may sit at another property (Run 14, A): its `address`
+// (blank = the customer's address) is copied onto the job when it's booked
+// (jobs.service_address) and the job keeps it, see jobAddress().
 export const GENERATOR_BRANDS = ["Generac", "Kohler", "Briggs & Stratton", "Champion", "Cummins", "Honeywell", "Other"];
 export const COOLING_OPTIONS = ["Air-cooled", "Liquid-cooled"];
 export const MAIN_GENERATOR_ID = "main";
@@ -77,6 +80,7 @@ function readGenerator(raw, id, label) {
     serial: clean(raw.serial),
     install_date: dateOnly(raw.install_date),
     cooling: normalizeCooling(raw.cooling),
+    address: clean(raw.address),
   };
 }
 
@@ -84,6 +88,7 @@ function readGenerator(raw, id, label) {
 export function generatorsOf(customer) {
   const c = customer || {};
   const main = readGenerator({
+    // The main generator is always at the customer's own address.
     brand: c.generator_brand, kw: c.generator_kw, model: c.generator_model, serial: c.generator_serial,
     install_date: c.generator_install_date, cooling: c.generator_cooling,
   }, MAIN_GENERATOR_ID, "Main generator");
@@ -100,7 +105,40 @@ export function generatorFor(customer, job) {
 }
 
 export function hasGeneratorInfo(gen) {
-  return !!gen && !!(gen.brand || gen.kw || gen.model || gen.serial || gen.install_date || gen.cooling);
+  return !!gen && !!(gen.brand || gen.kw || gen.model || gen.serial || gen.install_date || gen.cooling || gen.address);
+}
+
+// ── where the visit is (Run 14, A) ────────────────────────────────────────────
+// What a new job (or a job switched to another generator) stores in
+// jobs.service_address: the generator's own address, or null = the customer's.
+export function serviceAddressFor(customer, generatorId) {
+  if (!generatorId || generatorId === MAIN_GENERATOR_ID) return null;
+  const extras = Array.isArray(customer?.extra_generators) ? customer.extra_generators : [];
+  const gen = extras.find((g) => g && String(g.id) === String(generatorId));
+  return clean(gen?.address) || null;
+}
+
+// The job's service address, for every screen, email, PDF and calendar event.
+//  - jobs.service_address set: that (the address it was booked with; editing
+//    the generator later never moves it).
+//  - column present but empty: the customer's address.
+//  - column not there yet (migration pending): the job's generator's address
+//    as it is now, else the customer's.
+export function jobAddress(job, customer) {
+  const own = clean(job?.service_address);
+  if (own) return own;
+  if (job && !("service_address" in job)) {
+    const live = serviceAddressFor(customer, job.generator_id);
+    if (live) return live;
+  }
+  return clean(customer?.address);
+}
+
+// The customer row with `address` = this job's service address, for the
+// templates and PDFs that print customer.address.
+export function customerAtJobAddress(customer, job) {
+  if (!customer || !job) return customer;
+  return { ...customer, address: jobAddress(job, customer) };
 }
 
 // "Generac 17kW" — "Other" is a form choice, not something to show a customer.
