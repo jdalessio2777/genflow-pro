@@ -1,4 +1,5 @@
 import DateField from "@/components/ui/DateField";
+import { isUnpaidInvoice } from "@/lib/utils/invoiceTotals";
 import { StoredImage, StoredFileLink } from "@/lib/storageUrls";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -47,7 +48,7 @@ function OverviewTab({ invoices, mileage, financeData }) {
   const mileageTotal = periodMileage.reduce((s, m) => s + (m.miles || 0), 0);
   const mileageDeduction = mileageTotal * IRS_RATE;
   const netProfit = f.net;
-  const outstandingInvoices = invoices.filter(i => i.status === "sent");
+  const outstandingInvoices = invoices.filter(isUnpaidInvoice); // one rule app-wide (Run 14, D)
   const outstanding = outstandingInvoices.reduce((s, i) => s + (i.total || 0), 0);
 
   const monthlyRevenue = computeSeries(financeData, rangeFor("custom", { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` })).points

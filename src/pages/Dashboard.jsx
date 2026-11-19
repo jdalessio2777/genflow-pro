@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isUnpaidInvoice } from "@/lib/utils/invoiceTotals";
 import { db } from "@/lib/db";
 import { customersListQuery, invoicesListQuery, jobsListQuery, partsCatalogQuery } from "@/lib/queries";
 import { stockStatus, stockAlertText } from "@/lib/utils/stockStatus";
@@ -196,7 +197,7 @@ export default function Dashboard() {
   const completedJobs = jobs.filter(j => j.status === "completed" || j.status === "invoiced");
   const totalRevenue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.total || 0), 0);
   const totalProfit = completedJobs.reduce((s, j) => s + (j.profit || 0), 0);
-  const unpaidInvoices = invoices.filter(i => i.status !== "paid" && i.status !== "draft");
+  const unpaidInvoices = invoices.filter(isUnpaidInvoice); // one rule app-wide (Run 14, D)
 
   const failedEmailJobs = jobs
     .filter(j => j.confirmation_send_failed || j.completion_send_failed)
