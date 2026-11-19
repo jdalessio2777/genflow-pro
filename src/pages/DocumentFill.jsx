@@ -452,6 +452,9 @@ export default function DocumentFill() {
             rows={5}
             disabled={locked}
             placeholder={field.placeholder || ""}
+            // The checklist is a white sheet in dark mode too: dark text like
+            // the other boxes on it (Run 14, C: notes were near-white on white).
+            className="bg-white text-[#111] border-[#ddd] placeholder:text-gray-500"
           />
         </div>
       );
