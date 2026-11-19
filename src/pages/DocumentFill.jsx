@@ -176,7 +176,8 @@ export default function DocumentFill() {
     const fillMap = {
       // New template field IDs
       customer_name:          customer.name,
-      customer_address:       customer.address,
+      // "Address" on every checklist = where the visit is (Run 14, A).
+      customer_address:       jobAddress(job, customer),
       customer_phone:         customer.phone,
       customer_email:         customer.email,
       date_of_service:        new Date().toISOString().split("T")[0],
