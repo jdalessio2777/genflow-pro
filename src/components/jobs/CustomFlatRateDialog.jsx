@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -12,15 +12,24 @@ import { formatCurrency } from "@/lib/utils/format";
 import { sanitizePriceInput, parsePriceDraft } from "@/lib/utils/catalogPrice";
 import { buildLaborLine, memberPrice } from "@/lib/utils/laborPricing";
 import { useAddJobLabor } from "@/lib/useAddJobLabor";
-import { CUSTOM_FLAT_CATEGORY, customFlatRateRow, customLineName, findCustomDuplicates } from "@/lib/utils/catalogItems";
+import { CUSTOM_FLAT_CATEGORY, customFlatRateRow, customLineName, findCustomDuplicates, customPartRow, findCustomPartDuplicates } from "@/lib/utils/catalogItems";
+import { CUSTOM_PART_CATEGORY } from "@/lib/utils/partsManaged";
+import { createOnce, newRequestId, showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
+import { haptics } from "@/lib/haptics";
 
-const blank = { name: "", price: "", description: "" };
+const blank = { name: "", price: "", description: "", kind: "labor" }; // kind: labor | part (Run 14, B)
 
 /**
  * "+ Custom flat rate" on a job: type a name, price and optional
- * description; it goes straight onto this job (member discount applied like
- * any catalog flat rate). Then: "Save this flat rate to the catalog?"
- *   Save          → a Flat Rate in the catalog's "Custom" folder
+ * description, and choose Labor (default) or Part; it goes straight onto this
+ * job (member discount applied like any catalog item).
+ *   Labor → a job_labor line (Labor on the invoice).
+ *   Part  → a job_parts line with no catalog link and no stock (Parts on the
+ *           invoice, taxed like any part).
+ * Then: "Save to the catalog?"
+ *   Save          → Labor: a Flat Rate in Flat Rates › Custom
+ *                   Part:  a part in Parts › Custom (no stock tracking, never in
+ *                          low-stock alerts)
  *                   (same name already there → update its price, or keep both)
  *   Just this job → only on this job's invoice
  */
@@ -31,7 +40,27 @@ export default function CustomFlatRateDialog({ open, onOpenChange, jobId, member
   const [added, setAdded] = useState(null); // { name, price, description }
   const [dups, setDups] = useState([]);
   const [busy, setBusy] = useState(false);
-  const { add, busy: adding } = useAddJobLabor(jobId);
+  const { add, busy: addingLabor } = useAddJobLabor(jobId);
+  // Part lines: one add at a time, fixed id so a Retry can't add it twice.
+  const partGuard = useSaveGuard();
+  const pendingPart = useRef(null);
+  const adding = addingLabor || partGuard.busy;
+  const addPartLine = (line, label) => partGuard.run(async function attempt() {
+    const key = JSON.stringify(line);
+    if (!pendingPart.current || pendingPart.current.key !== key) pendingPart.current = { key, id: newRequestId() };
+    try {
+      const row = await createOnce(db.JobPart, pendingPart.current.id, line);
+      pendingPart.current = null;
+      dismissSaveError("", { id: "add-custom-part-error" });
+      queryClient.invalidateQueries({ queryKey: ["job-parts", jobId] });
+      toast.success(`${label} added`);
+      return row;
+    } catch (e) {
+      haptics.error();
+      showSaveError(`"${label}" NOT added`, e, () => partGuard.run(attempt), { id: "add-custom-part-error" });
+      return null;
+    }
+  });
 
   useEffect(() => {
     if (open) { setForm(blank); setStep("form"); setAdded(null); setDups([]); setBusy(false); }
@@ -43,20 +72,33 @@ export default function CustomFlatRateDialog({ open, onOpenChange, jobId, member
   const addToJob = async () => {
     if (!form.name.trim()) { toast.error("Enter a name"); return; }
     if (price === null) { toast.error("Enter a price like 250 or 250.50"); return; }
-    const entry = { name: form.name.trim(), price, description: form.description.trim() };
-    const rate = { type: "flat_rate", category: CUSTOM_FLAT_CATEGORY, name: customLineName(entry), flat_price: price, flat_cost: 0 };
-    const row = await add(buildLaborLine({ rate, jobId, memberDiscountRate }), entry.name);
+    const entry = { name: form.name.trim(), price, description: form.description.trim(), kind: form.kind };
+    let row;
+    if (form.kind === "part") {
+      const unit = memberPrice(price, memberDiscountRate);
+      row = await addPartLine({
+        job_id: jobId, name: customLineName(entry), part_number: null, description: null,
+        cost: 0, price: unit, quantity: 1, part_id: null, charge_for_part: true,
+        total_cost: 0, total_price: unit,
+      }, entry.name);
+    } else {
+      const rate = { type: "flat_rate", category: CUSTOM_FLAT_CATEGORY, name: customLineName(entry), flat_price: price, flat_cost: 0 };
+      row = await add(buildLaborLine({ rate, jobId, memberDiscountRate }), entry.name);
+    }
     if (!row) return; // add failed: the save-error toast has Retry; keep the form
     setAdded(entry);
     setStep("ask");
   };
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["labor-rates"] });
+  const isPart = added?.kind === "part";
+  const where = isPart ? "Parts › Custom" : "Flat Rates › Custom";
+  const refresh = () => queryClient.invalidateQueries({ queryKey: [isPart ? "parts-catalog" : "labor-rates"] });
 
   const createInCatalog = async () => {
-    await db.LaborRate.create(customFlatRateRow(added));
+    if (isPart) await db.Part.create(customPartRow(added));
+    else await db.LaborRate.create(customFlatRateRow(added));
     refresh();
-    toast.success(`"${added.name}" saved to Catalog › Flat Rates › Custom`);
+    toast.success(`"${added.name}" saved to Catalog › ${where}`);
     onOpenChange(false);
   };
 
@@ -69,13 +111,16 @@ export default function CustomFlatRateDialog({ open, onOpenChange, jobId, member
   };
 
   const onSave = () => run(async () => {
-    const existing = findCustomDuplicates(await db.LaborRate.filter({ category: CUSTOM_FLAT_CATEGORY }), added.name);
+    const existing = isPart
+      ? findCustomPartDuplicates(await db.Part.filter({ category: CUSTOM_PART_CATEGORY }), added.name)
+      : findCustomDuplicates(await db.LaborRate.filter({ category: CUSTOM_FLAT_CATEGORY }), added.name);
     if (existing.length > 0) { setDups(existing); setStep("duplicate"); return; }
     await createInCatalog();
   });
 
   const updateExisting = (row) => run(async () => {
-    await db.LaborRate.update(row.id, { flat_price: added.price, is_hidden: false, ...(added.description ? { notes: added.description } : {}) });
+    if (isPart) await db.Part.update(row.id, { default_price: added.price, is_hidden: false, ...(added.description ? { description: added.description } : {}) });
+    else await db.LaborRate.update(row.id, { flat_price: added.price, is_hidden: false, ...(added.description ? { notes: added.description } : {}) });
     refresh();
     toast.success(`"${row.name}" price updated to ${formatCurrency(added.price)} for future jobs`);
     onOpenChange(false);
@@ -94,6 +139,18 @@ export default function CustomFlatRateDialog({ open, onOpenChange, jobId, member
               <div>
                 <Label className="text-xs" htmlFor="cfr-name">Name *</Label>
                 <Input id="cfr-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1 h-11 rounded-xl text-base" placeholder="e.g. Replace fuel regulator" />
+              </div>
+              <div>
+                <Label className="text-xs">Goes on the invoice as</Label>
+                <div className="grid grid-cols-2 gap-2 mt-1" role="radiogroup" aria-label="Goes on the invoice as">
+                  {[["labor", "Labor"], ["part", "Part"]].map(([k, label]) => (
+                    <button key={k} type="button" role="radio" aria-checked={form.kind === k} data-testid={`cfr-kind-${k}`}
+                      onClick={() => setForm(f => ({ ...f, kind: k }))}
+                      className={`h-11 rounded-xl border text-sm font-semibold transition-colors ${form.kind === k ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <Label className="text-xs" htmlFor="cfr-price">Price *</Label>
@@ -120,9 +177,9 @@ export default function CustomFlatRateDialog({ open, onOpenChange, jobId, member
 
         {step === "ask" && added && (
           <>
-            <DialogHeader><DialogTitle>Save this flat rate to the catalog?</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{isPart ? "Save this part to the catalog?" : "Save this flat rate to the catalog?"}</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">"{added.name}" ({formatCurrency(added.price)}) is on this job. Save it under Flat Rates › Custom to use it again?</p>
+              <p className="text-sm text-muted-foreground">"{added.name}" ({formatCurrency(added.price)}) is on this job{isPart ? " as a part" : ""}. Save it under {where} to use it again?{isPart ? " Custom parts have no stock tracking." : ""}</p>
               <Button className="w-full h-11 rounded-xl font-semibold" onClick={onSave} disabled={busy} data-testid="cfr-save">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
               </Button>
@@ -136,7 +193,7 @@ export default function CustomFlatRateDialog({ open, onOpenChange, jobId, member
             <DialogHeader><DialogTitle>Already in the catalog</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                A custom flat rate named "{dups[0].name}" is already saved at {formatCurrency(dups[0].flat_price)}{dups[0].is_hidden ? " (hidden)" : ""}.
+                A custom {isPart ? "part" : "flat rate"} named "{dups[0].name}" is already saved at {formatCurrency(isPart ? dups[0].default_price : dups[0].flat_price)}{dups[0].is_hidden ? " (hidden)" : ""}.
               </p>
               <Button className="w-full h-11 rounded-xl font-semibold" onClick={() => updateExisting(dups[0])} disabled={busy} data-testid="cfr-update-price">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : `Update its price to ${formatCurrency(added.price)}`}

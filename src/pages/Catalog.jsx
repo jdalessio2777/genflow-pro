@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Package, Clock, Zap, Search, ChevronRight, Wrench, Loader2, X, FileText, BadgePercent, EyeOff } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
-import { firstManagedPatch, isManaged } from "@/lib/utils/partsManaged";
+import { firstManagedPatch, isManaged, isStockTracked } from "@/lib/utils/partsManaged";
 import { resolveBulkCommit, stockUpdatePatch } from "@/lib/utils/stockDraft";
 import StockCountInput from "@/components/catalog/StockCountInput";
 import StockEditor from "@/components/catalog/StockEditor";
@@ -64,7 +64,8 @@ const FLAT_RATE_FOLDERS = [
 
 /** Main parts grid: primary rows + flat-rate-style categories (deduped by key). */
 const CATALOG_PART_BROWSE_ROWS = (() => {
-  const byKey = new Map();
+  // Run 14 (B): custom parts saved from a job's custom flat rate (no stock).
+  const byKey = new Map([["custom", { key: "custom", label: "Custom", icon: "✏️" }]]);
   for (const c of PART_CATEGORIES) {
     if (c.key === "other") continue;
     byKey.set(c.key, c);
@@ -134,7 +135,7 @@ function PartsCategoryList({ parts, loading, onSelectCategory }) {
     );
   }
   const knownKeys = ALL_CATALOG_PART_KEYS;
-  const reorderParts = parts.filter(p => p.reorder_flagged && isManaged(p));
+  const reorderParts = parts.filter(p => p.reorder_flagged && isManaged(p) && isStockTracked(p));
   return (
     <div className="space-y-2">
       {reorderParts.length > 0 && (
@@ -254,7 +255,8 @@ function PartsItemList({ category, parts }) {
       {items.length === 0 ? <EmptyState icon={Package} title={`No ${category.label} yet`} description="Tap + to add one" /> : (
         <div className="space-y-2">
           {items.map(part => {
-            const st = stockStatus(part.in_stock);
+            const tracked = isStockTracked(part);
+            const st = tracked ? stockStatus(part.in_stock) : "ok";
             const isRecount = st === "recount";
             const isOut = st === "out";
             const isLow = st === "low";
@@ -266,7 +268,7 @@ function PartsItemList({ category, parts }) {
                     {part.part_number && <p className="text-xs text-muted-foreground">#{part.part_number}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {bulkEdit && (
+                    {bulkEdit && tracked && (
                       <div className="flex flex-col items-center min-w-[64px]">
                         <StockCountInput
                           aria-label={`Count for ${part.name}`}
@@ -281,7 +283,8 @@ function PartsItemList({ category, parts }) {
                   </div>
                 </div>
                 {!bulkEdit && <PriceEditor kind="part" item={part} onDirtyChange={(d) => markDirty(`price:${part.id}`, d)} />}
-                {!bulkEdit && <StockEditor part={part} onSave={(n) => saveStock(part, n)} onDirtyChange={(d) => markDirty(`stock:${part.id}`, d)} />}
+                {!bulkEdit && tracked && <StockEditor part={part} onSave={(n) => saveStock(part, n)} onDirtyChange={(d) => markDirty(`stock:${part.id}`, d)} />}
+                {!tracked && <p className="text-xs text-muted-foreground mt-1" data-testid="no-stock-tracking">No stock tracking</p>}
               </Card>
             );
           })}

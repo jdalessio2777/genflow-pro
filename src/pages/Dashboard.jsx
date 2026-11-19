@@ -17,7 +17,7 @@ import { sortJobs, isJobOverdue, etDateKey } from "@/lib/utils/jobSort";
 import { splitActive } from "@/lib/jobWindows";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
-import { isManaged } from "@/lib/utils/partsManaged";
+import { isManaged, isStockTracked } from "@/lib/utils/partsManaged";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -150,7 +150,7 @@ export default function Dashboard() {
 
   const { data: parts = [] } = useQuery(partsCatalogQuery());
   // Includes parts needing a recount (stock below 0) — see stockAlertText.
-  const lowStockParts = parts.filter(p => !p.is_hidden && (stockStatus(p.in_stock) === "recount" ||
+  const lowStockParts = parts.filter(p => !p.is_hidden && isStockTracked(p) && (stockStatus(p.in_stock) === "recount" ||
     (isManaged(p) && (["out", "low"].includes(stockStatus(p.in_stock)) || p.reorder_flagged)))
   );
 
