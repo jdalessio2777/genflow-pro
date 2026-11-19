@@ -17,6 +17,7 @@ import { sortJobs, isJobOverdue, isClosedJob } from "@/lib/utils/jobSort";
 import { serviceHistoryDocumentHtml } from "@/lib/serviceHistory";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import GeneratorAddress from "@/components/customers/GeneratorAddress";
 
 export default function CustomerDetail() {
   const { id } = useParams();
@@ -248,7 +249,7 @@ export default function CustomerDetail() {
         </div>
 
         {/* Generator info */}
-        {generators.map(gen => hasGeneratorInfo(gen) && (
+        {generators.map(gen => (hasGeneratorInfo(gen) || gen.id !== MAIN_GENERATOR_ID) && (
           <Card key={gen.id} className="p-4" data-testid="customer-generator">
             <h3 className="text-sm font-semibold mb-2">{generators.length > 1 ? gen.label : "Generator"}</h3>
             <div className="space-y-1 text-sm">
@@ -258,6 +259,8 @@ export default function CustomerDetail() {
               {gen.serial && <p><span className="text-muted-foreground">Serial #:</span> {gen.serial}</p>}
               {gen.install_date && <p><span className="text-muted-foreground">Installed:</span> {installDateLabel(gen.install_date)}</p>}
               {gen.cooling && <p><span className="text-muted-foreground">Cooling:</span> {gen.cooling}</p>}
+              {/* Run 14 (A): an added generator can be at another property. */}
+              {gen.id !== MAIN_GENERATOR_ID && <GeneratorAddress key={gen.address} customer={customer} gen={gen} />}
               {gen.id === MAIN_GENERATOR_ID && customer.service_interval && (customer.last_service_date || customer.generator_install_date) && (() => {
                 const intervalMonths = customer.service_interval === "6_months" ? 6 : customer.service_interval === "24_months" ? 24 : 12;
                 const lastDate = new Date(customer.last_service_date || customer.generator_install_date);

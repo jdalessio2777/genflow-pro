@@ -10,7 +10,7 @@
 // else (a generic task, another job's event) is never modified or deleted.
 import { estimateMinutes } from "@/lib/jobDuration";
 import { calendarEndMs, windowLabel } from "@/lib/arrivalWindow";
-import { generatorLine } from "@/lib/generatorInfo";
+import { generatorLine, jobAddress } from "@/lib/generatorInfo";
 import { techsLabel, jobTechs, isSharedJob } from "@/lib/jobTechs";
 
 export const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -76,7 +76,7 @@ export function buildEvent(job, customer) {
   return {
     summary: `${type} — ${customerName} (${techFirstName(job)})`,
     description,
-    location: customer?.address || "",
+    location: jobAddress(job, customer),
     start: { dateTime: start.toISOString(), timeZone: TIME_ZONE },
     end: { dateTime: end.toISOString(), timeZone: TIME_ZONE },
     colorId: techColorId(job),

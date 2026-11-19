@@ -1,6 +1,6 @@
 // Completed service checklist (job_documents row) -> PDF bytes.
 import { createDoc, BRAND, PAGE, fmtDateLong, safeFilename } from './common.js';
-import { generatorLine, GENERATOR_FIELD_IDS, generatorFor } from '../../../src/lib/generatorInfo.js';
+import { generatorLine, GENERATOR_FIELD_IDS, generatorFor, jobAddress } from '../../../src/lib/generatorInfo.js';
 
 // The checklist's own generator values when it has them, so a later correction to
 // the customer's record never changes what an old checklist showed (A4). Older
@@ -53,7 +53,7 @@ export async function buildChecklistPdf({ doc, customer, job }) {
   L.heading(title, { size: 16 });
   L.infoBox([
     ['Customer', customer?.name],
-    ['Service Address', customer?.address],
+    ['Service Address', jobAddress(job, customer)],
     ['Generator', checklistGeneratorLine(doc, customer, job)],
     ['Job', job?.title],
     // Customer-facing job description only — never job notes.

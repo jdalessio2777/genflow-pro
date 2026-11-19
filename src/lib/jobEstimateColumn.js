@@ -38,3 +38,37 @@ export async function withEstimate(payload, minutes) {
   return (await hasEstimateColumn()) ? { ...payload, estimated_minutes: Math.round(Number(minutes)) } : payload;
 }
 
+
+// ── Does jobs.service_address exist yet? (Run 14, A) ─────────────────────
+// From .qa-scratch/run14/A-job-service-address.sql. Same probe as above. Until
+// it is applied, saves leave the column out and jobAddress() falls back to the
+// job's generator's current address (src/lib/generatorInfo.js).
+let addressProbe = null;
+export function hasServiceAddressColumn() {
+  if (addressProbe) return addressProbe;
+  addressProbe = (async () => {
+    try {
+      const { supabase } = await import("@/lib/supabaseClient");
+      const row = await supabase.from("jobs").select("*").limit(1);
+      if (!row.error && row.data?.length) return "service_address" in row.data[0];
+      const { error } = await supabase.from("jobs").select("service_address").limit(0);
+      if (!error) return true;
+      const missing = error.code === "42703" || /service_address/.test(error.message || "");
+      if (!missing) addressProbe = null;
+      return false;
+    } catch {
+      addressProbe = null;
+      return false;
+    }
+  })();
+  return addressProbe;
+}
+export function __setServiceAddressColumnForTests(value) {
+  addressProbe = value == null ? null : Promise.resolve(!!value);
+}
+
+// Adds service_address (the generator's own address, or null = the
+// customer's) to a jobs payload, only when the column exists.
+export async function withServiceAddress(payload, serviceAddress) {
+  return (await hasServiceAddressColumn()) ? { ...payload, service_address: serviceAddress || null } : payload;
+}

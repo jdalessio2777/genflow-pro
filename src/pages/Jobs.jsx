@@ -24,6 +24,7 @@ import { sortJobs, isJobOverdue } from "@/lib/utils/jobSort";
 import { splitActive, UPCOMING_AFTER_DAYS } from "@/lib/jobWindows";
 import { jobTimeLabel } from "@/lib/arrivalWindow";
 import { jobTechs, jobIsFor, techsLabel } from "@/lib/jobTechs";
+import { jobAddress } from "@/lib/generatorInfo";
 
 function formatJobDate(job, use24h = false) {
   if (!job?.scheduled_date) return null;
@@ -232,11 +233,11 @@ export default function Jobs() {
                       color: "bg-green-500",
                       onAction: () => { window.location.href = "tel:" + customerMap[job.customer_id].phone; },
                     }] : []),
-                    ...(customerMap[job.customer_id]?.address ? [{
+                    ...(jobAddress(job, customerMap[job.customer_id]) ? [{
                       label: "Nav",
                       icon: <MapPin size={18} className="text-white" />,
                       color: "bg-blue-500",
-                      onAction: () => window.open("https://maps.apple.com/?address=" + encodeURIComponent(customerMap[job.customer_id].address)),
+                      onAction: () => window.open("https://maps.apple.com/?address=" + encodeURIComponent(jobAddress(job, customerMap[job.customer_id]))),
                     }] : []),
                   ]}
                 >
@@ -303,11 +304,11 @@ export default function Jobs() {
                       color: "bg-green-500",
                       onAction: () => { window.location.href = "tel:" + customerMap[job.customer_id].phone; },
                     }] : []),
-                    ...(customerMap[job.customer_id]?.address ? [{
+                    ...(jobAddress(job, customerMap[job.customer_id]) ? [{
                       label: "Nav",
                       icon: <MapPin size={18} className="text-white" />,
                       color: "bg-blue-500",
-                      onAction: () => window.open("https://maps.apple.com/?address=" + encodeURIComponent(customerMap[job.customer_id].address)),
+                      onAction: () => window.open("https://maps.apple.com/?address=" + encodeURIComponent(jobAddress(job, customerMap[job.customer_id]))),
                     }] : []),
                   ]}
                 >

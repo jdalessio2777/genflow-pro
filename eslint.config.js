@@ -38,6 +38,10 @@ export default [
       "no-unused-vars": "off",
       "react/jsx-uses-vars": "error",
       "react/jsx-uses-react": "error",
+      // Run 14: the rules block replaces the recommended set, so a component used
+      // without its import (JobDetail's Select, Run 12) went unnoticed.
+      "react/jsx-no-undef": "error",
+      "no-undef": "error", // JobDetail's On Site notice called formatTime without importing it
       "unused-imports/no-unused-imports": "error",
       "unused-imports/no-unused-vars": [
         "warn",

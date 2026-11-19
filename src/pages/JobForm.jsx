@@ -26,7 +26,8 @@ import { haptics } from "@/lib/haptics";
 import { newRequestId, createOnce, showSaveError, dismissSaveError } from "@/lib/saveSafety";
 import { afterJobScheduled } from "@/lib/jobCreate";
 import { DEFAULT_ESTIMATE_MINUTES, jobWithEstimate } from "@/lib/jobDuration";
-import { withEstimate } from "@/lib/jobEstimateColumn";
+import { withEstimate, withServiceAddress } from "@/lib/jobEstimateColumn";
+import { generatorsOf, generatorSummary, serviceAddressFor, jobAddress, MAIN_GENERATOR_ID } from "@/lib/generatorInfo";
 import { JOB_TYPES, SERVICE_TYPES, inferServiceType } from "@/lib/jobTypes";
 
 export default function JobForm() {
@@ -59,6 +60,9 @@ export default function JobForm() {
     assigned_to: "",
     assigned_to_name: "",
     assigned_techs: [],
+    // Which of the customer's generators (new jobs only; the job screen
+    // changes it later). "" = the main one.
+    generator_id: "",
   });
 
   // The appointment is edited here and only turned into scheduled_date +
@@ -137,7 +141,14 @@ export default function JobForm() {
     mutationFn: async ({ data }) => {
       const jobCustomer = await resolveCustomer(data.customer_id);
       // estimated_minutes only once its column exists (B2 migration).
-      const payload = await withEstimate(cleanPayload({ ...data, customer_name: jobCustomer.name }), data.estimated_minutes);
+      let payload = await withEstimate(cleanPayload({ ...data, customer_name: jobCustomer.name }), data.estimated_minutes);
+      if (!isEdit) {
+        // Run 14 (A): a job for a generator at another property is booked at
+        // that address and keeps it (jobs.service_address).
+        const generatorId = data.generator_id && data.generator_id !== MAIN_GENERATOR_ID ? data.generator_id : null;
+        payload = { ...payload, generator_id: generatorId };
+        payload = await withServiceAddress(payload, serviceAddressFor(jobCustomer, generatorId));
+      }
       const savedJob = isEdit
         ? await db.Job.update(id, payload)
         : await createOnce(db.Job, createIds.current.job, payload);
@@ -200,8 +211,10 @@ export default function JobForm() {
     // wipe the job's customer (found in batch-1 verification on slow signal).
     if (!customerId) return;
     const c = customers.find(c => c.id === customerId);
-    setForm(prev => ({ ...prev, customer_id: customerId, customer_name: c?.name || "" }));
+    setForm(prev => ({ ...prev, customer_id: customerId, customer_name: c?.name || "", ...(prev.customer_id !== customerId ? { generator_id: "" } : {}) }));
   };
+  const selectedCustomer = customers.find(c => c.id === form.customer_id);
+  const customerGenerators = generatorsOf(selectedCustomer);
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -244,6 +257,22 @@ export default function JobForm() {
               </SelectContent>
             </Select>
           </div>
+          {/* Run 14 (A): a customer with more than one generator picks which
+              one this visit is for; its address is where the job is. */}
+          {!isEdit && customerGenerators.length > 1 && (
+            <div data-testid="new-job-generator">
+              <Label className="text-xs">Generator for this visit</Label>
+              <Select value={form.generator_id || MAIN_GENERATOR_ID} onValueChange={v => update("generator_id", v === MAIN_GENERATOR_ID ? "" : v)}>
+                <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {customerGenerators.map(g => <SelectItem key={g.id} value={g.id}>{[g.label, generatorSummary(g)].filter(Boolean).join(" — ")}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {jobAddress({ service_address: serviceAddressFor(selectedCustomer, form.generator_id) }, selectedCustomer) && (
+                <p className="text-xs text-muted-foreground mt-1" data-testid="new-job-address">Service address: {jobAddress({ service_address: serviceAddressFor(selectedCustomer, form.generator_id) }, selectedCustomer)}</p>
+              )}
+            </div>
+          )}
           <div>
             <Label className="text-xs">Title *</Label>
             <Input value={form.title} onChange={e => updateTitle(e.target.value)} className="rounded-xl mt-1" placeholder="e.g. Annual maintenance" />

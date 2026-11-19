@@ -12,6 +12,7 @@ import { jobTimeLabel } from "@/lib/arrivalWindow";
 import { jobIsFor, techsLabel } from "@/lib/jobTechs";
 import { usePreferences } from "@/hooks/usePreferences";
 import { sortJobs, etDateKey } from "@/lib/utils/jobSort";
+import { jobAddress } from "@/lib/generatorInfo";
 
 export default function RouteMap() {
   const [selectedDate, setSelectedDate] = useState(() => etDateKey(new Date()));
@@ -31,10 +32,11 @@ export default function RouteMap() {
       return true;
     }));
 
-  const jobsWithAddress = todayJobs.filter(j => customerMap[j.customer_id]?.address);
+  // Each job's own service address (Run 14, A): a second generator can be at another property.
+  const jobsWithAddress = todayJobs.filter(j => jobAddress(j, customerMap[j.customer_id]));
 
   const openGoogleMapsRoute = () => {
-    const addresses = jobsWithAddress.map(j => encodeURIComponent(customerMap[j.customer_id].address));
+    const addresses = jobsWithAddress.map(j => encodeURIComponent(jobAddress(j, customerMap[j.customer_id])));
     if (addresses.length === 0) return;
     if (addresses.length === 1) {
       window.open(`https://maps.google.com/?q=${addresses[0]}`, "_blank");
@@ -117,18 +119,18 @@ export default function RouteMap() {
                           {jobTimeLabel(job, use24h)}
                         </span>
                       </div>
-                      {cust?.address && (
+                      {jobAddress(job, cust) && (
                         <div className="flex items-center justify-between mt-1.5">
                           <p className="text-xs text-muted-foreground flex items-center gap-1 truncate mr-2">
                             <MapPin className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{cust.address}</span>
+                            <span className="truncate">{jobAddress(job, cust)}</span>
                           </p>
-                          <button onClick={() => openSingleAddress(cust.address)} className="relative hit-44 text-primary shrink-0" aria-label="Open in Maps">
+                          <button onClick={() => openSingleAddress(jobAddress(job, cust))} className="relative hit-44 text-primary shrink-0" aria-label="Open in Maps">
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       )}
-                      {!cust?.address && <p className="text-xs text-amber-600 mt-1">⚠ No address on file</p>}
+                      {!jobAddress(job, cust) && <p className="text-xs text-amber-600 mt-1">⚠ No address on file</p>}
                       {job.estimated_duration && (
                         <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                           <Clock className="w-3 h-3" /> Est. {job.estimated_duration}h

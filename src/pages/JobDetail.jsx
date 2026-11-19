@@ -16,6 +16,8 @@ import { afterSheetsClose } from "@/lib/sheetHistory";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatTime } from "@/lib/formatTime";
 import { Pencil, Check, X, FileText, Loader2, CheckCircle2, XCircle, Receipt, ChevronRight, ChevronDown, MapPin, DollarSign, Navigation, ArrowLeft, Plus, Trash2, Search, User, Package, RefreshCw, AlertTriangle } from "lucide-react";
 import CallButtons from "@/components/ui/CallButtons";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -31,7 +33,8 @@ import { TAX_RATE, computeJobFinancials, partChargeTotal } from "@/lib/utils/job
 import ArrivalWindowPicker from "@/components/jobs/ArrivalWindowPicker";
 import { techsLabel } from "@/lib/jobTechs";
 import { appointmentFromPicker, hasArrivalWindow, jobTimeLabel, windowLabel, emptyPicker, etParts } from "@/lib/arrivalWindow";
-import { generatorFor, generatorsOf, generatorSummary, hasGeneratorInfo, installDateLabel, MAIN_GENERATOR_ID } from "@/lib/generatorInfo";
+import { generatorFor, generatorsOf, generatorSummary, hasGeneratorInfo, installDateLabel, MAIN_GENERATOR_ID, jobAddress, serviceAddressFor } from "@/lib/generatorInfo";
+import { withServiceAddress } from "@/lib/jobEstimateColumn";
 import { sortJobs } from "@/lib/utils/jobSort";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "sonner";
@@ -256,6 +259,24 @@ export default function JobDetail() {
   const { data: customer } = useQuery({ ...jobCustomerQuery(job?.customer_id), queryFn: () => jobSlice(id, "customer", jobCustomerQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
   const customerGenerators = generatorsOf(customer);
   const jobGenerator = generatorFor(customer, job);
+  // Where this visit is (Run 14, A): the address the job was booked with.
+  const serviceAddress = jobAddress(job, customer);
+
+  // Switching the visit to another generator re-books it at that generator's
+  // address, and moves the calendar event there.
+  const changeGenerator = useMutation({
+    mutationFn: async (value) => {
+      const generatorId = value === MAIN_GENERATOR_ID ? null : value;
+      const patch = await withServiceAddress({ generator_id: generatorId }, serviceAddressFor(customer, generatorId));
+      return db.Job.update(id, patch);
+    },
+    onSuccess: (saved) => {
+      queryClient.invalidateQueries({ queryKey: ["job", id] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      if (saved?.calendar_event_id) syncJobToCalendar({ job: saved, customer }); // never throws or blocks
+    },
+    onError: (e) => toast.error(`Generator not changed: ${e.message}`),
+  });
 
   const { data: customerHistory = [] } = useQuery({ ...customerHistoryQuery(job?.customer_id), queryFn: () => jobSlice(id, "customerHistory", customerHistoryQuery(job?.customer_id).queryFn), enabled: !!job?.customer_id });
   const previousJobs = sortJobs(customerHistory
@@ -533,10 +554,10 @@ export default function JobDetail() {
     }
     const triggeredBy = getUserDisplayName(user);
     if (newStatus === "dispatched") {
-      notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned")])}`, triggeredBy });
+      notifyTeam({ subject: `Tech Dispatched — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Dispatched", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", serviceAddress), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned")])}`, triggeredBy });
     }
     if (newStatus === "on_site") {
-      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", customer?.address), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned"), buildRow("Arrived", formatTime(new Date(), use24h))])}`, triggeredBy });
+      notifyTeam({ subject: `On Site — ${job.title} · ${job.customer_name}`, body: `${buildEventBadge("Arrived On Site", "amber")}${buildTable([buildRow("Customer", job.customer_name), buildRow("Address", serviceAddress), buildRow("Job", job.title), buildRow("Tech", techsLabel(job) || "Unassigned"), buildRow("Arrived", formatTime(new Date(), use24h))])}`, triggeredBy });
     }
     if (newStatus === "completed") {
       const { partsPrice, laborPrice } = getJobTotals();
@@ -1214,8 +1235,8 @@ export default function JobDetail() {
                         <p className="text-sm font-bold text-foreground">{job.customer_name}</p>
                         <RewardBadge show={customer?.pending_reward} />
                       </div>
-                      {customer?.address && (
-                        <p className="text-xs text-muted-foreground truncate">{customer.address}</p>
+                      {serviceAddress && (
+                        <p className="text-xs text-muted-foreground truncate" data-testid="job-service-address">{serviceAddress}</p>
                       )}
                     </div>
                   </div>
@@ -1250,7 +1271,7 @@ export default function JobDetail() {
                       <div data-testid="job-generator-picker">
                         <Label className="text-xs">Generator for this visit</Label>
                         <Select value={jobGenerator.id} disabled={isClosed}
-                          onValueChange={v => updateJob.mutate({ generator_id: v === MAIN_GENERATOR_ID ? null : v })}>
+                          onValueChange={v => changeGenerator.mutate(v)}>
                           <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {customerGenerators.map(g => <SelectItem key={g.id} value={g.id}>{[g.label, generatorSummary(g)].filter(Boolean).join(" — ")}</SelectItem>)}
@@ -1292,8 +1313,8 @@ export default function JobDetail() {
                       {customer?.phone && (
                         <CallButtons phone={customer.phone} />
                       )}
-                      {customer?.address && (
-                        <a href={`https://maps.google.com/?q=${encodeURIComponent(customer.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+                      {serviceAddress && (
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(serviceAddress)}`} target="_blank" rel="noopener noreferrer" className="flex-1">
                           <button className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300">
                             <MapPin className="w-3.5 h-3.5" /> Directions
                           </button>
@@ -2349,12 +2370,14 @@ export default function JobDetail() {
               let nextJob;
               try {
                 // Fixed id: a double tap or a Retry can't create a second job (A-05).
-                nextJob = await createOnce(db.Job, scheduleNextId.current, {
+                // Same generator as this visit, booked at its address (Run 14, A).
+                nextJob = await createOnce(db.Job, scheduleNextId.current, await withServiceAddress({
                   customer_id: job.customer_id, customer_name: job.customer_name,
                   title: job.title, job_type: "maintenance", status: "scheduled",
+                  generator_id: job.generator_id || null,
                   ...nextAppointment,
                   notes: `Auto-scheduled following service on ${new Date().toLocaleDateString()}`,
-                });
+                }, serviceAddressFor(customer, job.generator_id)));
               } catch (e) {
                 haptics.error();
                 showSaveError("Next service NOT scheduled", e, () => scheduleNextGuard.run(scheduleIt), { id: "schedule-next-error" });
