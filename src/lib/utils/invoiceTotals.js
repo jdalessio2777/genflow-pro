@@ -86,3 +86,26 @@ export function sameLineItems(a, b) {
   const x = (a || []).map(canon).sort(); const y = (b || []).map(canon).sort();
   return x.length === y.length && x.every((s, i) => s === y[i]);
 }
+
+// ── One rule for "unpaid" (Run 14, D) ───────────────────────────────────────
+// Used by Home, the Invoices list, Finance, the weekly/monthly report and the
+// connector's finance tool (its database function, see the Run 14 SQL).
+// Unpaid = the customer has been sent it (status "sent", or "partial" once
+// partial payments exist), it isn't a no-charge close, and it's over $0.
+// A "draft" was never sent, so it isn't counted.
+export const UNPAID_STATUSES = ["sent", "partial"];
+export function isUnpaidInvoice(invoice) {
+  if (!invoice || !UNPAID_STATUSES.includes(invoice.status)) return false;
+  if (invoice.payment_method === "no_charge") return false;
+  return amountCents(invoice) > 0;
+}
+// Lists that don't load parts_total/labor_total use the stored total.
+const amountCents = (invoice) => ("parts_total" in invoice || "labor_total" in invoice)
+  ? invoiceTotalCents(invoice) : Math.round(Number(invoice.total || 0) * 100);
+
+// A draft emailed to the customer (job completion / resend email) becomes
+// "sent". Never a paid, partial or no-charge invoice, never $0.
+export function shouldMarkSentAfterEmail(invoice) {
+  return !!invoice && invoice.status === "draft" && invoice.payment_method !== "no_charge"
+    && !invoice.paid_date && amountCents(invoice) > 0;
+}

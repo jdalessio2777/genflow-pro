@@ -8,6 +8,7 @@ import {
   computeFinance, reportRange, jobTypeLabel, paymentMethodLabel, paidViaLabel,
   EXPENSE_CATEGORIES, JOB_TYPE_ORDER, etDate, inRange, todayET, daysBetween, revenueType,
 } from '../../src/lib/finance/core.js';
+import { isUnpaidInvoice } from '../../src/lib/utils/invoiceTotals.js';
 
 export { reportRange };
 export const REPORT_RECIPIENTS = ['derek.j.sainz@gmail.com', 'contact@genshieldservice.com'];
@@ -43,7 +44,7 @@ export async function fetchReportData(supabase) {
 export function buildReport(data, type, now = new Date()) {
   const range = reportRange(type, now);
   const f = computeFinance(data, range);
-  const outstanding = (data.invoices || []).filter(i => i.status === 'sent');
+  const outstanding = (data.invoices || []).filter(isUnpaidInvoice); // one rule app-wide (Run 14, D)
   const today = todayET(now);
   const aging = { '0–13 days': { count: 0, amount: 0 }, '14–29 days': { count: 0, amount: 0 }, '30+ days': { count: 0, amount: 0 } };
   for (const i of outstanding) {

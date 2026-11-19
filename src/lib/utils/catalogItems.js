@@ -26,6 +26,7 @@ export const ITEM_TYPES = [
 export const CUSTOM_FLAT_CATEGORY = "custom";
 
 export const PART_CATEGORY_OPTIONS = [
+  ["custom", "Custom (no stock tracking)"],
   ["air_filters", "Air Filters"], ["oil_filters", "Oil Filters"], ["oils_fluids", "Oils & Fluids"],
   ["spark_plugs", "Spark Plugs"], ["batteries", "Batteries"], ["battery_chargers", "Battery Chargers"],
   ["belt", "Belts"], ["gasket", "Gaskets"], ["electrical", "Electrical"], ["coolant", "Coolant"],
@@ -215,6 +216,28 @@ export function customFlatRateRow({ name, price, description }) {
     flat_price: num(price),
     flat_cost: 0,
     notes: str(description) || null,
+    is_hidden: false,
+  };
+}
+
+// Existing custom PARTS (catalog "Custom" folder) with the same name.
+export function findCustomPartDuplicates(parts = [], name) {
+  const n = norm(name);
+  if (!n) return [];
+  return parts.filter((p) => p?.category === "custom" && norm(p.name) === n);
+}
+
+// The catalog part a custom flat rate entered as a Part becomes (Run 14, B):
+// "Custom" folder, no stock tracking (in_stock stays 0, never "managed").
+export function customPartRow({ name, price, description }) {
+  return {
+    name: str(name),
+    category: "custom",
+    default_price: num(price),
+    cost: 0,
+    description: str(description) || null,
+    in_stock: 0,
+    reorder_flagged: false,
     is_hidden: false,
   };
 }

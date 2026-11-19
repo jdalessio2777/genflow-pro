@@ -22,3 +22,11 @@ export const SUGGESTED_MARKUP = 1.35;
 export function suggestedSalePrice(cost) {
   return Math.round((cost || 0) * SUGGESTED_MARKUP * 100) / 100;
 }
+
+// Run 14 (B): parts in the catalog's "Custom" folder (saved from a custom flat
+// rate entered as a Part) have no stock: never counted, never decremented,
+// never in low-stock / reorder alerts.
+export const CUSTOM_PART_CATEGORY = "custom";
+export function isStockTracked(part) {
+  return part?.category !== CUSTOM_PART_CATEGORY;
+}

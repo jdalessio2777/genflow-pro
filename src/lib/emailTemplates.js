@@ -6,7 +6,7 @@ import { SURCHARGE_DEFAULTS, surchargeLabel } from './utils/surcharge.js'
 import { escapeHtml, multilineHtml, safeImageSrc } from './utils/escapeHtml.js'
 import { formatEstimate, estimateMinutes } from './jobDuration.js'
 import { SERVICE_TYPES } from './jobTypes.js'
-import { generatorLine, customerAtJobAddress } from './generatorInfo.js'
+import { generatorLine, customerAtJobAddress, otherServiceAddress } from './generatorInfo.js'
 import { techsLabel, isSharedJob } from './jobTechs.js'
 import { windowLabel, hasArrivalWindow } from './arrivalWindow.js'
 export { escapeHtml, multilineHtml, safeImageSrc }
@@ -437,7 +437,8 @@ export function confirmationEmailHTML({ customer, job, use24h = false }) {
 
 export function completionEmailHTML({ customer, job, parts = [], labor = [], documents = [], includeChecklist = true }) {
   job = job || {}
-  customer = customerAtJobAddress(customer || {}, job)
+  customer = customer || {}
+  const serviceAt = otherServiceAddress(job, customer)
   const generatorInfo = escapeHtml(generatorLine(customer, job))
   const jobTitle = String(job.title ?? '').trim()
   const jobDesc = String(job.customer_description ?? '').trim()
@@ -516,8 +517,12 @@ export function completionEmailHTML({ customer, job, parts = [], labor = [], doc
               <td style="padding:4px 0;font-size:13px;color:#374151;">${generatorInfo}</td>
             </tr>` : ''}
             ${customer.address ? `<tr>
-              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Address</td>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">${serviceAt ? 'Bill to' : 'Address'}</td>
               <td style="padding:4px 0;font-size:13px;color:#374151;">${escapeHtml(customer.address)}</td>
+            </tr>` : ''}
+            ${serviceAt ? `<tr>
+              <td style="padding:4px 0;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Service address</td>
+              <td style="padding:4px 0;font-size:13px;color:#374151;">${escapeHtml(serviceAt)}</td>
             </tr>` : ''}
           </table>
         </div>
@@ -580,9 +585,15 @@ export function serviceNotesHTML(notes) {
   return `<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;"><p style="font-size:10px;font-weight:bold;color:#888;margin:0 0 5px 0;">SERVICE SUMMARY</p><p style="font-size:13px;color:#333;margin:0;">${multilineHtml(notes)}</p></div>`
 }
 
+// A job at another property (a second generator): "Bill to" keeps the
+// customer's home address and the job's address shows under it (Run 14).
+// Jobs at the customer's own address print exactly as before.
+function serviceAddressBlock(job, customer) {
+  const at = otherServiceAddress(job, customer)
+  return at ? `<p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:10px 0 4px 0;">SERVICE ADDRESS</p><p style="font-size:12px;color:#555;margin:0;">${escapeHtml(at)}</p>` : ""
+}
+
 export function invoiceSummaryHTML({ invoice, customer, job = null, surchargeConfig = SURCHARGE_DEFAULTS }) {
-  // A job invoice prints the job's service address (Run 14, A).
-  customer = customerAtJobAddress(customer, job)
   // $0.00 invoices (exact, integer cents — see isZeroDollarInvoice) get their
   // own rendering with no paid/unpaid/payment-due language. Every invoice
   // > $0 (and every negative-total invoice) falls through to the original
@@ -639,7 +650,7 @@ export function invoiceSummaryHTML({ invoice, customer, job = null, surchargeCon
             <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
             ${String(customer?.name || invoice.customer_name || "").trim() ? `<p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${escapeHtml(customer?.name || invoice.customer_name)}</p>` : ""}
             ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${escapeHtml(customer.address)}</p>` : ""}
-            ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${escapeHtml(customer.phone)}</p>` : ""}
+            ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${escapeHtml(customer.phone)}</p>` : ""}${serviceAddressBlock(job, customer)}
           </div>
         </td>
         <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">
@@ -788,7 +799,6 @@ export function combineEmailSections(bodyParts) {
 // totals, notes, signature) but no PAID / PAYMENT DUE line or box anywhere.
 // Line items flagged no_charge (charge_for_part:false parts) show "No charge".
 function zeroDollarInvoiceSummaryHTML({ invoice, customer, job = null }) {
-  customer = customerAtJobAddress(customer, job)
   const lineItemsHTML = (invoice.line_items || []).map((item, i) => `
     <tr style="background:${i % 2 === 0 ? "#f8f9fa" : "white"};">
       <td style="padding:9px 12px;font-size:13px;">${escapeHtml(item.description)}</td>
@@ -829,7 +839,7 @@ function zeroDollarInvoiceSummaryHTML({ invoice, customer, job = null }) {
             <p style="font-size:10px;font-weight:bold;color:#888;letter-spacing:0.5px;margin:0 0 6px 0;">BILL TO</p>
             ${String(customer?.name || invoice.customer_name || "").trim() ? `<p style="font-size:13px;font-weight:bold;margin:0 0 3px 0;">${escapeHtml(customer?.name || invoice.customer_name)}</p>` : ""}
             ${customer?.address ? `<p style="font-size:12px;color:#555;margin:0 0 2px 0;">${escapeHtml(customer.address)}</p>` : ""}
-            ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${escapeHtml(customer.phone)}</p>` : ""}
+            ${customer?.phone ? `<p style="font-size:12px;color:#555;margin:0;">${escapeHtml(customer.phone)}</p>` : ""}${serviceAddressBlock(job, customer)}
           </div>
         </td>
         <td style="width:50%;vertical-align:top;padding:0 0 0 8px;">

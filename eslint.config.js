@@ -5,6 +5,9 @@ import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginUnusedImports from "eslint-plugin-unused-imports";
 
 export default [
+  // Untracked scratch/test-run folders and build output are never linted
+  // (Run 14: old .qa-scratch scripts made `eslint .` fail).
+  { ignores: [".qa-scratch/**", "dist/**", "node_modules/**", ".vercel/**", ".agents/**"] },
   {
     files: [
       "src/components/**/*.{js,mjs,cjs,jsx}",

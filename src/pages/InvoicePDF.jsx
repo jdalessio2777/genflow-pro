@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom";
+import { shouldMarkSentAfterEmail } from "@/lib/utils/invoiceTotals";
 import { useBack } from "@/hooks/useBack";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/lib/db";
@@ -75,7 +76,8 @@ export default function InvoicePDF() {
         html: fullHTML,
       });
 
-      await db.Invoice.update(id, { send_failed: false });
+      // Run 14 (D): an unpaid draft emailed to the customer is now "sent".
+      await db.Invoice.update(id, { send_failed: false, ...(includeInvoice && shouldMarkSentAfterEmail(invoice) ? { status: "sent" } : {}) });
       setSent(true);
       toast.success(`Email sent to ${customer.email}`);
     } catch (e) {

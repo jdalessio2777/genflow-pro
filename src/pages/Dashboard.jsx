@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isUnpaidInvoice } from "@/lib/utils/invoiceTotals";
 import { db } from "@/lib/db";
 import { customersListQuery, invoicesListQuery, jobsListQuery, partsCatalogQuery } from "@/lib/queries";
 import { stockStatus, stockAlertText } from "@/lib/utils/stockStatus";
@@ -17,7 +18,7 @@ import { sortJobs, isJobOverdue, etDateKey } from "@/lib/utils/jobSort";
 import { splitActive } from "@/lib/jobWindows";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useAuth } from "@/lib/AuthContext";
-import { isManaged } from "@/lib/utils/partsManaged";
+import { isManaged, isStockTracked } from "@/lib/utils/partsManaged";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -150,7 +151,7 @@ export default function Dashboard() {
 
   const { data: parts = [] } = useQuery(partsCatalogQuery());
   // Includes parts needing a recount (stock below 0) — see stockAlertText.
-  const lowStockParts = parts.filter(p => !p.is_hidden && (stockStatus(p.in_stock) === "recount" ||
+  const lowStockParts = parts.filter(p => !p.is_hidden && isStockTracked(p) && (stockStatus(p.in_stock) === "recount" ||
     (isManaged(p) && (["out", "low"].includes(stockStatus(p.in_stock)) || p.reorder_flagged)))
   );
 
@@ -196,7 +197,7 @@ export default function Dashboard() {
   const completedJobs = jobs.filter(j => j.status === "completed" || j.status === "invoiced");
   const totalRevenue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.total || 0), 0);
   const totalProfit = completedJobs.reduce((s, j) => s + (j.profit || 0), 0);
-  const unpaidInvoices = invoices.filter(i => i.status !== "paid" && i.status !== "draft");
+  const unpaidInvoices = invoices.filter(isUnpaidInvoice); // one rule app-wide (Run 14, D)
 
   const failedEmailJobs = jobs
     .filter(j => j.confirmation_send_failed || j.completion_send_failed)

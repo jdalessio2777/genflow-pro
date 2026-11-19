@@ -22,7 +22,7 @@ import { sendEmail } from './_lib/sendEmail.js';
 import { buildJobSummaryEmail, MAX_EMAIL_BYTES } from './_lib/jobSummary.js';
 import { surchargeConfig, SURCHARGE_SETTING_KEYS } from '../src/lib/utils/surcharge.js';
 import { requireStaff } from './_lib/staffAuth.js';
-import { invoiceTotalCents } from '../src/lib/utils/invoiceTotals.js';
+import { invoiceTotalCents, shouldMarkSentAfterEmail } from '../src/lib/utils/invoiceTotals.js';
 
 // Dates in the email body render in the business's timezone, same as the
 // browser-rendered emails did before (Vercel functions run in UTC).
@@ -216,7 +216,18 @@ export default async function handler(req, res) {
         }
       }
       await db.from('jobs').update({ completion_send_failed: false }).eq('id', job.id).then(() => {}, () => {});
-      if (invoice) await db.from('invoices').update({ emailed_at: now, emailed_to: customer.email }).eq('id', invoice.id).then(() => {}, () => {});
+      if (invoice) {
+        // Run 14 (D): an unpaid draft that just went to the customer is now
+        // "sent", so Home / Invoices / Finance count it as unpaid. Only from
+        // "draft" (the .eq guards a payment that landed meanwhile).
+        const patch = { emailed_at: now, emailed_to: customer.email };
+        if (shouldMarkSentAfterEmail(invoice)) patch.status = 'sent';
+        let q = db.from('invoices').update(patch).eq('id', invoice.id);
+        if (patch.status) q = q.eq('status', 'draft');
+        const { data: upd } = await q.select('id').then((r) => r, () => ({ data: null }));
+        // Payment landed between the read and this write: still record the email.
+        if (patch.status && !upd?.length) await db.from('invoices').update({ emailed_at: now, emailed_to: customer.email }).eq('id', invoice.id).then(() => {}, () => {});
+      }
     }
 
     // Filenames + SHA-256 only (never content): lets staff/QA confirm exactly

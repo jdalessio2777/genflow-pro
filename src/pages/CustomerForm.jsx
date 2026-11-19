@@ -251,7 +251,7 @@ export default function CustomerForm() {
               <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
               Always-Show Note (appears on every job)
             </Label>
-            <div className="mt-1">{longText("repeat_note", "Always-Show Note", { className: "border-amber-200 bg-amber-50/50", placeholder: "e.g. Dog in backyard · Gate code: 1234 · Generator is behind shed" })}</div>
+            <div className="mt-1">{longText("repeat_note", "Always-Show Note", { className: "border-amber-200 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/30", placeholder: "e.g. Dog in backyard · Gate code: 1234 · Generator is behind shed" })}</div>
           </div>
           <div>
             <Label className="text-xs">Notes</Label>

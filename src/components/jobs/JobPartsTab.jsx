@@ -11,7 +11,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { partChargeTotal } from "@/lib/utils/jobFinancials";
 import { stockStatus, stockShortText } from "@/lib/utils/stockStatus";
 import { usePreferences } from "@/hooks/usePreferences";
-import { suggestedSalePrice } from "@/lib/utils/partsManaged";
+import { suggestedSalePrice, isStockTracked, CUSTOM_PART_CATEGORY } from "@/lib/utils/partsManaged";
 import { saveCatalogPrice, applySavedPrice } from "@/lib/catalogPrices";
 import { matchesPart, searchParts, sanitizeQuantityInput, parseQuantity } from "@/lib/utils/partsSearch";
 import { toast } from "sonner";
@@ -19,7 +19,10 @@ import { haptics } from "@/lib/haptics";
 import { addPartToJob, removePartFromJob } from "@/lib/inventory";
 import { createOnce, newRequestId, showSaveError, dismissSaveError, useSaveGuard } from "@/lib/saveSafety";
 
+// "saved_custom" = the catalog's Custom parts (category "custom", no stock).
+// Its own key: "custom" is the Custom Part entry form below.
 const PART_CATEGORIES = [
+  { key: "saved_custom", category: CUSTOM_PART_CATEGORY, label: "Custom", icon: "✏️" },
   { key: "air_filters", label: "Air Filters", icon: "🌬️" },
   { key: "oil_filters", label: "Oil Filters", icon: "🛢️" },
   { key: "oils_fluids", label: "Oil", icon: "💧" },
@@ -43,11 +46,12 @@ const LEGACY_CATEGORY_MAP = {
 const normalizeCatalogPart = (p) =>
   LEGACY_CATEGORY_MAP[p.category] ? { ...p, category: LEGACY_CATEGORY_MAP[p.category] } : p;
 
-const KNOWN_CATEGORY_KEYS = PART_CATEGORIES.filter(c => c.key !== "other").map(c => c.key);
-const partsInCategory = (catalogParts, key) =>
-  key === "other"
-    ? catalogParts.filter(p => !KNOWN_CATEGORY_KEYS.includes(p.category))
-    : catalogParts.filter(p => p.category === key);
+const KNOWN_CATEGORY_KEYS = PART_CATEGORIES.filter(c => c.key !== "other").map(c => c.category || c.key);
+const partsInCategory = (catalogParts, key) => {
+  if (key === "other") return catalogParts.filter(p => !KNOWN_CATEGORY_KEYS.includes(p.category));
+  const category = PART_CATEGORIES.find(c => c.key === key)?.category || key;
+  return catalogParts.filter(p => p.category === category);
+};
 
 // Max catalog search rows rendered at once (keeps typing snappy on phones).
 const SEARCH_RESULT_LIMIT = 50;
@@ -214,6 +218,8 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
         : basePrice;
       const newCatalogPart = form.save_to_catalog && !form.part_id;
       const catalogPartId = newCatalogPart ? newRequestId() : null;
+      // Custom-folder parts have no stock (Run 14, B): no count, no usage row.
+      const untracked = form.untracked || (newCatalogPart && form.category === CUSTOM_PART_CATEGORY);
       pendingAdd.current = {
         formKey,
         newCatalogPart: newCatalogPart ? {
@@ -225,14 +231,14 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
           category: form.category,
           // Bought for this job: it arrives and is used, so the ledger
           // records +qty then -qty (stock ends at 0 with one usage row).
-          in_stock: qty,
-          ...(form.price > 0 ? { first_managed_at: new Date().toISOString() } : {}),
+          in_stock: untracked ? 0 : qty,
+          ...(form.price > 0 && !untracked ? { first_managed_at: new Date().toISOString() } : {}),
         } : null,
         plan: {
           jobPartId: newRequestId(),
           usageId: newRequestId(),
           qty,
-          stockPartId: catalogPartId || form.part_id || null,
+          stockPartId: untracked ? null : (catalogPartId || form.part_id || null),
           jobPart: {
             job_id: jobId,
             name: form.name.trim(),
@@ -299,7 +305,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
     // part picked FROM the catalog is already in the catalog, so
     // this must be off or handleAdd() creates a duplicate part row
     // and points the job at the duplicate instead of the real one.
-    setForm(f => ({ ...f, name: p.name, part_number: p.part_number || "", cost: p.cost, price: p.default_price || 0, catalogPrice: p.default_price || 0, catalogCost: p.cost || 0, part_id: p.id, charge_for_part: (p.default_price || 0) > 0, save_to_catalog: false, quantity: "1" }));
+    setForm(f => ({ ...f, name: p.name, part_number: p.part_number || "", cost: p.cost, price: p.default_price || 0, catalogPrice: p.default_price || 0, catalogCost: p.cost || 0, part_id: p.id, charge_for_part: (p.default_price || 0) > 0, save_to_catalog: false, untracked: !isStockTracked(p), quantity: "1" }));
     setUpdateCatalogPrice(false);
     setSaleTouchedInConfirm(false);
     setPartsFolder({ key: "confirm", label: "confirm", part: p });
@@ -361,7 +367,9 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
               ) : (
                 <p className="text-xs text-muted-foreground">No price</p>
               )}
-              {stockStatus(stock) === "recount" ? (
+              {!isStockTracked(p) ? (
+                <p className="text-xs text-muted-foreground">No stock tracking</p>
+              ) : stockStatus(stock) === "recount" ? (
                 <p className="text-xs font-semibold text-red-600 dark:text-red-400" data-testid="search-stock-recount">{stockShortText(stock)}</p>
               ) : (
                 <p className={`text-xs ${stock > 0 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>{stockShortText(stock)}</p>
@@ -577,8 +585,8 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <Label className="text-xs font-semibold">Category</Label>
                   <div className="grid grid-cols-3 gap-1.5 mt-1">
                     {PART_CATEGORIES.map(cat => (
-                      <button key={cat.key} type="button" onClick={() => setForm(f => ({...f, category: cat.key}))}
-                        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${form.category === cat.key ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/40"}`}>
+                      <button key={cat.key} type="button" onClick={() => setForm(f => ({...f, category: cat.category || cat.key}))}
+                        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${form.category === (cat.category || cat.key) ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/40"}`}>
                         <span>{cat.icon}</span>
                         <span className="truncate">{cat.label}</span>
                       </button>
@@ -630,7 +638,7 @@ export default function JobPartsTab({ jobId, parts, catalogParts: rawCatalogPart
                   <p className="text-sm font-semibold">{form.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {form.part_number ? <span className="font-mono">#{form.part_number} · </span> : null}
-                    {(() => { const n = catalogParts.find(p => p.id === form.part_id)?.in_stock ?? 0; return stockStatus(n) === "recount" ? `Recount needed (${n})` : `${n} in stock`; })()} · Selected from catalog
+                    {(() => { const cp = catalogParts.find(p => p.id === form.part_id); if (cp && !isStockTracked(cp)) return "No stock tracking"; const n = cp?.in_stock ?? 0; return stockStatus(n) === "recount" ? `Recount needed (${n})` : `${n} in stock`; })()} · Selected from catalog
                   </p>
                 </Card>
                 <div>

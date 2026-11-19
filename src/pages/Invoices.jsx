@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { isUnpaidInvoice } from "@/lib/utils/invoiceTotals";
 import { db } from "@/lib/db";
 import { invoicesListQuery } from "@/lib/queries";
 import { Link } from "react-router-dom";
@@ -55,7 +56,7 @@ export default function Invoices() {
     return i.status === filter;
   });
 
-  const totalUnpaid = invoices.filter(i => i.status !== "paid" && i.status !== "draft")
+  const totalUnpaid = invoices.filter(isUnpaidInvoice) // one rule app-wide (Run 14, D)
     .reduce((s, i) => s + (i.total || 0), 0);
 
   return (
