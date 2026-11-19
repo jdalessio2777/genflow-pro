@@ -3,6 +3,7 @@ import { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, XAxis, YAxis, 
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import DateField from "@/components/ui/DateField";
 import { formatCurrency } from "@/lib/utils/format";
 import { PRESETS, rangeFor, previousRange, computeFinance, computeSeries, change, todayET, addDays } from "@/lib/finance/core";
 
