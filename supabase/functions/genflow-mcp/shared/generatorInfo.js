@@ -134,6 +134,16 @@ export function jobAddress(job, customer) {
   return clean(customer?.address);
 }
 
+// The job's service address when it isn't the customer's own address (a
+// generator at another property), else "". Invoices and service reports then
+// show both "Bill to" (home) and "Service address" (Run 14).
+export function otherServiceAddress(job, customer) {
+  if (!job) return "";
+  const at = jobAddress(job, customer);
+  const norm = (v) => clean(v).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return at && norm(at) !== norm(customer?.address) ? at : "";
+}
+
 // The customer row with `address` = this job's service address, for the
 // templates and PDFs that print customer.address.
 export function customerAtJobAddress(customer, job) {

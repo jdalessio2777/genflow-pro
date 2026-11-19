@@ -1,7 +1,7 @@
 // Run 14 (A): an added generator at another property; the job is booked at
 // that address and keeps it.
 import { describe, it, expect } from 'vitest'
-import { serviceAddressFor, jobAddress, customerAtJobAddress, generatorsOf, hasGeneratorInfo, generatorPatch } from '@/lib/generatorInfo'
+import { serviceAddressFor, jobAddress, customerAtJobAddress, generatorsOf, hasGeneratorInfo, generatorPatch, otherServiceAddress } from '@/lib/generatorInfo'
 import { confirmationEmailHTML, completionEmailHTML, invoiceSummaryHTML } from '@/lib/emailTemplates'
 import { buildEvent } from '@/lib/googleCalendar'
 
@@ -79,18 +79,29 @@ describe('customer copy and calendar use the job\'s address', () => {
     expect(html).toContain(LAKE)
     expect(html).not.toContain(HOME)
   })
-  it('completion email', () => {
+  it('completion email: Bill to (home) and Service address (generator)', () => {
     const html = completionEmailHTML({ customer, job: booked })
     expect(html).toContain(LAKE)
-    expect(html).not.toContain(HOME)
+    expect(html).toContain(HOME)
+    expect(html).toMatch(/Bill to[\s\S]*Service address/)
+    const same = completionEmailHTML({ customer, job: job({ service_address: null }) })
+    expect(same).not.toContain('Service address')
+    expect(same).not.toContain('Bill to')
   })
-  it('invoice summary (and the $0 one)', () => {
-    const inv = { invoice_number: 'INV-1', line_items: [{ description: 'Tune-up', quantity: 1, unit_price: 315, total: 315 }], subtotal: 315, total: 315, labor_total: 315, parts_total: 0, status: 'sent' }
-    expect(invoiceSummaryHTML({ invoice: inv, customer, job: booked })).toContain(LAKE)
-    const zero = { ...inv, line_items: [], subtotal: 0, total: 0, labor_total: 0 }
-    const z = invoiceSummaryHTML({ invoice: zero, customer, job: booked })
-    expect(z).toContain(LAKE)
-    expect(z).not.toContain(HOME)
+  const inv = { invoice_number: 'INV-1', line_items: [{ description: 'Tune-up', quantity: 1, unit_price: 315, total: 315 }], subtotal: 315, total: 315, labor_total: 315, parts_total: 0, status: 'sent' }
+  it('invoice summary (and the $0 one): Bill to = home, Service address = generator', () => {
+    for (const i of [inv, { ...inv, line_items: [], subtotal: 0, total: 0, labor_total: 0 }]) {
+      const html = invoiceSummaryHTML({ invoice: i, customer, job: booked })
+      expect(html.indexOf(HOME)).toBeGreaterThan(html.indexOf('BILL TO'))
+      expect(html.indexOf('SERVICE ADDRESS')).toBeGreaterThan(html.indexOf(HOME))
+      expect(html.indexOf(LAKE)).toBeGreaterThan(html.indexOf('SERVICE ADDRESS'))
+    }
+  })
+  it('a job at the customer\'s own address prints exactly as before (no Service address block)', () => {
+    const atHome = job({ service_address: null })
+    expect(invoiceSummaryHTML({ invoice: inv, customer, job: atHome })).not.toContain('SERVICE ADDRESS')
+    // same address typed differently still counts as the same place
+    expect(otherServiceAddress(job({ service_address: ' 10 home st,  summit nj ' }), customer)).toBe('')
   })
   it('a standalone invoice (no job) keeps the customer\'s address', () => {
     const inv = { invoice_number: 'INV-2', line_items: [], subtotal: 50, total: 50, labor_total: 50, parts_total: 0, status: 'sent' }
